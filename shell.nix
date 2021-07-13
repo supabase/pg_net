@@ -12,6 +12,9 @@ let
       installPhase = ''
         mkdir -p $out/bin
         install -D curl_worker.so -t $out/lib
+
+        install -D -t $out/share/postgresql/extension sql/*.sql
+        install -D -t $out/share/postgresql/extension curl_worker.control
       '';
     };
   pgWithExt = { postgresql } :
@@ -36,6 +39,7 @@ let
 
       pg_ctl start -o "$options" -o "$ext_options"
 
+      createdb contrib_regression
       "$@"
     '';
   curl-with-pg-12 = writeShellScriptBin "curl-with-pg-12" (pgWithExt { postgresql = postgresql_12; });
