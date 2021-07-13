@@ -1,4 +1,12 @@
 ## Curl background worker
+<p>
+
+<a href="https://github.com/supabase/pg_curl_worker/actions"><img src="https://github.com/supabase/pg_curl_worker/actions/workflows/main.yml/badge.svg" alt="Tests" height="18"></a>
+<a href=""><img src="https://img.shields.io/badge/postgresql-12+-blue.svg" alt="PostgreSQL version" height="18"></a>
+
+</p>
+
+
 
 [Background worker](https://www.postgresql.org/docs/current/bgworker.html) that does http requests with curl without blocking.
 

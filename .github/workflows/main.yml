@@ -1,0 +1,16 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - uses: cachix/install-nix-action@v13
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+    - name: Run tests
+      run: nix-shell --run "curl-with-pg-12 make installcheck && curl-with-pg-13 make installcheck"
