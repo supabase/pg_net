@@ -14,14 +14,14 @@ create table http.request_queue (
 -- Associates a response with a request
 -- API: Private
 create table http.response (
-	id bigint primary key references http.request_queue(id),
+	id bigint primary key references http.request_queue(id) on delete cascade,
 	http_status_code integer,
 	content_type text,
 	headers jsonb,
 	content text
 );
 
--- Functional interface to make an async request
+-- Interface to make an async request
 -- API: Public
 create or replace function http.async_get(
 	url text,
@@ -39,4 +39,37 @@ as $$
 	insert into http.request_queue(url, params, headers, timeout_seconds, curl_opts)
 	values (url, params, headers, timeout_seconds, curl_opts)
 	returning id;
+$$;
+
+-- Check if a request is complete
+-- API: Public
+create or replace function http.is_complete(
+    request_id bigint
+)
+    returns bool
+    language sql
+    stable
+	parallel safe
+	strict
+as $$
+    select (count(1) > 0)::bool
+    from http.response
+    where id = request_id;
+$$;
+
+-- Cancel a request in the queue
+-- API: Public
+create or replace function http.cancel_request(
+    request_id bigint
+)
+    returns bigint
+    language sql
+    volatile
+	parallel safe
+	strict
+as $$
+    delete
+    from http.request_queue
+    where id = request_id
+    returning id;
 $$;

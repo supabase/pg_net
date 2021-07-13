@@ -1,14 +1,17 @@
-create extension curl_worker;
-select http.async_get('http://supabase.io');
+begin;
+    select http.async_get('http://supabase.io');
  async_get 
 -----------
          1
 (1 row)
 
-select *
-from http.request_queue;
+    select
+        *
+    from
+        http.request_queue;
  id |        url         | params | headers | timeout_seconds | curl_opts 
 ----+--------------------+--------+---------+-----------------+-----------
   1 | http://supabase.io | {}     | {}      |               1 | {}
 (1 row)
 
+rollback
