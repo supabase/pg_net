@@ -6,19 +6,22 @@
 #include "storage/proc.h"
 #include "fmgr.h"
 
-#include <curl/multi.h>
+#include "access/xact.h"
+#include "executor/spi.h"
+#include "utils/snapmgr.h"
 
-static const char *urls[] = {
-	"https://supabase.io/",
-	"https://news.ycombinator.com/",
-	"https://www.wikipedia.org",
-	"https://aws.amazon.com/"
-};
+#include "commands/extension.h"
+#include "catalog/pg_extension.h"
+
+#include "utils/builtins.h"
+
+#include <curl/multi.h>
 
 PG_MODULE_MAGIC;
 
 void _PG_init(void);
 void worker_main(Datum main_arg) pg_attribute_noreturn();
+bool isExtensionLoaded(void);
 
 static volatile sig_atomic_t got_sigterm = false;
 
@@ -40,15 +43,29 @@ handle_sigterm(SIGNAL_ARGS)
 	errno = save_errno;
 }
 
-static int init(CURLM *cm, int i)
+static int init(CURLM *cm, char *url)
 {
 	CURL *eh = curl_easy_init();
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, cb);
 	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
-	curl_easy_setopt(eh, CURLOPT_URL, urls[i]);
-	curl_easy_setopt(eh, CURLOPT_PRIVATE, urls[i]);
+	curl_easy_setopt(eh, CURLOPT_URL, url);
+	curl_easy_setopt(eh, CURLOPT_PRIVATE, url);
 	curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
 	return curl_multi_add_handle(cm, eh);
+}
+
+bool isExtensionLoaded(){
+	Oid extensionOid;
+
+	StartTransactionCommand();
+	PushActiveSnapshot(GetTransactionSnapshot());
+
+	extensionOid = get_extension_oid("curl_worker", true);
+
+	PopActiveSnapshot();
+	CommitTransactionCommand();
+
+	return extensionOid != InvalidOid;
 }
 
 void
@@ -58,7 +75,7 @@ worker_main(Datum main_arg)
 	CURL *eh=NULL;
 	CURLMsg *msg=NULL;
 	CURLcode return_code=0;
-	int still_running=0, i=0, msgs_left=0;
+	int still_running=0, msgs_left=0;
 	int http_status_code;
 	int res;
 	const char *szUrl;
@@ -67,8 +84,12 @@ worker_main(Datum main_arg)
 
 	BackgroundWorkerUnblockSignals();
 
+	BackgroundWorkerInitializeConnection("postgres", NULL, 0);
+
 	while (!got_sigterm)
 	{
+		StringInfoData	buf;
+
 		/* Wait 10 seconds */
 		WaitLatch(&MyProc->procLatch,
 					WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
@@ -76,24 +97,46 @@ worker_main(Datum main_arg)
 					PG_WAIT_EXTENSION);
 		ResetLatch(&MyProc->procLatch);
 
-		res = curl_global_init(CURL_GLOBAL_ALL);
-
-		cm = curl_multi_init();
-
-		if(res) {
-			elog(ERROR, "error: curl_global_init() returned %d\n", res);
+		if(!isExtensionLoaded()){
+			elog(INFO, "Extension not loaded");
+			continue;
 		}
 
-		for (i = 0; i < 4; ++i) {
-			res = init(cm, i);
+		StartTransactionCommand();
+		PushActiveSnapshot(GetTransactionSnapshot());
+		SPI_connect();
+
+		initStringInfo(&buf);
+
+		appendStringInfo(&buf, "SELECT url FROM http.request_queue");
+
+		if (SPI_execute(buf.data, true, 0) == SPI_OK_SELECT)
+		{
+			bool tupIsNull = false;
+
+			res = curl_global_init(CURL_GLOBAL_ALL);
+
 			if(res) {
-				elog(ERROR, "error: init() returned %d\n", res);
+				elog(ERROR, "error: curl_global_init() returned %d\n", res);
 			}
-		}
 
-		res = curl_multi_perform(cm, &still_running);
-		if(res != CURLM_OK) {
-				elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
+			cm = curl_multi_init();
+
+			for (int j = 0; j < SPI_processed; j++)
+			{
+					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
+					elog(INFO, "URL: %s", url);
+
+					res = init(cm, url);
+					if(res) {
+						elog(ERROR, "error: init() returned %d\n", res);
+					}
+					res = curl_multi_perform(cm, &still_running);
+					if(res != CURLM_OK) {
+							elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
+					}
+
+			}
 		}
 
 		do {
@@ -118,7 +161,6 @@ worker_main(Datum main_arg)
 								continue;
 						}
 
-						// Get HTTP status code
 						http_status_code=0;
 						szUrl = NULL;
 
@@ -136,6 +178,10 @@ worker_main(Datum main_arg)
 		}
 
 		curl_multi_cleanup(cm);
+
+		SPI_finish();
+		PopActiveSnapshot();
+		CommitTransactionCommand();
 	}
 
 	proc_exit(0);
@@ -147,7 +193,7 @@ _PG_init(void)
 	BackgroundWorker worker;
 
 	MemSet(&worker, 0, sizeof(BackgroundWorker));
-	worker.bgw_flags = BGWORKER_SHMEM_ACCESS;
+	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
 	snprintf(worker.bgw_library_name, BGW_MAXLEN, "curl_worker");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "worker_main");
