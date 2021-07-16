@@ -15,8 +15,8 @@ begin;
         *
     from
         http.request_queue;
- id | url | params | headers | timeout_seconds | curl_opts 
-----+-----+--------+---------+-----------------+-----------
+ id | url | params | headers | timeout_seconds | curl_opts | is_completed | delete_after 
+----+-----+--------+---------+-----------------+-----------+--------------+--------------
 (0 rows)
 
 rollback;

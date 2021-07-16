@@ -6,12 +6,12 @@ begin;
 (1 row)
 
     select
-        *
+        id, url
     from
         http.request_queue;
- id |        url         | params | headers | timeout_seconds | curl_opts 
-----+--------------------+--------+---------+-----------------+-----------
-  1 | http://supabase.io | {}     | {}      |               1 | {}
+ id |        url         
+----+--------------------
+  1 | http://supabase.io
 (1 row)
 
 rollback

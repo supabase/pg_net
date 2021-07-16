@@ -5,12 +5,16 @@ create schema if not exists http;
 create table http.request_queue (
 	id bigserial primary key,
 	url text not null,
-	params jsonb,
-	headers jsonb,
+	params jsonb not null,
+	headers jsonb not null,
 	timeout_seconds numeric,
-	curl_opts jsonb,
-	is_completed bool default false
+	curl_opts jsonb not null,
+	is_completed bool default false,
+    -- Available for delete after this date
+    delete_after timestamp not null
 );
+create index ix_request_queue_delete_after on http.request_queue (delete_after);
+
 
 -- Associates a response with a request
 -- API: Private
@@ -29,17 +33,36 @@ create or replace function http.async_get(
 	params jsonb DEFAULT '{}'::jsonb,
 	headers jsonb DEFAULT '{}'::jsonb,
 	timeout_seconds numeric DEFAULT 1,
-	curl_opts jsonb DEFAULT '{}'::jsonb
+	curl_opts jsonb DEFAULT '{}'::jsonb,
+    ttl interval default '3 days'
 )
     returns bigint
-    language sql
+    language plpgsql
     volatile
 	parallel safe
 	strict
 as $$
-	insert into http.request_queue(url, params, headers, timeout_seconds, curl_opts)
-	values (url, params, headers, timeout_seconds, curl_opts)
-	returning id;
+declare
+   request_id bigint; 
+begin
+    -- Add to the request queue
+	insert into http.request_queue(url, params, headers, timeout_seconds, curl_opts, delete_after)
+	values (url, params, headers, timeout_seconds, curl_opts, timezone('utc', now()) + ttl)
+	returning id
+    into request_id;
+
+    -- Deleting a few requests exceeding their TTL
+    with to_delete as (
+        select id
+        from http.request_queue
+        where delete_after < (timezone('utc', now()))
+        limit 3
+    )
+    delete from http.request_queue
+    where id in (select id from to_delete);
+
+    return request_id;
+end;
 $$;
 
 -- Check if a request is complete
