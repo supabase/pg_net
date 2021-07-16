@@ -4,11 +4,12 @@ create schema if not exists http;
 -- API: Private
 create table http.request_queue (
 	id bigserial primary key,
-	url text,
-	params jsonb not null,
-	headers jsonb not null,
-	timeout_seconds numeric not null,
-	curl_opts jsonb not null
+	url text not null,
+	params jsonb,
+	headers jsonb,
+	timeout_seconds numeric,
+	curl_opts jsonb,
+	is_completed bool default false
 );
 
 -- Associates a response with a request
@@ -18,7 +19,7 @@ create table http.response (
 	http_status_code integer,
 	content_type text,
 	headers jsonb,
-	content text
+	body text
 );
 
 -- Interface to make an async request
