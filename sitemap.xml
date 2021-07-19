@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://supabase.github.io/pg_curl_worker/</loc>
+         <lastmod>2021-07-19</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://supabase.github.io/pg_curl_worker/api/</loc>
+         <lastmod>2021-07-19</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://supabase.github.io/pg_curl_worker/contributing/</loc>
+         <lastmod>2021-07-19</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://supabase.github.io/pg_curl_worker/installation/</loc>
+         <lastmod>2021-07-19</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://supabase.github.io/pg_curl_worker/roadmap/</loc>
+         <lastmod>2021-07-19</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+</urlset>
