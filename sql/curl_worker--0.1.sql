@@ -112,12 +112,3 @@ begin
     return rec;
 end;
 $$;
-
-
-
-
-
-
-
-
-
