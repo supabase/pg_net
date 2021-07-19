@@ -90,7 +90,6 @@ worker_main(Datum main_arg)
 	{
 		StringInfoData	select_query;
 		StringInfoData	insert_query;
-		StringInfoData	update_query;
 
 		/* Wait 10 seconds */
 		WaitLatch(&MyProc->procLatch,
@@ -161,9 +160,6 @@ worker_main(Datum main_arg)
 		initStringInfo(&insert_query);
 		appendStringInfo(&insert_query, "insert into net.response(id, http_status_code) values ($1, $2)");
 
-		initStringInfo(&update_query);
-		appendStringInfo(&update_query, "update net.request_queue set is_completed = true where id = $1");
-
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				int64 id;
 				Oid argTypes[2];
@@ -193,12 +189,6 @@ worker_main(Datum main_arg)
 										false, 1) != SPI_OK_INSERT)
 						{
 							elog(ERROR, "SPI_exec failed: %s", insert_query.data);
-						}
-
-						if (SPI_execute_with_args(update_query.data, 1, argTypes, argValues, NULL,
-										false, 1) != SPI_OK_UPDATE)
-						{
-							elog(ERROR, "SPI_exec failed: %s", update_query.data);
 						}
 
 						curl_multi_remove_handle(cm, eh);

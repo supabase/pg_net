@@ -9,7 +9,7 @@ begin;
         req;
 
     select
-        *
+        id, url
     from
         net.request_queue;
 

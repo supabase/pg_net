@@ -12,11 +12,11 @@ begin;
 (1 row)
 
     select
-        *
+        id, url
     from
         net.request_queue;
- id | url | params | headers | timeout_seconds | curl_opts | is_completed | delete_after 
-----+-----+--------+---------+-----------------+-----------+--------------+--------------
+ id | url 
+----+-----
 (0 rows)
 
 rollback;
