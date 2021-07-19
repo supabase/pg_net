@@ -16,6 +16,10 @@
 
 #include "utils/builtins.h"
 
+#include "access/hash.h"
+#include "utils/hsearch.h"
+#include "utils/memutils.h"
+
 #include <curl/multi.h>
 
 PG_MODULE_MAGIC;
@@ -24,14 +28,21 @@ void _PG_init(void);
 void worker_main(Datum main_arg) pg_attribute_noreturn();
 bool isExtensionLoaded(void);
 
+typedef struct _CurlData
+{
+	int64 id;
+	StringInfo body;
+} CurlData;
+
 static volatile sig_atomic_t got_sigterm = false;
 
-/* dummy callback */
-static size_t cb(char *d, size_t n, size_t l, void *p)
+static size_t
+cb(void *contents, size_t size, size_t nmemb, void *userp)
 {
-	(void)d;
-	(void)p;
-	return n*l;
+	size_t realsize = size * nmemb;
+	StringInfo si = (StringInfo)userp;
+	appendBinaryStringInfo(si, (const char*)contents, (int)realsize);
+	return realsize;
 }
 
 static void
@@ -44,10 +55,23 @@ handle_sigterm(SIGNAL_ARGS)
 	errno = save_errno;
 }
 
-static int init(CURLM *cm, char *url, int64 id)
+static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
 {
 	CURL *eh = curl_easy_init();
+
+	CurlData *cdata = NULL;
+	StringInfo body = makeStringInfo();
+	bool isPresent = false;
+
+	cdata = hash_search(curlDataMap, &id, HASH_ENTER, &isPresent);
+	if (!isPresent)
+	{
+		cdata->id = id;
+		cdata->body = body;
+	}
+
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, cb);
+	curl_easy_setopt(eh, CURLOPT_WRITEDATA, cdata->body);
 	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
 	curl_easy_setopt(eh, CURLOPT_URL, url);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
@@ -80,11 +104,28 @@ worker_main(Datum main_arg)
 	int http_status_code;
 	int res;
 
+	HTAB *curlDataMap = NULL;
+	HASHCTL info;
+	int hashFlags = 0;
+
 	pqsignal(SIGTERM, handle_sigterm);
 
 	BackgroundWorkerUnblockSignals();
 
 	BackgroundWorkerInitializeConnection("postgres", NULL, 0);
+
+	MemSet(&info, 0, sizeof(info));
+	info.keysize = sizeof(int64);
+	info.entrysize = sizeof(CurlData);
+	info.hash = tag_hash;
+	info.hcxt = AllocSetContextCreate(CurrentMemoryContext,
+											"pg_curl_worker context",
+											ALLOCSET_DEFAULT_MINSIZE,
+											ALLOCSET_DEFAULT_INITSIZE,
+											ALLOCSET_DEFAULT_MAXSIZE);
+	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+
+	curlDataMap = hash_create("pg_curl_worker curl data", 1024, &info, hashFlags);
 
 	while (!got_sigterm)
 	{
@@ -99,7 +140,7 @@ worker_main(Datum main_arg)
 		ResetLatch(&MyProc->procLatch);
 
 		if(!isExtensionLoaded()){
-			elog(INFO, "Extension not loaded");
+			elog(DEBUG2, "Extension not loaded");
 			continue;
 		}
 
@@ -109,7 +150,12 @@ worker_main(Datum main_arg)
 
 		initStringInfo(&select_query);
 
-		appendStringInfo(&select_query, "SELECT id, url FROM net.http_request_queue");
+		appendStringInfo(&select_query, "\
+			SELECT\
+			  q.id, q.url \
+			FROM net.http_request_queue q \
+			LEFT JOIN net.http_response r ON q.id = r.id \
+			WHERE r.id IS NULL");
 
 		if (SPI_execute(select_query.data, true, 0) == SPI_OK_SELECT)
 		{
@@ -127,20 +173,17 @@ worker_main(Datum main_arg)
 			{
 					int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
 					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
-					bool is_completed = DatumGetBool(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
-					elog(INFO, "ID: %ld", id);
-					elog(INFO, "URL: %s", url);
-					elog(INFO, "Completed: %d", is_completed);
 
-					if(!is_completed){
-						res = init(cm, url, id);
-						if(res) {
-							elog(ERROR, "error: init() returned %d\n", res);
-						}
-						res = curl_multi_perform(cm, &still_running);
-						if(res != CURLM_OK) {
-								elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
-						}
+					elog(DEBUG2, "Making a request to %s with id %ld", url, id);
+
+					res = init(cm, url, id, curlDataMap);
+
+					if(res) {
+						elog(ERROR, "error: init() returned %d\n", res);
+					}
+					res = curl_multi_perform(cm, &still_running);
+					if(res != CURLM_OK) {
+							elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
 					}
 			}
 		}
@@ -154,16 +197,18 @@ worker_main(Datum main_arg)
 				}
 
 				curl_multi_perform(cm, &still_running);
-
 		} while(still_running);
 
 		initStringInfo(&insert_query);
-		appendStringInfo(&insert_query, "insert into net.http_response(id, http_status_code) values ($1, $2)");
+		appendStringInfo(&insert_query, "insert into net.http_response(id, status_code, body) values ($1, $2, $3)");
 
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				int64 id;
-				Oid argTypes[2];
-				Datum argValues[2];
+				int argCount = 3;
+				Oid argTypes[3];
+				Datum argValues[3];
+				CurlData *cdata = NULL;
+				bool isPresent = false;
 
 				if (msg->msg == CURLMSG_DONE) {
 						eh = msg->easy_handle;
@@ -177,7 +222,9 @@ worker_main(Datum main_arg)
 						curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 						curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
 
-						elog(INFO, "GET of %ld returned http status code %d\n", id, http_status_code);
+						elog(DEBUG2, "GET of %ld returned http status code %d\n", id, http_status_code);
+
+						cdata = hash_search(curlDataMap, &id, HASH_FIND, &isPresent);
 
 						argTypes[0] = INT8OID;
 						argValues[0] = Int64GetDatum(id);
@@ -185,7 +232,10 @@ worker_main(Datum main_arg)
 						argTypes[1] = INT4OID;
 						argValues[1] = Int32GetDatum(http_status_code);
 
-						if (SPI_execute_with_args(insert_query.data, 2, argTypes, argValues, NULL,
+						argTypes[2] = CSTRINGOID;
+						argValues[2] = CStringGetDatum(cdata->body->data);
+
+						if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, NULL,
 										false, 1) != SPI_OK_INSERT)
 						{
 							elog(ERROR, "SPI_exec failed: %s", insert_query.data);
@@ -193,6 +243,9 @@ worker_main(Datum main_arg)
 
 						curl_multi_remove_handle(cm, eh);
 						curl_easy_cleanup(eh);
+						pfree(cdata->body->data);
+						pfree(cdata->body);
+						hash_search(curlDataMap, &id, HASH_REMOVE, &isPresent);
 				}
 				else {
 						elog(ERROR, "error: after curl_multi_info_read(), CURLMsg=%d\n", msg->msg);
