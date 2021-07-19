@@ -1,10 +1,10 @@
 begin;
 
-    select http.async_get('http://supabase.io');
+    select net.async_get('http://supabase.io');
 
     select
         id, url
     from
-        http.request_queue;
+        net.request_queue;
 
 rollback
