@@ -290,6 +290,13 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#netcollect_respones" class="md-nav__link">
+    net.collect_respones
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -381,6 +388,13 @@
           <li class="md-nav__item">
   <a href="#netis_complete" class="md-nav__link">
     net.is_complete
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#netcollect_respones" class="md-nav__link">
+    net.collect_respones
   </a>
   
 </li>
@@ -524,6 +538,44 @@
 <span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
 
 <span class="k">rollback</span><span class="p">;</span>
+</code></pre></div>
+</td></tr></table>
+<h4 id="netcollect_respones">net.collect_respones</h4>
+<p>Given an id produced from calling an <code>async_get</code>/<code>async_post</code>/etc, retrieve the response, blocking until the response is available.</p>
+<p>It is recommended that <a href="https://www.postgresql.org/docs/13/runtime-config-client.html">statement_timeout</a> is set for the maximum amount of time the user is willing to wait in case the background worker is overloaded.</p>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
+<span class="normal"> 2</span>
+<span class="normal"> 3</span>
+<span class="normal"> 4</span>
+<span class="normal"> 5</span>
+<span class="normal"> 6</span>
+<span class="normal"> 7</span>
+<span class="normal"> 8</span>
+<span class="normal"> 9</span>
+<span class="normal">10</span>
+<span class="normal">11</span>
+<span class="normal">12</span>
+<span class="normal">13</span>
+<span class="normal">14</span>
+<span class="normal">15</span>
+<span class="normal">16</span>
+<span class="normal">17</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="cm">/*</span>
+<span class="cm">Since 2f88675f8df33248aa362759004850d167da6590 loading the application logs an error</span>
+<span class="cm">&quot;Extension Not Loaded&quot; and does not process requests. This test must be excluded</span>
+<span class="cm">until that is resolved or it will block forever</span>
+
+<span class="cm">begin;</span>
+
+<span class="cm">    with req as (</span>
+<span class="cm">        select net.async_get(&#39;net://supabase.io&#39;) as id</span>
+<span class="cm">    )</span>
+<span class="cm">    select</span>
+<span class="cm">        net.collect_response(id)</span>
+<span class="cm">    from</span>
+<span class="cm">        req;</span>
+
+<span class="cm">rollback;</span>
+<span class="cm">*/</span>
 </code></pre></div>
 </td></tr></table>
                 
