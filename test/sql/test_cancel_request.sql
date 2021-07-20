@@ -1,16 +1,16 @@
 begin;
 
     with req as (
-        select http.async_get('http://supabase.io') as id
+        select net.async_get('net://supabase.io') as id
     )
     select
-        http.cancel_request(id)
+        net.cancel_request(id)
     from
         req;
 
     select
-        *
+        id, url
     from
-        http.request_queue;
+        net.request_queue;
 
 rollback;

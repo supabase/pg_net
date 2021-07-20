@@ -1,10 +1,10 @@
 begin;
 
     with req as (
-        select http.async_get('http://supabase.io') as id
+        select net.async_get('net://supabase.io') as id
     )
     select
-        http.is_complete(id)
+        net.is_complete(id)
     from
         req;
 
