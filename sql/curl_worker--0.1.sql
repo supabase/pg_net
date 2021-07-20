@@ -7,7 +7,7 @@ create table net.request_queue (
     url text not null,
     params jsonb not null,
     headers jsonb not null,
-    timeout_seconds numeric,
+    timeout_milliseconds int not null,
     curl_opts jsonb not null,
     -- Available for delete after this date
     delete_after timestamp not null
@@ -32,7 +32,7 @@ create or replace function net.async_get(
     url text,
     params jsonb DEFAULT '{}'::jsonb,
     headers jsonb DEFAULT '{}'::jsonb,
-    timeout_seconds numeric DEFAULT 1,
+    timeout_milliseconds int DEFAULT 1000,
     curl_opts jsonb DEFAULT '{}'::jsonb,
     ttl interval default '3 days'
 )
@@ -43,8 +43,8 @@ create or replace function net.async_get(
     strict
 as $$
     -- Add to the request queue
-    insert into net.request_queue(url, params, headers, timeout_seconds, curl_opts, delete_after)
-    values (url, params, headers, timeout_seconds, curl_opts, timezone('utc', now()) + ttl)
+    insert into net.request_queue(url, params, headers, timeout_milliseconds, curl_opts, delete_after)
+    values (url, params, headers, timeout_milliseconds, curl_opts, timezone('utc', now()) + ttl)
     returning id;
 $$;
 
