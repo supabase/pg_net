@@ -26,3 +26,13 @@ Given an id produced from calling an `async_get`/`async_post`/etc, check if the 
 ```sql
 --8<-- "test/expected/test_is_complete.out"
 ```
+
+#### net.collect_respones
+
+Given an id produced from calling an `async_get`/`async_post`/etc, retrieve the response, blocking until the response is available.
+
+It is recommended that [statement_timeout](https://www.postgresql.org/docs/13/runtime-config-client.html) is set for the maximum amount of time the user is willing to wait in case the background worker is overloaded.
+
+```sql
+--8<-- "test/expected/test_collect_response.out"
+```
