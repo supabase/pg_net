@@ -20,6 +20,8 @@
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
+#include "utils/jsonb.h"
+
 #include <curl/multi.h>
 
 PG_MODULE_MAGIC;
@@ -32,18 +34,10 @@ typedef struct _CurlData
 {
 	int64 id;
 	StringInfo body;
+	JsonbParseState *headers;
 } CurlData;
 
 static volatile sig_atomic_t got_sigterm = false;
-
-static size_t
-cb(void *contents, size_t size, size_t nmemb, void *userp)
-{
-	size_t realsize = size * nmemb;
-	StringInfo si = (StringInfo)userp;
-	appendBinaryStringInfo(si, (const char*)contents, (int)realsize);
-	return realsize;
-}
 
 static void
 handle_sigterm(SIGNAL_ARGS)
@@ -55,12 +49,65 @@ handle_sigterm(SIGNAL_ARGS)
 	errno = save_errno;
 }
 
+static size_t
+body_cb(void *contents, size_t size, size_t nmemb, void *userp)
+{
+	size_t realsize = size * nmemb;
+	StringInfo si = (StringInfo)userp;
+	appendBinaryStringInfo(si, (const char*)contents, (int)realsize);
+	return realsize;
+}
+
+static size_t
+header_cb(void *contents, size_t size, size_t nmemb, void *userp)
+{
+	size_t realsize = size * nmemb;
+	JsonbParseState *headers = (JsonbParseState *)userp;
+	/* per curl docs, the status code is included in the header data
+	 * (it starts with: HTTP/1.1 200 OK or HTTP/2 200 OK)*/
+	bool firstLine = strncmp(contents, "HTTP/", 5) == 0;
+	/* the final(end of headers) last line is empty - just a CRLF */
+	bool lastLine = strncmp(contents, "\r\n", 2) == 0;
+
+	/*Ignore non-header data in the first header line and last header line*/
+	if(!firstLine && !lastLine){
+	/*TODO: make the parsing more robust, test with invalid headers*/
+		char *token;
+		char *tmp = pstrdup(contents);
+		JsonbValue	key, val;
+
+		elog(DEBUG2, "FullHeaderLine: %s\n", tmp);
+
+		/*The header comes as "Header-Key: val", split by whitespace and ditch the colon later*/
+		token = strtok(tmp, " ");
+		elog(DEBUG2, "Key: %s\n", token);
+
+		key.type = jbvString;
+		key.val.string.val = token;
+		/*strlen - 1 because we ditch the last char - the colon*/
+		key.val.string.len = strlen(token) - 1;
+		(void)pushJsonbValue(&headers, WJB_KEY, &key);
+
+		/*Every header line ends with CRLF, split and remove it*/
+		token = strtok(NULL, "\r\n");
+		elog(DEBUG2, "Value: %s\n", token);
+
+		val.type = jbvString;
+		val.val.string.val = token;
+		val.val.string.len = strlen(token);
+		(void)pushJsonbValue(&headers, WJB_VALUE, &val);
+	}
+
+	return realsize;
+}
+
 static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
 {
 	CURL *eh = curl_easy_init();
 
 	CurlData *cdata = NULL;
 	StringInfo body = makeStringInfo();
+	JsonbParseState *headers = NULL;
 	bool isPresent = false;
 
 	cdata = hash_search(curlDataMap, &id, HASH_ENTER, &isPresent);
@@ -68,10 +115,14 @@ static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
 	{
 		cdata->id = id;
 		cdata->body = body;
+		(void)pushJsonbValue(&headers, WJB_BEGIN_OBJECT, NULL);
+		cdata->headers = headers;
 	}
 
-	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, cb);
+	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, body_cb);
 	curl_easy_setopt(eh, CURLOPT_WRITEDATA, cdata->body);
+	curl_easy_setopt(eh, CURLOPT_HEADERFUNCTION, header_cb);
+	curl_easy_setopt(eh, CURLOPT_HEADERDATA, cdata->headers);
 	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
 	curl_easy_setopt(eh, CURLOPT_URL, url);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
@@ -200,13 +251,13 @@ worker_main(Datum main_arg)
 		} while(still_running);
 
 		initStringInfo(&insert_query);
-		appendStringInfo(&insert_query, "insert into net.http_response(id, status_code, body) values ($1, $2, $3)");
+		appendStringInfo(&insert_query, "insert into net.http_response(id, status_code, body, headers) values ($1, $2, $3, $4)");
 
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				int64 id;
-				int argCount = 3;
-				Oid argTypes[3];
-				Datum argValues[3];
+				int argCount = 4;
+				Oid argTypes[4];
+				Datum argValues[4];
 				CurlData *cdata = NULL;
 				bool isPresent = false;
 
@@ -234,6 +285,9 @@ worker_main(Datum main_arg)
 
 						argTypes[2] = CSTRINGOID;
 						argValues[2] = CStringGetDatum(cdata->body->data);
+
+						argTypes[3] = JSONBOID;
+						argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->headers, WJB_END_OBJECT, NULL)));
 
 						if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, NULL,
 										false, 1) != SPI_OK_INSERT)
