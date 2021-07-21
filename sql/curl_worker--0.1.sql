@@ -2,23 +2,22 @@ create schema if not exists net;
 
 -- Store pending requests. The background worker reads from here
 -- API: Private
-create table net.request_queue (
-    id bigserial primary key,
+create table net.http_request_queue(
+    id uuid primary key default uuid_generate_v4(),
     url text not null,
     params jsonb not null,
     headers jsonb not null,
     timeout_milliseconds int not null,
-    curl_opts jsonb not null,
     -- Available for delete after this date
     delete_after timestamp not null
 );
-create index ix_request_queue_delete_after on net.request_queue (delete_after);
+create index ix_http_request_queue_delete_after on net.http_request_queue (delete_after);
 
 
 -- Associates a response with a request
 -- API: Private
-create table net.response (
-    id bigint primary key references net.request_queue(id) on delete cascade,
+create table net.http_response(
+    id uuid primary key references net.http_request_queue(id) on delete cascade,
     net_status_code integer,
     content_type text,
     headers jsonb,
@@ -26,89 +25,137 @@ create table net.response (
     timed_out bool
 );
 
--- Interface to make an async request
--- API: Public
-create or replace function net.async_get(
-    url text,
-    params jsonb DEFAULT '{}'::jsonb,
-    headers jsonb DEFAULT '{}'::jsonb,
-    timeout_milliseconds int DEFAULT 1000,
-    curl_opts jsonb DEFAULT '{}'::jsonb,
-    ttl interval default '3 days'
+
+-- Blocks until an http_request is complete
+-- API: Private
+create or replace function net._await_response(
+    request_id uuid
 )
-    returns bigint
-    language sql
+    returns uuid
     volatile
     parallel safe
     strict
-as $$
-    -- Add to the request queue
-    insert into net.request_queue(url, params, headers, timeout_milliseconds, curl_opts, delete_after)
-    values (url, params, headers, timeout_milliseconds, curl_opts, timezone('utc', now()) + ttl)
-    returning id;
-$$;
-
--- Check if a request is complete
--- API: Public
-create or replace function net.is_complete(
-    request_id bigint
-)
-    returns bool
-    language sql
-    stable
-    parallel safe
-    strict
-as $$
-    select (count(1) > 0)::bool
-    from net.response
-    where id = request_id;
-$$;
-
--- Cancel a request in the queue
--- API: Public
-create or replace function net.cancel_request(
-    request_id bigint
-)
-    returns bigint
-    language sql
-    volatile
-    parallel safe
-    strict
-as $$
-    delete
-    from net.request_queue
-    where id = request_id
-    returning id;
-$$;
-
-
--- Collect respones of a request, blocking until complete as needed
--- API: Public
-create or replace function net.collect_response(
-    request_id bigint
-)
-    returns net.response
     language plpgsql
-    volatile
-    parallel safe
-    strict
 as $$
 declare
-    rec net.response;
-
+    rec net.http_response;
 begin
     while rec is null loop
         select *
         into rec
-        from net.response
+        from net.http_response
         where id = request_id;
-        
-        -- Wait 50 ms before checking again
+
         if rec is null then
+            -- Wait 50 ms before checking again
             perform pg_sleep(0.05);
         end if;
     end loop;
 
     return rec;
 end;
+$$;
+
+
+-- Interface to make an async request
+-- API: Public
+create or replace function net.http_get(
+    -- url for the request
+    url text,
+    -- key/value pairs to be url encoded and appended to the `url`
+    params jsonb DEFAULT '{}'::jsonb,
+    -- key/values to be included in request headers
+    headers jsonb DEFAULT '{}'::jsonb,
+    -- the maximum number of milliseconds the request may take before being cancelled
+    timeout_milliseconds int DEFAULT 1000,
+    -- the minimum amount of time the response should be persisted
+    ttl interval default '3 days',
+    -- when `true`, return immediately. when `false` wait for the request to complete before returning
+    async bool default true
+)
+    -- request_id reference
+    returns uuid
+    strict
+    volatile
+    parallel safe
+    language plpgsql
+as $$
+declare
+    request_id uuid;
+    respone_rec net.http_response;
+begin
+    -- Add to the request queue
+    insert into net.http_request_queue(url, params, headers, timeout_milliseconds, delete_after)
+    values (url, params, headers, timeout_milliseconds, timezone('utc', now()) + ttl)
+    returning id
+    into request_id;
+
+    -- If request is async, return id immediately
+    if async then
+        return request_id;
+    end if;
+
+    -- If sync, wait for the request to complete before returning
+    perform net._await_http_response(request_id);
+    return request_id;
+end
+$$;
+
+
+-- Collect respones of an http request
+-- API: Public
+create or replace function net.http_collect_response(
+    -- request_id reference
+    request_id uuid,
+    -- when `true`, return immediately. when `false` wait for the request to complete before returning
+    async bool default true
+)
+    -- http response composite type
+    returns net.http_response
+    language plpgsql
+    volatile
+    parallel safe
+    strict
+as $$
+declare
+    rec net.http_response;
+begin
+
+    if not async then
+        perform net._await_http_response(request_id);
+    end if;
+
+    select *
+    into rec
+    from net.http_response
+    where id = request_id;
+
+    if rec is null then
+        -- if rec is null it is a composite with every
+        -- field nulled out rather than a single null value
+        return null;
+    end if;
+
+    -- Return a valid, populated http_response
+    return rec;
+end;
+$$;
+
+
+-- Cancel a request in the queue
+-- API: Public
+create or replace function net.http_cancel_request(
+    -- request_id reference
+    request_id uuid
+)
+    returns uuid
+    volatile
+    parallel safe
+    strict
+    language sql
+as $$
+    delete
+    from net.http_request_queue
+    where id = request_id
+    returning id;
 $$;

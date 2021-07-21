@@ -1,1 +1,1 @@
-create extension curl_worker;
+create extension curl_worker cascade;
