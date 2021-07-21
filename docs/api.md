@@ -1,5 +1,3 @@
-Creating the All examples assume `pg_curl_worker` are created in a schema named `net`.
-
 ## HTTP
 
 ### net.http_get

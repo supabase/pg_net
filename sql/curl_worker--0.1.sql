@@ -112,10 +112,10 @@ create or replace function net.http_collect_response(
 )
     -- http response composite type
     returns net.http_response
-    language plpgsql
+    strict
     volatile
     parallel safe
-    strict
+    language plpgsql
 as $$
 declare
     rec net.http_response;
@@ -148,10 +148,11 @@ create or replace function net.http_cancel_request(
     -- request_id reference
     request_id uuid
 )
+    -- request_id reference
     returns uuid
+    strict
     volatile
     parallel safe
-    strict
     language sql
 as $$
     delete
