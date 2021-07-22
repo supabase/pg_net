@@ -251,14 +251,17 @@ worker_main(Datum main_arg)
 		} while(still_running);
 
 		initStringInfo(&insert_query);
-		appendStringInfo(&insert_query, "insert into net.http_response(id, status_code, body, headers) values ($1, $2, $3, $4)");
+		appendStringInfo(&insert_query, "\
+			insert into net.http_response(id, status_code, body, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
 
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				int64 id;
-				int argCount = 4;
-				Oid argTypes[4];
-				Datum argValues[4];
+				int argCount = 6;
+				Oid argTypes[6];
+				Datum argValues[6];
 				CurlData *cdata = NULL;
+				char *contentType = NULL;
+				bool timedOut = false;
 				bool isPresent = false;
 
 				if (msg->msg == CURLMSG_DONE) {
@@ -272,6 +275,7 @@ worker_main(Datum main_arg)
 
 						curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 						curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
+						curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
 
 						elog(DEBUG2, "GET of %ld returned http status code %d\n", id, http_status_code);
 
@@ -288,6 +292,12 @@ worker_main(Datum main_arg)
 
 						argTypes[3] = JSONBOID;
 						argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->headers, WJB_END_OBJECT, NULL)));
+
+						argTypes[4] = CSTRINGOID;
+						argValues[4] = CStringGetDatum(contentType);
+
+						argTypes[5] = BOOLOID;
+						argValues[5] = BoolGetDatum(timedOut);
 
 						if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, NULL,
 										false, 1) != SPI_OK_INSERT)
