@@ -96,7 +96,7 @@ begin
     end if;
 
     -- If sync, wait for the request to complete before returning
-    perform net._await_http_response(request_id);
+    perform net._await_response(request_id);
     return request_id;
 end
 $$;
@@ -122,7 +122,7 @@ declare
 begin
 
     if not async then
-        perform net._await_http_response(request_id);
+        perform net._await_response(request_id);
     end if;
 
     select *

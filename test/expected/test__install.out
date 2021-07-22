@@ -1,2 +1,0 @@
-create extension curl_worker cascade;
-NOTICE:  installing required extension "uuid-ossp"
