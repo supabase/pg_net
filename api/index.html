@@ -11,21 +11,21 @@
       
       
       
-        <link rel="canonical" href="https://supabase.github.io/pg_curl_worker/api/">
+        <link rel="canonical" href="https://supabase.github.io/pg_net/api/">
       
       <link rel="icon" href="../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.2.2, mkdocs-material-7.1.11">
+      <meta name="generator" content="mkdocs-1.2.2, mkdocs-material-7.2.0">
     
     
       
-        <title>API Reference - pg_curl_worker</title>
+        <title>API Reference - pg_net</title>
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.3754935a.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.fe914879.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.f1a3b89f.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ba0d045b.min.css">
         
           
           
@@ -80,7 +80,7 @@
     
       <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="pg_curl_worker" class="md-header__button md-logo" aria-label="pg_curl_worker" data-md-component="logo">
+    <a href=".." title="pg_net" class="md-header__button md-logo" aria-label="pg_net" data-md-component="logo">
       
   <img src="../assets/favicon.ico" alt="logo">
 
@@ -92,7 +92,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            pg_curl_worker
+            pg_net
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -115,14 +115,18 @@
   <label class="md-search__overlay" for="__search"></label>
   <div class="md-search__inner" role="search">
     <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" data-md-state="active" required>
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
       <label class="md-search__icon md-icon" for="__search">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
       </label>
-      <button type="reset" class="md-search__icon md-icon" aria-label="Clear" tabindex="-1">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
-      </button>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" aria-label="Clear" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
+        </button>
+      </nav>
+      
     </form>
     <div class="md-search__output">
       <div class="md-search__scrollwrap" data-md-scrollfix>
@@ -140,13 +144,13 @@
     
       <div class="md-header__source">
         
-<a href="https://github.com/supabase/pg_curl_worker/" title="Go to repository" class="md-source" data-md-component="source">
+<a href="https://github.com/supabase/pg_net/" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
   </div>
   <div class="md-source__repository">
-    supabase/pg_curl_worker
+    supabase/pg_net
   </div>
 </a>
       </div>
@@ -172,23 +176,23 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="pg_curl_worker" class="md-nav__button md-logo" aria-label="pg_curl_worker" data-md-component="logo">
+    <a href=".." title="pg_net" class="md-nav__button md-logo" aria-label="pg_net" data-md-component="logo">
       
   <img src="../assets/favicon.ico" alt="logo">
 
     </a>
-    pg_curl_worker
+    pg_net
   </label>
   
     <div class="md-nav__source">
       
-<a href="https://github.com/supabase/pg_curl_worker/" title="Go to repository" class="md-source" data-md-component="source">
+<a href="https://github.com/supabase/pg_net/" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
   </div>
   <div class="md-source__repository">
-    supabase/pg_curl_worker
+    supabase/pg_net
   </div>
 </a>
     </div>
@@ -270,35 +274,123 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#netasync_get" class="md-nav__link">
-    net.async_get
+  <a href="#nethttp_get" class="md-nav__link">
+    net.http_get
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_get">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    description
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#netcancel_request" class="md-nav__link">
-    net.cancel_request
+  <a href="#signature" class="md-nav__link">
+    signature
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#netis_complete" class="md-nav__link">
-    net.is_complete
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#netcollect_respones" class="md-nav__link">
-    net.collect_respones
+  <a href="#usage" class="md-nav__link">
+    usage
   </a>
   
 </li>
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nethttp_collect_response" class="md-nav__link">
+    net.http_collect_response
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_collect_response">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description_1" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signature_1" class="md-nav__link">
+    signature
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_1" class="md-nav__link">
+    usage
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nethttp_cancel_request" class="md-nav__link">
+    net.http_cancel_request
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_cancel_request">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description_2" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signature_2" class="md-nav__link">
+    signature
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#description_3" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_2" class="md-nav__link">
+    usage
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#smtp" class="md-nav__link">
+    SMTP
+  </a>
   
 </li>
       
@@ -320,21 +412,6 @@
     <li class="md-nav__item">
       <a href="../contributing/" class="md-nav__link">
         Contributing
-      </a>
-    </li>
-  
-
-    
-      
-      
-      
-
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../roadmap/" class="md-nav__link">
-        Roadmap
       </a>
     </li>
   
@@ -372,35 +449,123 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#netasync_get" class="md-nav__link">
-    net.async_get
+  <a href="#nethttp_get" class="md-nav__link">
+    net.http_get
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_get">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    description
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#netcancel_request" class="md-nav__link">
-    net.cancel_request
+  <a href="#signature" class="md-nav__link">
+    signature
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#netis_complete" class="md-nav__link">
-    net.is_complete
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#netcollect_respones" class="md-nav__link">
-    net.collect_respones
+  <a href="#usage" class="md-nav__link">
+    usage
   </a>
   
 </li>
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nethttp_collect_response" class="md-nav__link">
+    net.http_collect_response
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_collect_response">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description_1" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signature_1" class="md-nav__link">
+    signature
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_1" class="md-nav__link">
+    usage
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nethttp_cancel_request" class="md-nav__link">
+    net.http_cancel_request
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_cancel_request">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description_2" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signature_2" class="md-nav__link">
+    signature
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#description_3" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_2" class="md-nav__link">
+    usage
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#smtp" class="md-nav__link">
+    SMTP
+  </a>
   
 </li>
       
@@ -416,17 +581,18 @@
             <article class="md-content__inner md-typeset">
               
                 
-                  <a href="https://github.com/supabase/pg_curl_worker/edit/master/docs/api.md" title="Edit this page" class="md-content__button md-icon">
+                  <a href="https://github.com/supabase/pg_net/edit/master/docs/api.md" title="Edit this page" class="md-content__button md-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
                   </a>
                 
                 
                   <h1>API Reference</h1>
                 
-                <p>Creating the All examples assume <code>pg_curl_worker</code> are created in a schema named <code>net</code>.</p>
-<h2 id="http">HTTP</h2>
-<h4 id="netasync_get">net.async_get</h4>
-<p>Create an async HTTP GET request returning a bigint id that can be used to retrieve the result.</p>
+                <h2 id="http">HTTP</h2>
+<h3 id="nethttp_get">net.http_get</h3>
+<h5 id="description">description</h5>
+<p>Create an HTTP GET request returning the request's uuid id. </p>
+<h5 id="signature">signature</h5>
 <table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
 <span class="normal"> 2</span>
 <span class="normal"> 3</span>
@@ -443,27 +609,32 @@
 <span class="normal">14</span>
 <span class="normal">15</span>
 <span class="normal">16</span>
-<span class="normal">17</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">begin</span><span class="p">;</span>
-    <span class="k">select</span> <span class="n">net</span><span class="p">.</span><span class="n">async_get</span><span class="p">(</span><span class="s1">&#39;http://supabase.io&#39;</span><span class="p">);</span>
- <span class="n">async_get</span> 
-<span class="c1">-----------</span>
-         <span class="mi">1</span>
-<span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
-
-    <span class="k">select</span>
-        <span class="n">id</span><span class="p">,</span> <span class="n">url</span>
-    <span class="k">from</span>
-        <span class="n">net</span><span class="p">.</span><span class="n">request_queue</span><span class="p">;</span>
- <span class="n">id</span> <span class="o">|</span>        <span class="n">url</span>         
-<span class="c1">----+--------------------</span>
-  <span class="mi">1</span> <span class="o">|</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">supabase</span><span class="p">.</span><span class="n">io</span>
-<span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
-
-<span class="k">rollback</span>
+<span class="normal">17</span>
+<span class="normal">18</span>
+<span class="normal">19</span>
+<span class="normal">20</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span>
+    <span class="c1">-- url for the request</span>
+    <span class="n">url</span> <span class="nb">text</span><span class="p">,</span>
+    <span class="c1">-- key/value pairs to be url encoded and appended to the `url`</span>
+    <span class="n">params</span> <span class="n">jsonb</span> <span class="k">DEFAULT</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="c1">-- key/values to be included in request headers</span>
+    <span class="n">headers</span> <span class="n">jsonb</span> <span class="k">DEFAULT</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="c1">-- the maximum number of milliseconds the request may take before being cancelled</span>
+    <span class="n">timeout_milliseconds</span> <span class="nb">int</span> <span class="k">DEFAULT</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="c1">-- the minimum amount of time the response should be persisted</span>
+    <span class="n">ttl</span> <span class="nb">interval</span> <span class="k">default</span> <span class="s1">&#39;3 days&#39;</span><span class="p">,</span>
+    <span class="c1">-- when `true`, return immediately. when `false` wait for the request to complete before returning</span>
+    <span class="n">async</span> <span class="n">bool</span> <span class="k">default</span> <span class="k">true</span>
+<span class="p">)</span>
+    <span class="c1">-- request_id reference</span>
+    <span class="k">returns</span> <span class="n">uuid</span>
+    <span class="k">strict</span>
+    <span class="k">volatile</span>
+    <span class="n">parallel</span> <span class="n">safe</span>
+    <span class="k">language</span> <span class="n">plpgsql</span>
 </code></pre></div>
 </td></tr></table>
-<h4 id="netcancel_request">net.cancel_request</h4>
-<p>Given an id produced from calling an <code>async_get</code>/<code>async_post</code>/etc, cancel the request. If the request was already completed, its result will no longer be retrievable.</p>
+<h5 id="usage">usage</h5>
 <table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
 <span class="normal"> 2</span>
 <span class="normal"> 3</span>
@@ -485,32 +656,67 @@
 <span class="normal">19</span>
 <span class="normal">20</span>
 <span class="normal">21</span>
-<span class="normal">22</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">begin</span><span class="p">;</span>
-    <span class="k">with</span> <span class="n">req</span> <span class="k">as</span> <span class="p">(</span>
-        <span class="k">select</span> <span class="n">net</span><span class="p">.</span><span class="n">async_get</span><span class="p">(</span><span class="s1">&#39;net://supabase.io&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">id</span>
+<span class="normal">22</span>
+<span class="normal">23</span>
+<span class="normal">24</span>
+<span class="normal">25</span>
+<span class="normal">26</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="c1">-- Async</span>
+<span class="k">begin</span><span class="p">;</span>
+    <span class="k">with</span> <span class="n">request</span> <span class="k">as</span> <span class="p">(</span>
+        <span class="k">select</span>
+            <span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span><span class="s1">&#39;http://supabase.io&#39;</span><span class="p">,</span> <span class="n">async</span><span class="p">:</span><span class="o">=</span><span class="k">true</span><span class="p">)</span> <span class="k">as</span> <span class="n">id</span>
     <span class="p">)</span>
     <span class="k">select</span>
-        <span class="n">net</span><span class="p">.</span><span class="n">cancel_request</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
+        <span class="n">net</span><span class="p">.</span><span class="n">http_collect_response</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
     <span class="k">from</span>
-        <span class="n">req</span><span class="p">;</span>
- <span class="n">cancel_request</span> 
-<span class="c1">----------------</span>
-              <span class="mi">2</span>
+        <span class="n">request</span><span class="p">;</span>
+ <span class="n">http_collect_response</span> 
+<span class="c1">-----------------------</span>
+
 <span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
 
-    <span class="k">select</span>
-        <span class="n">id</span><span class="p">,</span> <span class="n">url</span>
-    <span class="k">from</span>
-        <span class="n">net</span><span class="p">.</span><span class="n">request_queue</span><span class="p">;</span>
- <span class="n">id</span> <span class="o">|</span> <span class="n">url</span> 
-<span class="c1">----+-----</span>
-<span class="p">(</span><span class="mi">0</span> <span class="k">rows</span><span class="p">)</span>
-
 <span class="k">rollback</span><span class="p">;</span>
+<span class="c1">-- Sync</span>
+<span class="c1">-- begin;</span>
+    <span class="c1">-- with request as (</span>
+        <span class="c1">-- select net.http_get(&#39;http://supabase.io&#39;, async:=false) as id</span>
+    <span class="c1">-- )</span>
+    <span class="c1">-- select</span>
+        <span class="c1">-- net.http_collect_response(id)</span>
+    <span class="c1">-- from</span>
+        <span class="c1">-- request;</span>
+<span class="c1">-- rollback;</span>
 </code></pre></div>
 </td></tr></table>
-<h4 id="netis_complete">net.is_complete</h4>
-<p>Given an id produced from calling an <code>async_get</code>/<code>async_post</code>/etc, check if the request has been completed.</p>
+<h3 id="nethttp_collect_response">net.http_collect_response</h3>
+<h5 id="description_1">description</h5>
+<p>Given a <code>request_id</code> reference, retrieve the response.</p>
+<p>When <code>async:=false</code> is set it is recommended that <a href="https://www.postgresql.org/docs/13/runtime-config-client.html">statement_timeout</a> is set for the maximum amount of time the caller is willing to wait in case the response is slow to populate.</p>
+<h5 id="signature_1">signature</h5>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
+<span class="normal"> 2</span>
+<span class="normal"> 3</span>
+<span class="normal"> 4</span>
+<span class="normal"> 5</span>
+<span class="normal"> 6</span>
+<span class="normal"> 7</span>
+<span class="normal"> 8</span>
+<span class="normal"> 9</span>
+<span class="normal">10</span>
+<span class="normal">11</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_collect_response</span><span class="p">(</span>
+    <span class="c1">-- request_id reference</span>
+    <span class="n">request_id</span> <span class="n">uuid</span><span class="p">,</span>
+    <span class="c1">-- when `true`, return immediately. when `false` wait for the request to complete before returning</span>
+    <span class="n">async</span> <span class="n">bool</span> <span class="k">default</span> <span class="k">true</span>
+<span class="p">)</span>
+    <span class="c1">-- http response composite type</span>
+    <span class="k">returns</span> <span class="n">net</span><span class="p">.</span><span class="n">http_response</span>
+    <span class="k">strict</span>
+    <span class="k">volatile</span>
+    <span class="n">parallel</span> <span class="n">safe</span>
+</code></pre></div>
+</td></tr></table>
+<h5 id="usage_1">usage</h5>
 <table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
 <span class="normal"> 2</span>
 <span class="normal"> 3</span>
@@ -526,23 +732,46 @@
 <span class="normal">13</span>
 <span class="normal">14</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">begin</span><span class="p">;</span>
     <span class="k">with</span> <span class="n">req</span> <span class="k">as</span> <span class="p">(</span>
-        <span class="k">select</span> <span class="n">net</span><span class="p">.</span><span class="n">async_get</span><span class="p">(</span><span class="s1">&#39;net://supabase.io&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">id</span>
+        <span class="k">select</span> <span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span><span class="s1">&#39;https://supabase.io&#39;</span><span class="p">,</span> <span class="n">async</span><span class="p">:</span><span class="o">=</span><span class="k">true</span><span class="p">)</span> <span class="k">as</span> <span class="n">id</span>
     <span class="p">)</span>
     <span class="k">select</span>
-        <span class="n">net</span><span class="p">.</span><span class="n">is_complete</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
+        <span class="n">net</span><span class="p">.</span><span class="n">http_collect_response</span><span class="p">(</span><span class="n">id</span><span class="p">,</span> <span class="n">async</span><span class="p">:</span><span class="o">=</span><span class="k">true</span><span class="p">)</span>
     <span class="k">from</span>
         <span class="n">req</span><span class="p">;</span>
- <span class="n">is_complete</span> 
-<span class="c1">-------------</span>
- <span class="n">f</span>
+ <span class="n">http_collect_response</span> 
+<span class="c1">-----------------------</span>
+
 <span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
 
 <span class="k">rollback</span><span class="p">;</span>
 </code></pre></div>
 </td></tr></table>
-<h4 id="netcollect_respones">net.collect_respones</h4>
-<p>Given an id produced from calling an <code>async_get</code>/<code>async_post</code>/etc, retrieve the response, blocking until the response is available.</p>
-<p>It is recommended that <a href="https://www.postgresql.org/docs/13/runtime-config-client.html">statement_timeout</a> is set for the maximum amount of time the user is willing to wait in case the background worker is overloaded.</p>
+<h3 id="nethttp_cancel_request">net.http_cancel_request</h3>
+<h5 id="description_2">description</h5>
+<p>Given a <code>request_id</code> reference, cancel the request. If the request was already completed, its result will no longer be retrievable.</p>
+<h5 id="signature_2">signature</h5>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span>
+<span class="normal">6</span>
+<span class="normal">7</span>
+<span class="normal">8</span>
+<span class="normal">9</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_cancel_request</span><span class="p">(</span>
+    <span class="c1">-- request_id reference</span>
+    <span class="n">request_id</span> <span class="n">uuid</span>
+<span class="p">)</span>
+    <span class="c1">-- request_id reference</span>
+    <span class="k">returns</span> <span class="n">uuid</span>
+    <span class="k">strict</span>
+    <span class="k">volatile</span>
+    <span class="n">parallel</span> <span class="n">safe</span>
+</code></pre></div>
+</td></tr></table>
+<h5 id="description_3">description</h5>
+<p>Given an id produced from calling an <code>async_get</code>/<code>async_post</code>/etc, cancel the request. If the request was already completed, its result will no longer be retrievable.</p>
+<h5 id="usage_2">usage</h5>
 <table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
 <span class="normal"> 2</span>
 <span class="normal"> 3</span>
@@ -556,28 +785,24 @@
 <span class="normal">11</span>
 <span class="normal">12</span>
 <span class="normal">13</span>
-<span class="normal">14</span>
-<span class="normal">15</span>
-<span class="normal">16</span>
-<span class="normal">17</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="cm">/*</span>
-<span class="cm">Since 2f88675f8df33248aa362759004850d167da6590 loading the application logs an error</span>
-<span class="cm">&quot;Extension Not Loaded&quot; and does not process requests. This test must be excluded</span>
-<span class="cm">until that is resolved or it will block forever</span>
+<span class="normal">14</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">begin</span><span class="p">;</span>
+    <span class="k">with</span> <span class="n">req</span> <span class="k">as</span> <span class="p">(</span>
+        <span class="k">select</span> <span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span><span class="s1">&#39;https://supabase.io&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">id</span>
+    <span class="p">)</span>
+    <span class="k">select</span>
+        <span class="n">net</span><span class="p">.</span><span class="n">http_cancel_request</span><span class="p">(</span><span class="n">id</span><span class="p">)</span> <span class="k">is</span> <span class="k">not</span> <span class="k">null</span>
+    <span class="k">from</span>
+        <span class="n">req</span><span class="p">;</span>
+ <span class="o">?</span><span class="k">column</span><span class="o">?</span> 
+<span class="c1">----------</span>
+ <span class="n">t</span>
+<span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
 
-<span class="cm">begin;</span>
-
-<span class="cm">    with req as (</span>
-<span class="cm">        select net.async_get(&#39;net://supabase.io&#39;) as id</span>
-<span class="cm">    )</span>
-<span class="cm">    select</span>
-<span class="cm">        net.collect_response(id)</span>
-<span class="cm">    from</span>
-<span class="cm">        req;</span>
-
-<span class="cm">rollback;</span>
-<span class="cm">*/</span>
+<span class="k">rollback</span><span class="p">;</span>
 </code></pre></div>
 </td></tr></table>
+<h2 id="smtp">SMTP</h2>
+<p>Coming soon</p>
                 
               
               
@@ -648,10 +873,10 @@
     <div class="md-dialog" data-md-component="dialog">
       <div class="md-dialog__inner md-typeset"></div>
     </div>
-    <script id="__config" type="application/json">{"base": "..", "features": [], "translations": {"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing", "select.version.title": "Select version"}, "search": "../assets/javascripts/workers/search.477d984a.min.js", "version": null}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": [], "translations": {"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing", "select.version.title": "Select version"}, "search": "../assets/javascripts/workers/search.53c85856.min.js", "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.ddd52ceb.min.js"></script>
+      <script src="../assets/javascripts/bundle.716f8af4.min.js"></script>
       
     
   </body>
