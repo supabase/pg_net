@@ -3,7 +3,7 @@ create schema if not exists net;
 -- Store pending requests. The background worker reads from here
 -- API: Private
 create table net.http_request_queue(
-    id uuid primary key default uuid_generate_v4(),
+    id bigserial primary key,
     url text not null,
     params jsonb not null,
     headers jsonb not null,
@@ -17,8 +17,8 @@ create index ix_http_request_queue_delete_after on net.http_request_queue (delet
 -- Associates a response with a request
 -- API: Private
 create table net.http_response(
-    id uuid primary key references net.http_request_queue(id) on delete cascade,
-    net_status_code integer,
+    id bigint primary key references net.http_request_queue(id) on delete cascade,
+    status_code integer,
     content_type text,
     headers jsonb,
     body text,
@@ -29,9 +29,9 @@ create table net.http_response(
 -- Blocks until an http_request is complete
 -- API: Private
 create or replace function net._await_response(
-    request_id uuid
+    request_id bigint
 )
-    returns uuid
+    returns bigint
     volatile
     parallel safe
     strict
@@ -74,14 +74,14 @@ create or replace function net.http_get(
     async bool default true
 )
     -- request_id reference
-    returns uuid
+    returns bigint
     strict
     volatile
     parallel safe
     language plpgsql
 as $$
 declare
-    request_id uuid;
+    request_id bigint;
     respone_rec net.http_response;
 begin
     -- Add to the request queue
@@ -96,7 +96,7 @@ begin
     end if;
 
     -- If sync, wait for the request to complete before returning
-    perform net._await_http_response(request_id);
+    perform net._await_response(request_id);
     return request_id;
 end
 $$;
@@ -106,7 +106,7 @@ $$;
 -- API: Public
 create or replace function net.http_collect_response(
     -- request_id reference
-    request_id uuid,
+    request_id bigint,
     -- when `true`, return immediately. when `false` wait for the request to complete before returning
     async bool default true
 )
@@ -122,7 +122,7 @@ declare
 begin
 
     if not async then
-        perform net._await_http_response(request_id);
+        perform net._await_response(request_id);
     end if;
 
     select *
@@ -146,10 +146,10 @@ $$;
 -- API: Public
 create or replace function net.http_cancel_request(
     -- request_id reference
-    request_id uuid
+    request_id bigint
 )
     -- request_id reference
-    returns uuid
+    returns bigint
     strict
     volatile
     parallel safe

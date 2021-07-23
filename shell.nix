@@ -19,6 +19,9 @@ let
     };
   pgWithExt = { postgresql } :
     let pg = postgresql.withPackages (p: [ (curl_worker {inherit postgresql;}) ]);
+        # Do `export LOGMIN=DEBUG2` outside nix-shell to get more detailed logging
+        LOGMIN = builtins.getEnv "LOGMIN";
+        logMin = if LOGMIN == "" then "WARNING" else LOGMIN;
     in ''
       export PATH=${pg}/bin:"$PATH"
 
@@ -33,13 +36,16 @@ let
 
       PGTZ=UTC initdb --no-locale --encoding=UTF8 --nosync -U "$PGUSER"
 
-      options="-F -c listen_addresses=\"\" -c log_min_messages=INFO -k $PGDATA"
+      options="-F -c listen_addresses=\"\" -c log_min_messages=${logMin} -k $PGDATA"
 
       ext_options="-c shared_preload_libraries=\"curl_worker\""
 
       pg_ctl start -o "$options" -o "$ext_options"
 
       createdb contrib_regression
+
+      psql -v ON_ERROR_STOP=1 -f test/fixtures.sql -d contrib_regression
+
       "$@"
     '';
   curl-with-pg-12 = writeShellScriptBin "curl-with-pg-12" (pgWithExt { postgresql = postgresql_12; });

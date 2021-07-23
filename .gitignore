@@ -2,3 +2,4 @@ results/
 .python-version
 venv/
 site/
+regression.*
