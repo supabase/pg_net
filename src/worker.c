@@ -1,3 +1,4 @@
+// clang-format off
 #include "postgres.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
@@ -136,7 +137,7 @@ bool isExtensionLoaded(){
 	StartTransactionCommand();
 	PushActiveSnapshot(GetTransactionSnapshot());
 
-	extensionOid = get_extension_oid("curl_worker", true);
+	extensionOid = get_extension_oid("pg_net", true);
 
 	PopActiveSnapshot();
 	CommitTransactionCommand();
@@ -170,13 +171,13 @@ worker_main(Datum main_arg)
 	info.entrysize = sizeof(CurlData);
 	info.hash = tag_hash;
 	info.hcxt = AllocSetContextCreate(CurrentMemoryContext,
-											"pg_curl_worker context",
+											"pg_net context",
 											ALLOCSET_DEFAULT_MINSIZE,
 											ALLOCSET_DEFAULT_INITSIZE,
 											ALLOCSET_DEFAULT_MAXSIZE);
 	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
-	curlDataMap = hash_create("pg_curl_worker curl data", 1024, &info, hashFlags);
+	curlDataMap = hash_create("pg_net curl data", 1024, &info, hashFlags);
 
 	while (!got_sigterm)
 	{
@@ -334,11 +335,12 @@ _PG_init(void)
 	MemSet(&worker, 0, sizeof(BackgroundWorker));
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
-	snprintf(worker.bgw_library_name, BGW_MAXLEN, "curl_worker");
+	snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_net");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "worker_main");
-	snprintf(worker.bgw_name, BGW_MAXLEN, "curl worker");
+	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_net worker");
 	worker.bgw_restart_time = BGW_NEVER_RESTART;
 	worker.bgw_main_arg = (Datum) 0;
 	worker.bgw_notify_pid = 0;
 	RegisterBackgroundWorker(&worker);
 }
+// clang-format on

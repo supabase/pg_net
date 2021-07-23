@@ -4,21 +4,21 @@ with import (builtins.fetchTarball {
   sha256 = "1h8c0mk6jlxdmjqch6ckj30pax3hqh6kwjlvp2021x3z4pdzrn9p";
 }) {};
 let
-  curl_worker = { postgresql }:
+  net_worker = { postgresql }:
     stdenv.mkDerivation {
-      name = "curl_worker";
+      name = "net_worker";
       buildInputs = [ postgresql curl ];
       src = ./.;
       installPhase = ''
         mkdir -p $out/bin
-        install -D curl_worker.so -t $out/lib
+        install -D pg_net.so -t $out/lib
 
         install -D -t $out/share/postgresql/extension sql/*.sql
-        install -D -t $out/share/postgresql/extension curl_worker.control
+        install -D -t $out/share/postgresql/extension pg_net.control
       '';
     };
   pgWithExt = { postgresql } :
-    let pg = postgresql.withPackages (p: [ (curl_worker {inherit postgresql;}) ]);
+    let pg = postgresql.withPackages (p: [ (net_worker {inherit postgresql;}) ]);
         # Do `export LOGMIN=DEBUG2` outside nix-shell to get more detailed logging
         LOGMIN = builtins.getEnv "LOGMIN";
         logMin = if LOGMIN == "" then "WARNING" else LOGMIN;
@@ -38,7 +38,7 @@ let
 
       options="-F -c listen_addresses=\"\" -c log_min_messages=${logMin} -k $PGDATA"
 
-      ext_options="-c shared_preload_libraries=\"curl_worker\""
+      ext_options="-c shared_preload_libraries=\"pg_net\""
 
       pg_ctl start -o "$options" -o "$ext_options"
 
@@ -48,9 +48,9 @@ let
 
       "$@"
     '';
-  curl-with-pg-12 = writeShellScriptBin "curl-with-pg-12" (pgWithExt { postgresql = postgresql_12; });
-  curl-with-pg-13 = writeShellScriptBin "curl-with-pg-13" (pgWithExt { postgresql = postgresql_13; });
+  net-with-pg-12 = writeShellScriptBin "net-with-pg-12" (pgWithExt { postgresql = postgresql_12; });
+  net-with-pg-13 = writeShellScriptBin "net-with-pg-13" (pgWithExt { postgresql = postgresql_13; });
 in
 mkShell {
-  buildInputs = [ curl-with-pg-12 curl-with-pg-13 ];
+  buildInputs = [ net-with-pg-12 net-with-pg-13 ];
 }

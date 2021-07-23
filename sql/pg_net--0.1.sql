@@ -52,7 +52,7 @@ begin
         end if;
     end loop;
 
-    return rec;
+    return rec.id;
 end;
 $$;
 

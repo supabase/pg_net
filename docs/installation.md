@@ -12,7 +12,7 @@ make && make install
 To make the extension available to the database add on `postgresql.conf`:
 
 ```
-shared_preload_libraries = 'curl_worker'
+shared_preload_libraries = 'pg_net'
 ```
 
 

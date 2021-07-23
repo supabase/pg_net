@@ -13,4 +13,4 @@ jobs:
       with:
         nix_path: nixpkgs=channel:nixos-unstable
     - name: Run tests
-      run: nix-shell --run "curl-with-pg-12 make installcheck && curl-with-pg-13 make installcheck"
+      run: nix-shell --run "net-with-pg-12 make installcheck && net-with-pg-13 make installcheck"

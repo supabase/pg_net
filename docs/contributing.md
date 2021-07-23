@@ -14,10 +14,10 @@ For testing locally, execute:
 $ nix-shell
 
 # test on pg 12
-$ curl-with-pg-12 make installcheck
+$ net-with-pg-12 make installcheck
 
 # test on pg 13
-$ curl-with-pg-13 make installcheck
+$ net-with-pg-13 make installcheck
 ```
 
 ### Documentation
