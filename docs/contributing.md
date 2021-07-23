@@ -1,4 +1,4 @@
-pg_curl_worker is OSS. PR and issues are welcome.
+pg_netis OSS. PR and issues are welcome.
 
 
 ## Development
@@ -41,6 +41,4 @@ To serve the documentation locally run
 mkdocs serve
 ```
 
-and visit the docs at [http://127.0.0.1:8000/pg_curl_worker/](http://127.0.0.1:8000/pg_curl_worker/)
-
-
+and visit the docs at [http://127.0.0.1:8000/pg_net/](http://127.0.0.1:8000/pg_net/)

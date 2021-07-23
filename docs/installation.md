@@ -20,5 +20,5 @@ shared_preload_libraries = 'curl_worker'
 To enable the extension in PostgreSQL we must execute a `create extension` statement. The extension creates its own schema/namespace named `net` to avoid naming conflicts.
 
 ```psql
-create extension pg_curl_worker;
+create extension pg_net;
 ```
