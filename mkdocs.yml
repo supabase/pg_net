@@ -1,23 +1,21 @@
-site_name: pg_curl_worker
-site_url: https://supabase.github.io/pg_curl_worker
+site_name: pg_net
+site_url: https://supabase.github.io/pg_net
 site_description: A PostgreSQL extension for async networking
 
-repo_name: supabase/pg_curl_worker
-repo_url: https://github.com/supabase/pg_curl_worker
+repo_name: supabase/pg_net
+repo_url: https://github.com/supabase/pg_net
 
 nav:
     - Welcome: 'index.md'
     - Installation: 'installation.md'
     - API Reference: 'api.md'
     - Contributing: 'contributing.md'
-    - Roadmap: 'roadmap.md'
-
 
 theme:
     name: 'material'
     favicon: 'assets/favicon.ico'
     logo: 'assets/favicon.ico'
-    homepage: https://supabase.github.io/pg_curl_worker
+    homepage: https://supabase.github.io/pg_net
     palette:
         primary: black
         accent: light green
