@@ -1,4 +1,4 @@
-# pg_net
+# `pg_net`
 
 <p>
 
@@ -10,9 +10,9 @@
 
 ---
 
-**Documentation**: <a href="https://supabase.github.io/pg_net" target="_blank">https://supabase.github.io/pg_curl_worker</a>
+**Documentation**: <a href="https://supabase.github.io/pg_net" target="_blank">https://supabase.github.io/pg_net</a>
 
-**Source Code**: <a href="https://github.com/supabase/pg_net" target="_blank">https://github.com/supabase/pg_curl_worker</a>
+**Source Code**: <a href="https://github.com/supabase/pg_net" target="_blank">https://github.com/supabase/pg_net</a>
 
 ---
 
