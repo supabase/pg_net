@@ -28,3 +28,5 @@ rollback;
 -- select net.http_get('net://supabase.io');
 -- request with invalid hostname
 -- select net.http_get('http://new.ycombinator.com');
+-- request with NULL body and content_type
+-- select net.http_get('http://wikipedia.org');
