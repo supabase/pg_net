@@ -77,11 +77,11 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 		char *tmp = pstrdup(contents);
 		JsonbValue	key, val;
 
-		elog(DEBUG2, "FullHeaderLine: %s\n", tmp);
+		elog(DEBUG1, "FullHeaderLine: %s\n", tmp);
 
 		/*The header comes as "Header-Key: val", split by whitespace and ditch the colon later*/
 		token = strtok(tmp, " ");
-		elog(DEBUG2, "Key: %s\n", token);
+		elog(DEBUG1, "Key: %s\n", token);
 
 		key.type = jbvString;
 		key.val.string.val = token;
@@ -91,7 +91,7 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 
 		/*Every header line ends with CRLF, split and remove it*/
 		token = strtok(NULL, "\r\n");
-		elog(DEBUG2, "Value: %s\n", token);
+		elog(DEBUG1, "Value: %s\n", token);
 
 		val.type = jbvString;
 		val.val.string.val = token;
@@ -151,7 +151,6 @@ worker_main(Datum main_arg)
 	CURLM *cm=NULL;
 	CURL *eh=NULL;
 	CURLMsg *msg=NULL;
-	CURLcode return_code=0;
 	int still_running=0, msgs_left=0;
 	int http_status_code;
 	int res;
@@ -183,6 +182,7 @@ worker_main(Datum main_arg)
 	{
 		StringInfoData	select_query;
 		StringInfoData	insert_query;
+		StringInfoData	update_query;
 
 		/* Wait 10 seconds */
 		WaitLatch(&MyProc->procLatch,
@@ -192,7 +192,7 @@ worker_main(Datum main_arg)
 		ResetLatch(&MyProc->procLatch);
 
 		if(!isExtensionLoaded()){
-			elog(DEBUG2, "Extension not loaded");
+			elog(DEBUG1, "Extension not loaded");
 			continue;
 		}
 
@@ -204,10 +204,10 @@ worker_main(Datum main_arg)
 
 		appendStringInfo(&select_query, "\
 			SELECT\
-			  q.id, q.url \
+			  q.id, q.url, q.error_msg \
 			FROM net.http_request_queue q \
 			LEFT JOIN net.http_response r ON q.id = r.id \
-			WHERE r.id IS NULL");
+			WHERE r.id IS NULL AND q.error_msg is NULL");
 
 		if (SPI_execute(select_query.data, true, 0) == SPI_OK_SELECT)
 		{
@@ -226,7 +226,7 @@ worker_main(Datum main_arg)
 					int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
 					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
 
-					elog(DEBUG2, "Making a request to %s with id %ld", url, id);
+					elog(DEBUG1, "Making a request to %s with id %ld", url, id);
 
 					res = init(cm, url, id, curlDataMap);
 
@@ -255,64 +255,88 @@ worker_main(Datum main_arg)
 		appendStringInfo(&insert_query, "\
 			insert into net.http_response(id, status_code, body, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
 
+		initStringInfo(&update_query);
+		appendStringInfo(&update_query, "update net.http_request_queue set error_msg = $1 where id = $2");
+
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				int64 id;
-				int argCount = 6;
-				Oid argTypes[6];
-				Datum argValues[6];
-				CurlData *cdata = NULL;
-				char *contentType = NULL;
-				bool timedOut = false;
+				CURLcode return_code=0;
 				bool isPresent = false;
 
 				if (msg->msg == CURLMSG_DONE) {
 						eh = msg->easy_handle;
 
 						return_code = msg->data.result;
-						if(return_code!=CURLE_OK) {
-								elog(ERROR, "CURL error code: %d\n", msg->data.result);
-								continue;
-						}
-
-						curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 						curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
-						curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
 
-						elog(DEBUG2, "GET of %ld returned http status code %d\n", id, http_status_code);
+						if (return_code != CURLE_OK) {
+							int argCount = 2;
+							Oid argTypes[2];
+							Datum argValues[2];
+							const char *error_msg = curl_easy_strerror(return_code);
 
-						cdata = hash_search(curlDataMap, &id, HASH_FIND, &isPresent);
+							argTypes[0] = CSTRINGOID;
+							argValues[0] = CStringGetDatum(error_msg);
 
-						argTypes[0] = INT8OID;
-						argValues[0] = Int64GetDatum(id);
+							argTypes[1] = INT8OID;
+							argValues[1] = Int64GetDatum(id);
 
-						argTypes[1] = INT4OID;
-						argValues[1] = Int32GetDatum(http_status_code);
+							elog(DEBUG1, "%s\n", error_msg);
 
-						argTypes[2] = CSTRINGOID;
-						argValues[2] = CStringGetDatum(cdata->body->data);
+							if (SPI_execute_with_args(update_query.data, argCount, argTypes, argValues, NULL, false, 1) != SPI_OK_UPDATE)
+							{
+								elog(ERROR, "SPI_exec failed: %s", update_query.data);
+							}
+						} else {
+							int argCount = 6;
+							Oid argTypes[6];
+							Datum argValues[6];
+							CurlData *cdata = NULL;
+							char *contentType = NULL;
+							bool timedOut = false;
 
-						argTypes[3] = JSONBOID;
-						argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->headers, WJB_END_OBJECT, NULL)));
+							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
+							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
+							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
 
-						argTypes[4] = CSTRINGOID;
-						argValues[4] = CStringGetDatum(contentType);
+							argTypes[0] = INT8OID;
+							argValues[0] = Int64GetDatum(id);
 
-						argTypes[5] = BOOLOID;
-						argValues[5] = BoolGetDatum(timedOut);
+							elog(DEBUG1, "GET of %ld returned http status code %d\n", id, http_status_code);
 
-						if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, NULL,
-										false, 1) != SPI_OK_INSERT)
-						{
-							elog(ERROR, "SPI_exec failed: %s", insert_query.data);
+							cdata = hash_search(curlDataMap, &id, HASH_FIND, &isPresent);
+
+							argTypes[1] = INT4OID;
+							argValues[1] = Int32GetDatum(http_status_code);
+
+							argTypes[2] = CSTRINGOID;
+							argValues[2] = CStringGetDatum(cdata->body->data);
+
+							elog(DEBUG1, "Body is: %s\n", cdata->body->data);
+
+							argTypes[3] = JSONBOID;
+							argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->headers, WJB_END_OBJECT, NULL)));
+
+							argTypes[4] = CSTRINGOID;
+							argValues[4] = CStringGetDatum(contentType);
+
+							argTypes[5] = BOOLOID;
+							argValues[5] = BoolGetDatum(timedOut);
+
+							if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, NULL,
+											false, 1) != SPI_OK_INSERT)
+							{
+								elog(ERROR, "SPI_exec failed: %s", insert_query.data);
+							}
+
+							pfree(cdata->body->data);
+							pfree(cdata->body);
 						}
 
 						curl_multi_remove_handle(cm, eh);
 						curl_easy_cleanup(eh);
-						pfree(cdata->body->data);
-						pfree(cdata->body);
 						hash_search(curlDataMap, &id, HASH_REMOVE, &isPresent);
-				}
-				else {
+				} else {
 						elog(ERROR, "error: after curl_multi_info_read(), CURLMsg=%d\n", msg->msg);
 				}
 		}

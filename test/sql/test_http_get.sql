@@ -22,3 +22,9 @@ rollback;
     -- from
         -- request;
 -- rollback;
+
+-- TODO run these tests:
+-- request with invalid protocol
+-- select net.http_get('net://supabase.io');
+-- request with invalid hostname
+-- select net.http_get('http://new.ycombinator.com');
