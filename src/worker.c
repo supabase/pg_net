@@ -291,6 +291,7 @@ worker_main(Datum main_arg)
 							int argCount = 6;
 							Oid argTypes[6];
 							Datum argValues[6];
+							char nulls[6];
 							CurlData *cdata = NULL;
 							char *contentType = NULL;
 							bool timedOut = false;
@@ -299,31 +300,41 @@ worker_main(Datum main_arg)
 							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
 							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
 
-							argTypes[0] = INT8OID;
-							argValues[0] = Int64GetDatum(id);
-
 							elog(DEBUG1, "GET of %ld returned http status code %d\n", id, http_status_code);
 
 							cdata = hash_search(curlDataMap, &id, HASH_FIND, &isPresent);
 
+							argTypes[0] = INT8OID;
+							argValues[0] = Int64GetDatum(id);
+							nulls[0] = ' ';
+
 							argTypes[1] = INT4OID;
 							argValues[1] = Int32GetDatum(http_status_code);
+							nulls[1] = ' ';
 
 							argTypes[2] = CSTRINGOID;
 							argValues[2] = CStringGetDatum(cdata->body->data);
-
-							elog(DEBUG1, "Body is: %s\n", cdata->body->data);
+							if(cdata->body->data[0] == '\0')
+								nulls[2] = 'n';
+							else
+								nulls[2] = ' ';
 
 							argTypes[3] = JSONBOID;
 							argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->headers, WJB_END_OBJECT, NULL)));
+							nulls[3] = ' ';
 
 							argTypes[4] = CSTRINGOID;
 							argValues[4] = CStringGetDatum(contentType);
+							if(!contentType)
+								nulls[4] = 'n';
+							else
+								nulls[4] = ' ';
 
 							argTypes[5] = BOOLOID;
 							argValues[5] = BoolGetDatum(timedOut);
+							nulls[5] = ' ';
 
-							if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, NULL,
+							if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, nulls,
 											false, 1) != SPI_OK_INSERT)
 							{
 								elog(ERROR, "SPI_exec failed: %s", insert_query.data);
