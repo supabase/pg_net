@@ -51,7 +51,12 @@ let
   net-with-pg-12 = writeShellScriptBin "net-with-pg-12" (pgWithExt { postgresql = postgresql_12; });
   net-with-pg-13 = writeShellScriptBin "net-with-pg-13" (pgWithExt { postgresql = postgresql_13; });
 
+  my-python-packages = with pythonPackages; [
+    pytest
+    psycopg2
+    sqlalchemy
+  ];
 in
 mkShell {
-  buildInputs = [ net-with-pg-12 net-with-pg-13 ];
+  buildInputs = [ net-with-pg-12 net-with-pg-13 my-python-packages ];
 }
