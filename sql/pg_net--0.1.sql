@@ -8,7 +8,6 @@ create table net.http_request_queue(
     params jsonb not null,
     headers jsonb not null,
     timeout_milliseconds int not null,
-    error_msg text,
     -- Available for delete after this date
     delete_after timestamp not null
 );
@@ -23,9 +22,9 @@ create table net.http_response(
     content_type text,
     headers jsonb,
     body text,
-    timed_out bool
+    timed_out bool,
+    error_msg text
 );
-
 
 -- Blocks until an http_request is complete
 -- API: Private
