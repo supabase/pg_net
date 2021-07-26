@@ -167,6 +167,8 @@ static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeader
 	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
 	// curl_easy_setopt(eh, CURLOPT_VERBOSE, 1); // for debugging
+	curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
+	curl_easy_setopt(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 	return curl_multi_add_handle(cm, eh);
 }
 
