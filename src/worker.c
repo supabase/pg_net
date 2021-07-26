@@ -187,7 +187,7 @@ worker_main(Datum main_arg)
 		/* Wait 10 seconds */
 		WaitLatch(&MyProc->procLatch,
 					WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
-					10000L,
+					200L,
 					PG_WAIT_EXTENSION);
 		ResetLatch(&MyProc->procLatch);
 
