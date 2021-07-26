@@ -181,8 +181,8 @@ worker_main(Datum main_arg)
 	while (!got_sigterm)
 	{
 		StringInfoData	select_query;
-		StringInfoData	insert_query;
-		StringInfoData	update_query;
+		StringInfoData	query_insert_response_ok;
+		StringInfoData	query_insert_response_bad;
 
 		/* Wait 10 seconds */
 		WaitLatch(&MyProc->procLatch,
@@ -204,10 +204,10 @@ worker_main(Datum main_arg)
 
 		appendStringInfo(&select_query, "\
 			SELECT\
-			  q.id, q.url, q.error_msg \
+			  q.id, q.url\
 			FROM net.http_request_queue q \
 			LEFT JOIN net.http_response r ON q.id = r.id \
-			WHERE r.id IS NULL AND q.error_msg is NULL");
+			WHERE r.id IS NULL");
 
 		if (SPI_execute(select_query.data, true, 0) == SPI_OK_SELECT)
 		{
@@ -251,12 +251,13 @@ worker_main(Datum main_arg)
 				curl_multi_perform(cm, &still_running);
 		} while(still_running);
 
-		initStringInfo(&insert_query);
-		appendStringInfo(&insert_query, "\
+		initStringInfo(&query_insert_response_ok);
+		appendStringInfo(&query_insert_response_ok, "\
 			insert into net.http_response(id, status_code, body, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
 
-		initStringInfo(&update_query);
-		appendStringInfo(&update_query, "update net.http_request_queue set error_msg = $1 where id = $2");
+		initStringInfo(&query_insert_response_bad);
+		appendStringInfo(&query_insert_response_bad, "\
+			insert into net.http_response(id, error_msg) values ($1, $2)");
 
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				int64 id;
@@ -275,17 +276,18 @@ worker_main(Datum main_arg)
 							Datum argValues[2];
 							const char *error_msg = curl_easy_strerror(return_code);
 
-							argTypes[0] = CSTRINGOID;
-							argValues[0] = CStringGetDatum(error_msg);
+							argTypes[0] = INT8OID;
+							argValues[0] = Int64GetDatum(id);
 
-							argTypes[1] = INT8OID;
-							argValues[1] = Int64GetDatum(id);
+							argTypes[1] = CSTRINGOID;
+							argValues[1] = CStringGetDatum(error_msg);
 
 							elog(DEBUG1, "%s\n", error_msg);
 
-							if (SPI_execute_with_args(update_query.data, argCount, argTypes, argValues, NULL, false, 1) != SPI_OK_UPDATE)
+							if (SPI_execute_with_args(query_insert_response_bad.data, argCount, argTypes, argValues, NULL,
+											false, 1) != SPI_OK_INSERT)
 							{
-								elog(ERROR, "SPI_exec failed: %s", update_query.data);
+								elog(ERROR, "SPI_exec failed: %s", query_insert_response_bad.data);
 							}
 						} else {
 							int argCount = 6;
@@ -334,10 +336,10 @@ worker_main(Datum main_arg)
 							argValues[5] = BoolGetDatum(timedOut);
 							nulls[5] = ' ';
 
-							if (SPI_execute_with_args(insert_query.data, argCount, argTypes, argValues, nulls,
+							if (SPI_execute_with_args(query_insert_response_ok.data, argCount, argTypes, argValues, nulls,
 											false, 1) != SPI_OK_INSERT)
 							{
-								elog(ERROR, "SPI_exec failed: %s", insert_query.data);
+								elog(ERROR, "SPI_exec failed: %s", query_insert_response_ok.data);
 							}
 
 							pfree(cdata->body->data);
