@@ -129,6 +129,8 @@ static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
 	curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
 	curl_easy_setopt(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+	curl_easy_setopt(eh, CURLOPT_ACCEPT_ENCODING, "");
+
 	return curl_multi_add_handle(cm, eh);
 }
 
