@@ -103,7 +103,30 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 	return realsize;
 }
 
-static int init(CURLM *cm, char *method, char *url, char *contentType, char *reqBody, int64 id, HTAB *curlDataMap)
+static struct curl_slist *
+header_array_to_slist(ArrayType *array, struct curl_slist *headers)
+{
+	ArrayIterator iterator;
+	Datum value;
+	bool isnull;
+	char *header;
+
+	iterator = array_create_iterator(array, 0, NULL);
+
+	while (array_iterate(iterator, &value, &isnull))
+	{
+		if (isnull) continue;
+
+		header = TextDatumGetCString(value);
+		elog(DEBUG1, "Request header \"%s\"\n", header);
+		headers = curl_slist_append(headers, header);
+	}
+	array_free_iterator(iterator);
+
+	return headers;
+}
+
+static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeaders, char *reqBody, int64 id, HTAB *curlDataMap)
 {
 	CURL *eh = curl_easy_init();
 
@@ -121,11 +144,7 @@ static int init(CURLM *cm, char *method, char *url, char *contentType, char *req
 		cdata->headers = headers;
 	}
 
-	if (contentType) {
-		struct curl_slist *reqHeaders = NULL;
-		reqHeaders = curl_slist_append(reqHeaders, contentType);
-		curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
-	}
+	reqHeaders = curl_slist_append(reqHeaders, "User-Agent: pg_net/0.0.1");
 
 	if (strcasecmp(method, "GET") == 0) {
 		if (reqBody) {
@@ -146,8 +165,9 @@ static int init(CURLM *cm, char *method, char *url, char *contentType, char *req
 	curl_easy_setopt(eh, CURLOPT_HEADERDATA, cdata->headers);
 	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
 	curl_easy_setopt(eh, CURLOPT_URL, url);
+	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
-	curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
+	// curl_easy_setopt(eh, CURLOPT_VERBOSE, 1); // for debugging
 	return curl_multi_add_handle(cm, eh);
 }
 
@@ -224,7 +244,13 @@ worker_main(Datum main_arg)
 
 		appendStringInfo(&select_query, "\
 			SELECT\
-			  q.id, q.method, q.url, q.content_type, q.body\
+				q.id,\
+				q.method,\
+				q.url,\
+				array(\
+					select key || ': ' || value from jsonb_each_text(q.headers)\
+				),\
+				q.body\
 			FROM net.http_request_queue q \
 			LEFT JOIN net._http_response r ON q.id = r.id \
 			WHERE r.id IS NULL");
@@ -243,35 +269,37 @@ worker_main(Datum main_arg)
 
 			for (int j = 0; j < SPI_processed; j++)
 			{
-				    StringInfoData content_type;
+					struct curl_slist *headers = NULL;
+					// FIXME: Need to free headers, but only *after* curl_multi stuff during cleanup.
+					// Maybe store in cdata?
+					// curl_slist_free_all(headers);
 
 					int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
 					char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
 					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
-					Datum contentTypeBin;
+
+					Datum headersBin;
 					Datum bodyBin;
-					char *contentType = NULL;
+					ArrayType *pgHeaders;
 					char *body = NULL;
 
-					contentTypeBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
+					headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
 					if (!tupIsNull) {
-						initStringInfo(&content_type);
-						appendStringInfo(&content_type, "Content-Type: %s", TextDatumGetCString(contentTypeBin));
-						contentType = content_type.data;
+						pgHeaders = DatumGetArrayTypeP(headersBin);
+						headers = header_array_to_slist(pgHeaders, headers);
 					}
 					bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
 					if (!tupIsNull) body = TextDatumGetCString(bodyBin);
 
 					elog(DEBUG1, "Making a %s request to %s with id %ld", method, url, id);
 
-					res = init(cm, method, url, contentType, body, id, curlDataMap);
-
-					/* pfree(content_type.data); */
+					res = init(cm, method, url, headers, body, id, curlDataMap);
 
 					if(res) {
 						elog(ERROR, "error: init() returned %d\n", res);
 					}
 					res = curl_multi_perform(cm, &still_running);
+
 					if(res != CURLM_OK) {
 							elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
 					}

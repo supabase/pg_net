@@ -14,7 +14,6 @@ create table net.http_request_queue(
     url text not null,
     params jsonb not null,
     headers jsonb not null,
-    content_type text,
     body bytea,
     timeout_milliseconds int not null,
     -- Available for delete after this date
@@ -91,8 +90,8 @@ declare
     request_id bigint;
 begin
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, params, headers, content_type, body, timeout_milliseconds, delete_after)
-    values ('GET', url, params, headers, null, null, timeout_milliseconds, timezone('utc', now()) + ttl)
+    insert into net.http_request_queue(method, url, params, headers, timeout_milliseconds, delete_after)
+    values ('GET', url, params, headers, timeout_milliseconds, timezone('utc', now()) + ttl)
     returning id
     into request_id;
 
@@ -105,20 +104,17 @@ $$;
 create or replace function net.http_post(
     -- url for the request
     url text,
-    -- ContentType of the POST request
-    content_type text,
     -- body of the POST request
     body bytea,
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb DEFAULT '{}'::jsonb,
     -- key/values to be included in request headers
+    -- by default curl uses "Content-Type: application/x-www-form-urlencoded"
     headers jsonb DEFAULT '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int DEFAULT 1000,
     -- the minimum amount of time the response should be persisted
-    ttl interval default '3 days',
-    -- when `true`, return immediately. when `false` wait for the request to complete before returning
-    async bool default true
+    ttl interval default '3 days'
 )
     -- request_id reference
     returns bigint
@@ -129,21 +125,13 @@ create or replace function net.http_post(
 as $$
 declare
     request_id bigint;
-    respone_rec net.http_response;
 begin
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, params, headers, content_type, body, timeout_milliseconds, delete_after)
-    values ('POST', url, params, headers, content_type, body, timeout_milliseconds, timezone('utc', now()) + ttl)
+    insert into net.http_request_queue(method, url, params, headers, body, timeout_milliseconds, delete_after)
+    values ('POST', url, params, headers, body, timeout_milliseconds, timezone('utc', now()) + ttl)
     returning id
     into request_id;
 
-    -- If request is async, return id immediately
-    if async then
-        return request_id;
-    end if;
-
-    -- If sync, wait for the request to complete before returning
-    perform net._await_response(request_id);
     return request_id;
 end
 $$;
