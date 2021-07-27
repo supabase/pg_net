@@ -62,34 +62,6 @@ net.http_collect_response(
 --8<-- "test/expected/test_http_collect_response.out"
 ```
 
-
-### net.http_cancel_request
-
-##### description
-Given a `request_id` reference, cancel the request. If the request was already completed, its result will no longer be retrievable.
-
-
-##### signature
-```sql
-net.http_cancel_request(
-    -- request_id reference
-    request_id uuid
-)
-    -- request_id reference
-    returns uuid
-    strict
-    volatile
-    parallel safe
-```
-
-##### description
-Given an id produced from calling an `async_get`/`async_post`/etc, cancel the request. If the request was already completed, its result will no longer be retrievable.
-
-##### usage
-```sql
---8<-- "test/expected/test_http_cancel_request.out"
-```
-
 ## SMTP
 
 Coming soon
