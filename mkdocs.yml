@@ -25,3 +25,4 @@ markdown_extensions:
         linenums: true
     - pymdownx.superfences
     - pymdownx.snippets
+    - admonition
