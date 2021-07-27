@@ -140,23 +140,3 @@ begin
     return rec;
 end;
 $$;
-
-
--- Cancel a request in the queue
--- API: Public
-create or replace function net.http_cancel_request(
-    -- request_id reference
-    request_id bigint
-)
-    -- request_id reference
-    returns bigint
-    strict
-    volatile
-    parallel safe
-    language sql
-as $$
-    delete
-    from net.http_request_queue
-    where id = request_id
-    returning id;
-$$;
