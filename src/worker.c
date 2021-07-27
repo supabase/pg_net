@@ -23,6 +23,7 @@
 
 #include "utils/jsonb.h"
 
+#include <curl/curl.h>
 #include <curl/multi.h>
 
 PG_MODULE_MAGIC;
@@ -102,7 +103,7 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 	return realsize;
 }
 
-static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
+static int init(CURLM *cm, char *method, char *url, char *contentType, char *reqBody, int64 id, HTAB *curlDataMap)
 {
 	CURL *eh = curl_easy_init();
 
@@ -118,6 +119,25 @@ static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
 		cdata->body = body;
 		(void)pushJsonbValue(&headers, WJB_BEGIN_OBJECT, NULL);
 		cdata->headers = headers;
+	}
+
+	if (contentType) {
+		struct curl_slist *reqHeaders = NULL;
+		reqHeaders = curl_slist_append(reqHeaders, contentType);
+		curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
+	}
+
+	if (strcasecmp(method, "GET") == 0) {
+		if (reqBody) {
+			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
+			curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "GET");
+		}
+	} else if (strcasecmp(method, "POST") == 0) {
+		if (reqBody) {
+			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
+		}
+	} else {
+		elog(ERROR, "error: Unsupported request method %s\n", method);
 	}
 
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, body_cb);
@@ -204,7 +224,7 @@ worker_main(Datum main_arg)
 
 		appendStringInfo(&select_query, "\
 			SELECT\
-			  q.id, q.url\
+			  q.id, q.method, q.url, q.content_type, q.body\
 			FROM net.http_request_queue q \
 			LEFT JOIN net._http_response r ON q.id = r.id \
 			WHERE r.id IS NULL");
@@ -223,12 +243,30 @@ worker_main(Datum main_arg)
 
 			for (int j = 0; j < SPI_processed; j++)
 			{
+				    StringInfoData content_type;
+
 					int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
-					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
+					char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
+					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
+					Datum contentTypeBin;
+					Datum bodyBin;
+					char *contentType = NULL;
+					char *body = NULL;
 
-					elog(DEBUG1, "Making a request to %s with id %ld", url, id);
+					contentTypeBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
+					if (!tupIsNull) {
+						initStringInfo(&content_type);
+						appendStringInfo(&content_type, "Content-Type: %s", TextDatumGetCString(contentTypeBin));
+						contentType = content_type.data;
+					}
+					bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
+					if (!tupIsNull) body = TextDatumGetCString(bodyBin);
 
-					res = init(cm, url, id, curlDataMap);
+					elog(DEBUG1, "Making a %s request to %s with id %ld", method, url, id);
+
+					res = init(cm, method, url, contentType, body, id, curlDataMap);
+
+					/* pfree(content_type.data); */
 
 					if(res) {
 						elog(ERROR, "error: init() returned %d\n", res);
