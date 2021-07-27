@@ -74,7 +74,7 @@ request_id
          1
 (1 row)
 
-select * from net.http_collect_response(1, async:=False);
+select * from net.http_collect_response(1, async:=false);
 status  | message | response
 --------+---------+----------
 SUCCESS        ok        ...

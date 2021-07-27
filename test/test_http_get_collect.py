@@ -30,7 +30,7 @@ def test_http_get_collect_sync_success(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=False);
+        select * from net.http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
@@ -61,7 +61,7 @@ def test_http_get_collect_async_pending(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=True);
+        select * from net.http_collect_response(:request_id, async:=true);
     """
         ),
         {"request_id": request_id},
@@ -79,7 +79,7 @@ def test_http_collect_response_async_does_not_exist(sess):
     # Collect the response, waiting as needed
     response = sess.execute(
         """
-        select * from net.http_collect_response(1, async:=True);
+        select * from net.http_collect_response(1, async:=true);
     """
     ).fetchone()
 
