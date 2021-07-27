@@ -341,47 +341,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#nethttp_cancel_request" class="md-nav__link">
-    net.http_cancel_request
-  </a>
-  
-    <nav class="md-nav" aria-label="net.http_cancel_request">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#description_2" class="md-nav__link">
-    description
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#signature_2" class="md-nav__link">
-    signature
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#description_3" class="md-nav__link">
-    description
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#usage_2" class="md-nav__link">
-    usage
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -516,47 +475,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#nethttp_cancel_request" class="md-nav__link">
-    net.http_cancel_request
-  </a>
-  
-    <nav class="md-nav" aria-label="net.http_cancel_request">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#description_2" class="md-nav__link">
-    description
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#signature_2" class="md-nav__link">
-    signature
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#description_3" class="md-nav__link">
-    description
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#usage_2" class="md-nav__link">
-    usage
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -660,7 +578,14 @@
 <span class="normal">23</span>
 <span class="normal">24</span>
 <span class="normal">25</span>
-<span class="normal">26</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="c1">-- Async</span>
+<span class="normal">26</span>
+<span class="normal">27</span>
+<span class="normal">28</span>
+<span class="normal">29</span>
+<span class="normal">30</span>
+<span class="normal">31</span>
+<span class="normal">32</span>
+<span class="normal">33</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="c1">-- Async</span>
 <span class="k">begin</span><span class="p">;</span>
     <span class="k">with</span> <span class="n">request</span> <span class="k">as</span> <span class="p">(</span>
         <span class="k">select</span>
@@ -686,6 +611,13 @@
     <span class="c1">-- from</span>
         <span class="c1">-- request;</span>
 <span class="c1">-- rollback;</span>
+<span class="c1">-- TODO run these tests:</span>
+<span class="c1">-- request with invalid protocol</span>
+<span class="c1">-- select net.http_get(&#39;net://supabase.io&#39;);</span>
+<span class="c1">-- request with invalid hostname</span>
+<span class="c1">-- select net.http_get(&#39;http://new.ycombinator.com&#39;);</span>
+<span class="c1">-- request with NULL body and content_type</span>
+<span class="c1">-- select net.http_get(&#39;http://wikipedia.org&#39;);</span>
 </code></pre></div>
 </td></tr></table>
 <h3 id="nethttp_collect_response">net.http_collect_response</h3>
@@ -741,61 +673,6 @@
  <span class="n">http_collect_response</span> 
 <span class="c1">-----------------------</span>
 
-<span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
-
-<span class="k">rollback</span><span class="p">;</span>
-</code></pre></div>
-</td></tr></table>
-<h3 id="nethttp_cancel_request">net.http_cancel_request</h3>
-<h5 id="description_2">description</h5>
-<p>Given a <code>request_id</code> reference, cancel the request. If the request was already completed, its result will no longer be retrievable.</p>
-<h5 id="signature_2">signature</h5>
-<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span>
-<span class="normal">2</span>
-<span class="normal">3</span>
-<span class="normal">4</span>
-<span class="normal">5</span>
-<span class="normal">6</span>
-<span class="normal">7</span>
-<span class="normal">8</span>
-<span class="normal">9</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_cancel_request</span><span class="p">(</span>
-    <span class="c1">-- request_id reference</span>
-    <span class="n">request_id</span> <span class="n">uuid</span>
-<span class="p">)</span>
-    <span class="c1">-- request_id reference</span>
-    <span class="k">returns</span> <span class="n">uuid</span>
-    <span class="k">strict</span>
-    <span class="k">volatile</span>
-    <span class="n">parallel</span> <span class="n">safe</span>
-</code></pre></div>
-</td></tr></table>
-<h5 id="description_3">description</h5>
-<p>Given an id produced from calling an <code>async_get</code>/<code>async_post</code>/etc, cancel the request. If the request was already completed, its result will no longer be retrievable.</p>
-<h5 id="usage_2">usage</h5>
-<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
-<span class="normal"> 2</span>
-<span class="normal"> 3</span>
-<span class="normal"> 4</span>
-<span class="normal"> 5</span>
-<span class="normal"> 6</span>
-<span class="normal"> 7</span>
-<span class="normal"> 8</span>
-<span class="normal"> 9</span>
-<span class="normal">10</span>
-<span class="normal">11</span>
-<span class="normal">12</span>
-<span class="normal">13</span>
-<span class="normal">14</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">begin</span><span class="p">;</span>
-    <span class="k">with</span> <span class="n">req</span> <span class="k">as</span> <span class="p">(</span>
-        <span class="k">select</span> <span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span><span class="s1">&#39;https://supabase.io&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">id</span>
-    <span class="p">)</span>
-    <span class="k">select</span>
-        <span class="n">net</span><span class="p">.</span><span class="n">http_cancel_request</span><span class="p">(</span><span class="n">id</span><span class="p">)</span> <span class="k">is</span> <span class="k">not</span> <span class="k">null</span>
-    <span class="k">from</span>
-        <span class="n">req</span><span class="p">;</span>
- <span class="o">?</span><span class="k">column</span><span class="o">?</span> 
-<span class="c1">----------</span>
- <span class="n">t</span>
 <span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
 
 <span class="k">rollback</span><span class="p">;</span>
