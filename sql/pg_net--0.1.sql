@@ -69,9 +69,7 @@ create or replace function net.http_get(
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int DEFAULT 1000,
     -- the minimum amount of time the response should be persisted
-    ttl interval default '3 days',
-    -- when `true`, return immediately. when `false` wait for the request to complete before returning
-    async bool default true
+    ttl interval default '3 days'
 )
     -- request_id reference
     returns bigint
@@ -82,7 +80,6 @@ create or replace function net.http_get(
 as $$
 declare
     request_id bigint;
-    respone_rec net.http_response;
 begin
     -- Add to the request queue
     insert into net.http_request_queue(url, params, headers, timeout_milliseconds, delete_after)
@@ -90,13 +87,6 @@ begin
     returning id
     into request_id;
 
-    -- If request is async, return id immediately
-    if async then
-        return request_id;
-    end if;
-
-    -- If sync, wait for the request to complete before returning
-    perform net._await_response(request_id);
     return request_id;
 end
 $$;

@@ -2,7 +2,7 @@
 begin;
     with request as (
         select
-            net.http_get('http://supabase.io', async:=true) as id
+            net.http_get('http://supabase.io') as id
     )
     select
         net.http_collect_response(id)
