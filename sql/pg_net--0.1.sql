@@ -16,12 +16,12 @@ create index ix_http_request_queue_delete_after on net.http_request_queue (delet
 
 -- Associates a response with a request
 -- API: Private
-create table net.http_response(
+create table net._http_response(
     id bigint primary key references net.http_request_queue(id) on delete cascade,
     status_code integer,
     content_type text,
     headers jsonb,
-    body text,
+    content text,
     timed_out bool,
     error_msg text
 );
@@ -31,19 +31,19 @@ create table net.http_response(
 create or replace function net._await_response(
     request_id bigint
 )
-    returns bigint
+    returns bool
     volatile
     parallel safe
     strict
     language plpgsql
 as $$
 declare
-    rec net.http_response;
+    rec net._http_response;
 begin
     while rec is null loop
         select *
         into rec
-        from net.http_response
+        from net._http_response
         where id = request_id;
 
         if rec is null then
@@ -52,7 +52,7 @@ begin
         end if;
     end loop;
 
-    return rec.id;
+    return true;
 end;
 $$;
 
@@ -92,6 +92,28 @@ end
 $$;
 
 
+-- Lifecycle states of a request (all protocols)
+-- API: Public
+create type net.request_status as enum ('PENDING', 'SUCCESS', 'ERROR');
+
+
+-- A response from an HTTP server
+-- API: Public
+create type net.http_response AS (
+    status_code integer,
+    headers jsonb,
+    content text
+);
+
+-- State wrapper around responses
+-- API: Public
+create type net.http_response_result as (
+    status net.request_status,
+    message text,
+    response net.http_response
+);
+
+
 -- Collect respones of an http request
 -- API: Public
 create or replace function net.http_collect_response(
@@ -100,15 +122,16 @@ create or replace function net.http_collect_response(
     -- when `true`, return immediately. when `false` wait for the request to complete before returning
     async bool default true
 )
-    -- http response composite type
-    returns net.http_response
+    -- http response composite wrapped in a result type
+    returns net.http_response_result
     strict
     volatile
     parallel safe
     language plpgsql
 as $$
 declare
-    rec net.http_response;
+    rec net._http_response;
+    req_exists boolean;
 begin
 
     if not async then
@@ -117,16 +140,44 @@ begin
 
     select *
     into rec
-    from net.http_response
+    from net._http_response
     where id = request_id;
 
     if rec is null then
-        -- if rec is null it is a composite with every
-        -- field nulled out rather than a single null value
-        return null;
+        -- The request is either still processing or the request_id provided does not exist
+
+        -- Check if a request exists with the given request_id
+        select count(1) > 0
+        into req_exists
+        from net.http_request_queue
+        where id = request_id;
+
+        if req_exists then
+            return (
+                'PENDING',
+                'request is pending processing',
+                null
+            )::net.http_response_result;
+        end if;
+
+        -- No request matching request_id found
+        return (
+            'ERROR',
+            'request matching request_id not found',
+            null
+        )::net.http_response_result;
+
     end if;
 
-    -- Return a valid, populated http_response
-    return rec;
+    -- Return a valid, populated http_response_result
+    return (
+        'SUCCESS',
+        'ok',
+        (
+            rec.status_code,
+            rec.headers,
+            rec.content
+        )::net.http_response
+    )::net.http_response_result;
 end;
 $$;

@@ -206,7 +206,7 @@ worker_main(Datum main_arg)
 			SELECT\
 			  q.id, q.url\
 			FROM net.http_request_queue q \
-			LEFT JOIN net.http_response r ON q.id = r.id \
+			LEFT JOIN net._http_response r ON q.id = r.id \
 			WHERE r.id IS NULL");
 
 		if (SPI_execute(select_query.data, true, 0) == SPI_OK_SELECT)
@@ -253,11 +253,11 @@ worker_main(Datum main_arg)
 
 		initStringInfo(&query_insert_response_ok);
 		appendStringInfo(&query_insert_response_ok, "\
-			insert into net.http_response(id, status_code, body, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
+			insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
 
 		initStringInfo(&query_insert_response_bad);
 		appendStringInfo(&query_insert_response_bad, "\
-			insert into net.http_response(id, error_msg) values ($1, $2)");
+			insert into net._http_response(id, error_msg) values ($1, $2)");
 
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				int64 id;

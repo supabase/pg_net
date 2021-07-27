@@ -3,7 +3,11 @@
 ### net.http_get
 
 ##### description
-Create an HTTP GET request returning the request's uuid id. 
+Create an HTTP GET request returning the request's id
+
+!!! note
+    HTTP requests are not started until the transaction is committed
+
 
 ##### signature
 ```sql
@@ -18,8 +22,6 @@ net.http_get(
     timeout_milliseconds int DEFAULT 1000,
     -- the minimum amount of time the response should be persisted
     ttl interval default '3 days',
-    -- when `true`, return immediately. when `false` wait for the request to complete before returning
-    async bool default true
 )
     -- request_id reference
     returns uuid
@@ -31,7 +33,11 @@ net.http_get(
 
 ##### usage
 ```sql
---8<-- "test/expected/test_http_get.out"
+select net.http_get('https://news.ycombinator.com') as request_id;
+request_id
+----------
+         1
+(1 row)
 ```
 
 ### net.http_collect_response
@@ -40,6 +46,9 @@ net.http_get(
 Given a `request_id` reference, retrieve the response.
 
 When `async:=false` is set it is recommended that [statement_timeout](https://www.postgresql.org/docs/13/runtime-config-client.html) is set for the maximum amount of time the caller is willing to wait in case the response is slow to populate.
+
+!!! warning
+    `net.http_collect_response` must be in a separate transaction from the calls to `net.http_<method>`
 
 
 ##### signature
@@ -50,8 +59,8 @@ net.http_collect_response(
     -- when `true`, return immediately. when `false` wait for the request to complete before returning
     async bool default true
 )
-    -- http response composite type
-    returns net.http_response
+    -- http response composite wrapped in a result type
+    returns net.http_response_result
     strict
     volatile
     parallel safe
@@ -59,9 +68,22 @@ net.http_collect_response(
 
 ##### usage
 ```sql
---8<-- "test/expected/test_http_collect_response.out"
+select net.http_get('https://news.ycombinator.com') as request_id;
+request_id
+----------
+         1
+(1 row)
+
+select * from net.http_collect_response(1, async:=false);
+status  | message | response
+--------+---------+----------
+SUCCESS        ok        ...
+```
+where `response` is a composite
+```sql
+status_code integer
+headers jsonb
+content text
 ```
 
-## SMTP
-
-Coming soon
+Possible values for `net.http_response_result.status` are `('PENDING', 'SUCCESS', 'ERROR')`
