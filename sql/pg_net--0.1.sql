@@ -15,7 +15,7 @@ create table net.http_request_queue(
     params jsonb not null,
     headers jsonb not null,
     content_type text,
-    body text,
+    body bytea,
     timeout_milliseconds int not null,
     -- Available for delete after this date
     delete_after timestamp not null
@@ -108,7 +108,7 @@ create or replace function net.http_post(
     -- ContentType of the POST request
     content_type text,
     -- body of the POST request
-    body text,
+    body bytea,
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb DEFAULT '{}'::jsonb,
     -- key/values to be included in request headers
