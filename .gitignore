@@ -3,3 +3,4 @@ results/
 venv/
 site/
 regression.*
+__pycache__/
