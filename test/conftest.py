@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 @pytest.fixture(scope="function")
 def engine():
-    engine = create_engine("postgresql:///postgres", echo=True)
+    engine = create_engine("postgresql:///postgres")
     yield engine
     engine.dispose()
 
