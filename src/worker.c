@@ -118,7 +118,6 @@ header_array_to_slist(ArrayType *array, struct curl_slist *headers)
 		if (isnull) continue;
 
 		header = TextDatumGetCString(value);
-		elog(DEBUG1, "Request header \"%s\"\n", header);
 		headers = curl_slist_append(headers, header);
 	}
 	array_free_iterator(iterator);
