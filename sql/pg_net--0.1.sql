@@ -1,6 +1,6 @@
 create schema if not exists net;
 
-create domain http_method as text
+create domain net.http_method as text
 check (
     value ilike 'get' or
     value ilike 'post'
@@ -10,7 +10,7 @@ check (
 -- API: Private
 create table net.http_request_queue(
     id bigserial primary key,
-    method http_method not null,
+    method net.http_method not null,
     url text not null,
     params jsonb not null,
     headers jsonb not null,
