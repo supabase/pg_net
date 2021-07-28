@@ -105,12 +105,11 @@ create or replace function net.http_post(
     -- url for the request
     url text,
     -- body of the POST request
-    body bytea,
+    body bytea default null,
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb DEFAULT '{}'::jsonb,
     -- key/values to be included in request headers
-    -- by default curl uses "Content-Type: application/x-www-form-urlencoded"
-    headers jsonb DEFAULT '{}'::jsonb,
+    headers jsonb DEFAULT '{"Content-Type": "application/x-www-form-urlencoded"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int DEFAULT 1000,
     -- the minimum amount of time the response should be persisted
@@ -118,7 +117,6 @@ create or replace function net.http_post(
 )
     -- request_id reference
     returns bigint
-    strict
     volatile
     parallel safe
     language plpgsql

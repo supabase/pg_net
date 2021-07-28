@@ -24,7 +24,8 @@ net.http_get(
     ttl interval default '3 days',
 )
     -- request_id reference
-    returns uuid
+    returns bigint
+
     strict
     volatile
     parallel safe
@@ -34,6 +35,53 @@ net.http_get(
 ##### usage
 ```sql
 select net.http_get('https://news.ycombinator.com') as request_id;
+request_id
+----------
+         1
+(1 row)
+```
+
+### net.http_post
+
+##### description
+Create an HTTP POST request returning the request's id
+
+!!! note
+    HTTP requests are not started until the transaction is committed
+
+
+##### signature
+```sql
+net.http_post(
+    -- url for the request
+    url text,
+    -- body of the POST request
+    body bytea default null,
+    -- key/value pairs to be url encoded and appended to the `url`
+    params jsonb DEFAULT '{}'::jsonb,
+    -- key/values to be included in request headers
+    headers jsonb DEFAULT '{"Content-Type": "application/x-www-form-urlencoded"}'::jsonb,
+    -- the maximum number of milliseconds the request may take before being cancelled
+    timeout_milliseconds int DEFAULT 1000,
+    -- the minimum amount of time the response should be persisted
+    ttl interval default '3 days'
+)
+    -- request_id reference
+    returns bigint
+
+    volatile
+    parallel safe
+    language plpgsql
+```
+
+##### usage
+```sql
+select
+    net.http_post(
+        url:='https://httpbin.org/post',
+        body:='{"hello": "world"}',
+        headers:='{"content-type": "application/json", "accept": "application/json"}'
+    );
 request_id
 ----------
          1
@@ -55,12 +103,13 @@ When `async:=false` is set it is recommended that [statement_timeout](https://ww
 ```sql
 net.http_collect_response(
     -- request_id reference
-    request_id uuid,
+    request_id id,
     -- when `true`, return immediately. when `false` wait for the request to complete before returning
     async bool default true
 )
     -- http response composite wrapped in a result type
     returns net.http_response_result
+
     strict
     volatile
     parallel safe
