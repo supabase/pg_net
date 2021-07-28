@@ -86,3 +86,33 @@ def test_http_collect_response_async_does_not_exist(sess):
     assert response[0] == "ERROR"
     assert "not found" in response[1]
     assert response[2] is None
+
+
+def test_http_get_returns_jsonb_body(sess):
+    """Confirm bytea response body is deserializeable"""
+
+    # Create a request
+    (request_id,) = sess.execute(
+        """
+        select net.http_get(url:='https://httpbin.org/anything');
+    """
+    ).fetchone()
+
+    # Commit so background worker can start
+    sess.commit()
+
+    # Collect the response, waiting as needed
+    (body,) = sess.execute(
+        text(
+            """
+        select
+            encode((x.response).body, 'escape')::jsonb
+        from
+            net.http_collect_response(:request_id, async:=false) x;
+    """
+        ),
+        {"request_id": request_id},
+    ).fetchone()
+
+    assert isinstance(body, dict)
+    assert "url" in body

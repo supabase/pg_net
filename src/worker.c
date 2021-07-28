@@ -318,7 +318,7 @@ worker_main(Datum main_arg)
 
 		initStringInfo(&query_insert_response_ok);
 		appendStringInfo(&query_insert_response_ok, "\
-			insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
+			insert into net._http_response(id, status_code, body, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
 
 		initStringInfo(&query_insert_response_bad);
 		appendStringInfo(&query_insert_response_bad, "\

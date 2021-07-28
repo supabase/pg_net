@@ -83,7 +83,7 @@ where `response` is a composite
 ```sql
 status_code integer
 headers jsonb
-content text
+body bytea
 ```
 
 Possible values for `net.http_response_result.status` are `('PENDING', 'SUCCESS', 'ERROR')`
