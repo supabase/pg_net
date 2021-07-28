@@ -29,7 +29,7 @@ create table net._http_response(
     status_code integer,
     content_type text,
     headers jsonb,
-    content text,
+    body bytea,
     timed_out bool,
     error_msg text
 );
