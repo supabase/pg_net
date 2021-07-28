@@ -65,6 +65,33 @@ end;
 $$;
 
 
+-- url encode a string
+-- API: Private
+create or replace function net._urlencode_string(string varchar)
+    -- url encoded string
+    returns text
+
+    language 'c'
+    immutable
+    strict
+as 'pg_net';
+
+-- url encode key/value pairs from a jsonb object
+-- API: Private
+create or replace function net._urlencode(params jsonb)
+    -- url encoded string
+    returns text
+
+    language sql
+    immutable
+as $$
+    select
+        '?' || string_agg(net._urlencode_string(elem::text) || '=' || net._urlencode_string(val::text), '&'::text)
+	from
+        jsonb_each_text(params) js(elem, val)
+$$;
+
+
 -- Interface to make an async request
 -- API: Public
 create or replace function net.http_get(
@@ -91,7 +118,7 @@ declare
 begin
     -- Add to the request queue
     insert into net.http_request_queue(method, url, params, headers, timeout_milliseconds, delete_after)
-    values ('GET', url, params, headers, timeout_milliseconds, timezone('utc', now()) + ttl)
+    values ('GET', url || coalesce(net._urlencode(params), ''), params, headers, timeout_milliseconds, timezone('utc', now()) + ttl)
     returning id
     into request_id;
 
@@ -126,7 +153,7 @@ declare
 begin
     -- Add to the request queue
     insert into net.http_request_queue(method, url, params, headers, body, timeout_milliseconds, delete_after)
-    values ('POST', url, params, headers, body, timeout_milliseconds, timezone('utc', now()) + ttl)
+    values ('POST', url || coalesce(net._urlencode(params), ''), params, headers, body, timeout_milliseconds, timezone('utc', now()) + ttl)
     returning id
     into request_id;
 
