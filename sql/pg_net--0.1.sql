@@ -1,20 +1,12 @@
 create schema if not exists net;
 
-create domain http_method as text
-check (
-    value ilike 'get' or
-    value ilike 'post'
-);
-
 -- Store pending requests. The background worker reads from here
 -- API: Private
 create table net.http_request_queue(
     id bigserial primary key,
-    method http_method not null,
     url text not null,
     params jsonb not null,
     headers jsonb not null,
-    body bytea,
     timeout_milliseconds int not null,
     -- Available for delete after this date
     delete_after timestamp not null
@@ -90,8 +82,8 @@ declare
     request_id bigint;
 begin
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, params, headers, timeout_milliseconds, delete_after)
-    values ('GET', url, params, headers, timeout_milliseconds, timezone('utc', now()) + ttl)
+    insert into net.http_request_queue(url, params, headers, timeout_milliseconds, delete_after)
+    values (url, params, headers, timeout_milliseconds, timezone('utc', now()) + ttl)
     returning id
     into request_id;
 
@@ -99,42 +91,6 @@ begin
 end
 $$;
 
--- Interface to make an async request
--- API: Public
-create or replace function net.http_post(
-    -- url for the request
-    url text,
-    -- body of the POST request
-    body bytea,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb DEFAULT '{}'::jsonb,
-    -- key/values to be included in request headers
-    -- by default curl uses "Content-Type: application/x-www-form-urlencoded"
-    headers jsonb DEFAULT '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000,
-    -- the minimum amount of time the response should be persisted
-    ttl interval default '3 days'
-)
-    -- request_id reference
-    returns bigint
-    strict
-    volatile
-    parallel safe
-    language plpgsql
-as $$
-declare
-    request_id bigint;
-begin
-    -- Add to the request queue
-    insert into net.http_request_queue(method, url, params, headers, body, timeout_milliseconds, delete_after)
-    values ('POST', url, params, headers, body, timeout_milliseconds, timezone('utc', now()) + ttl)
-    returning id
-    into request_id;
-
-    return request_id;
-end
-$$;
 
 -- Lifecycle states of a request (all protocols)
 -- API: Public
