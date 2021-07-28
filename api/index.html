@@ -308,11 +308,11 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nethttp_collect_response" class="md-nav__link">
-    net.http_collect_response
+  <a href="#nethttp_post" class="md-nav__link">
+    net.http_post
   </a>
   
-    <nav class="md-nav" aria-label="net.http_collect_response">
+    <nav class="md-nav" aria-label="net.http_post">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -331,6 +331,40 @@
         
           <li class="md-nav__item">
   <a href="#usage_1" class="md-nav__link">
+    usage
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nethttp_collect_response" class="md-nav__link">
+    net.http_collect_response
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_collect_response">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description_2" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signature_2" class="md-nav__link">
+    signature
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_2" class="md-nav__link">
     usage
   </a>
   
@@ -435,11 +469,11 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nethttp_collect_response" class="md-nav__link">
-    net.http_collect_response
+  <a href="#nethttp_post" class="md-nav__link">
+    net.http_post
   </a>
   
-    <nav class="md-nav" aria-label="net.http_collect_response">
+    <nav class="md-nav" aria-label="net.http_post">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -458,6 +492,40 @@
         
           <li class="md-nav__item">
   <a href="#usage_1" class="md-nav__link">
+    usage
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nethttp_collect_response" class="md-nav__link">
+    net.http_collect_response
+  </a>
+  
+    <nav class="md-nav" aria-label="net.http_collect_response">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#description_2" class="md-nav__link">
+    description
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signature_2" class="md-nav__link">
+    signature
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_2" class="md-nav__link">
     usage
   </a>
   
@@ -518,7 +586,8 @@
 <span class="normal">15</span>
 <span class="normal">16</span>
 <span class="normal">17</span>
-<span class="normal">18</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span>
+<span class="normal">18</span>
+<span class="normal">19</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span>
     <span class="c1">-- url for the request</span>
     <span class="n">url</span> <span class="nb">text</span><span class="p">,</span>
     <span class="c1">-- key/value pairs to be url encoded and appended to the `url`</span>
@@ -531,7 +600,8 @@
     <span class="n">ttl</span> <span class="nb">interval</span> <span class="k">default</span> <span class="s1">&#39;3 days&#39;</span><span class="p">,</span>
 <span class="p">)</span>
     <span class="c1">-- request_id reference</span>
-    <span class="k">returns</span> <span class="n">uuid</span>
+    <span class="k">returns</span> <span class="nb">bigint</span>
+
     <span class="k">strict</span>
     <span class="k">volatile</span>
     <span class="n">parallel</span> <span class="n">safe</span>
@@ -550,13 +620,12 @@
 <span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
 </code></pre></div>
 </td></tr></table>
-<h3 id="nethttp_collect_response">net.http_collect_response</h3>
+<h3 id="nethttp_post">net.http_post</h3>
 <h5 id="description_1">description</h5>
-<p>Given a <code>request_id</code> reference, retrieve the response.</p>
-<p>When <code>async:=false</code> is set it is recommended that <a href="https://www.postgresql.org/docs/13/runtime-config-client.html">statement_timeout</a> is set for the maximum amount of time the caller is willing to wait in case the response is slow to populate.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p><code>net.http_collect_response</code> must be in a separate transaction from the calls to <code>net.http_&lt;method&gt;</code></p>
+<p>Create an HTTP POST request returning the request's id</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>HTTP requests are not started until the transaction is committed</p>
 </div>
 <h5 id="signature_1">signature</h5>
 <table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
@@ -569,20 +638,94 @@
 <span class="normal"> 8</span>
 <span class="normal"> 9</span>
 <span class="normal">10</span>
-<span class="normal">11</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_collect_response</span><span class="p">(</span>
+<span class="normal">11</span>
+<span class="normal">12</span>
+<span class="normal">13</span>
+<span class="normal">14</span>
+<span class="normal">15</span>
+<span class="normal">16</span>
+<span class="normal">17</span>
+<span class="normal">18</span>
+<span class="normal">19</span>
+<span class="normal">20</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_post</span><span class="p">(</span>
+    <span class="c1">-- url for the request</span>
+    <span class="n">url</span> <span class="nb">text</span><span class="p">,</span>
+    <span class="c1">-- body of the POST request</span>
+    <span class="n">body</span> <span class="n">bytea</span> <span class="k">default</span> <span class="k">null</span><span class="p">,</span>
+    <span class="c1">-- key/value pairs to be url encoded and appended to the `url`</span>
+    <span class="n">params</span> <span class="n">jsonb</span> <span class="k">DEFAULT</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="c1">-- key/values to be included in request headers</span>
+    <span class="n">headers</span> <span class="n">jsonb</span> <span class="k">DEFAULT</span> <span class="s1">&#39;{&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="c1">-- the maximum number of milliseconds the request may take before being cancelled</span>
+    <span class="n">timeout_milliseconds</span> <span class="nb">int</span> <span class="k">DEFAULT</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="c1">-- the minimum amount of time the response should be persisted</span>
+    <span class="n">ttl</span> <span class="nb">interval</span> <span class="k">default</span> <span class="s1">&#39;3 days&#39;</span>
+<span class="p">)</span>
     <span class="c1">-- request_id reference</span>
-    <span class="n">request_id</span> <span class="n">uuid</span><span class="p">,</span>
+    <span class="k">returns</span> <span class="nb">bigint</span>
+
+    <span class="k">volatile</span>
+    <span class="n">parallel</span> <span class="n">safe</span>
+    <span class="k">language</span> <span class="n">plpgsql</span>
+</code></pre></div>
+</td></tr></table>
+<h5 id="usage_1">usage</h5>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
+<span class="normal"> 2</span>
+<span class="normal"> 3</span>
+<span class="normal"> 4</span>
+<span class="normal"> 5</span>
+<span class="normal"> 6</span>
+<span class="normal"> 7</span>
+<span class="normal"> 8</span>
+<span class="normal"> 9</span>
+<span class="normal">10</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">select</span>
+    <span class="n">net</span><span class="p">.</span><span class="n">http_post</span><span class="p">(</span>
+        <span class="n">url</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;https://httpbin.org/post&#39;</span><span class="p">,</span>
+        <span class="n">body</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;{&quot;hello&quot;: &quot;world&quot;}&#39;</span><span class="p">,</span>
+        <span class="n">headers</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;{&quot;content-type&quot;: &quot;application/json&quot;, &quot;accept&quot;: &quot;application/json&quot;}&#39;</span>
+    <span class="p">);</span>
+<span class="n">request_id</span>
+<span class="c1">----------</span>
+         <span class="mi">1</span>
+<span class="p">(</span><span class="mi">1</span> <span class="k">row</span><span class="p">)</span>
+</code></pre></div>
+</td></tr></table>
+<h3 id="nethttp_collect_response">net.http_collect_response</h3>
+<h5 id="description_2">description</h5>
+<p>Given a <code>request_id</code> reference, retrieve the response.</p>
+<p>When <code>async:=false</code> is set it is recommended that <a href="https://www.postgresql.org/docs/13/runtime-config-client.html">statement_timeout</a> is set for the maximum amount of time the caller is willing to wait in case the response is slow to populate.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><code>net.http_collect_response</code> must be in a separate transaction from the calls to <code>net.http_&lt;method&gt;</code></p>
+</div>
+<h5 id="signature_2">signature</h5>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
+<span class="normal"> 2</span>
+<span class="normal"> 3</span>
+<span class="normal"> 4</span>
+<span class="normal"> 5</span>
+<span class="normal"> 6</span>
+<span class="normal"> 7</span>
+<span class="normal"> 8</span>
+<span class="normal"> 9</span>
+<span class="normal">10</span>
+<span class="normal">11</span>
+<span class="normal">12</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_collect_response</span><span class="p">(</span>
+    <span class="c1">-- request_id reference</span>
+    <span class="n">request_id</span> <span class="n">id</span><span class="p">,</span>
     <span class="c1">-- when `true`, return immediately. when `false` wait for the request to complete before returning</span>
     <span class="n">async</span> <span class="n">bool</span> <span class="k">default</span> <span class="k">true</span>
 <span class="p">)</span>
     <span class="c1">-- http response composite wrapped in a result type</span>
     <span class="k">returns</span> <span class="n">net</span><span class="p">.</span><span class="n">http_response_result</span>
+
     <span class="k">strict</span>
     <span class="k">volatile</span>
     <span class="n">parallel</span> <span class="n">safe</span>
 </code></pre></div>
 </td></tr></table>
-<h5 id="usage_1">usage</h5>
+<h5 id="usage_2">usage</h5>
 <p><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
 <span class="normal"> 2</span>
 <span class="normal"> 3</span>

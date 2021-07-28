@@ -2,22 +2,22 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://supabase.github.io/pg_net/</loc>
-         <lastmod>2021-07-27</lastmod>
+         <lastmod>2021-07-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://supabase.github.io/pg_net/api/</loc>
-         <lastmod>2021-07-27</lastmod>
+         <lastmod>2021-07-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://supabase.github.io/pg_net/contributing/</loc>
-         <lastmod>2021-07-27</lastmod>
+         <lastmod>2021-07-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://supabase.github.io/pg_net/installation/</loc>
-         <lastmod>2021-07-27</lastmod>
+         <lastmod>2021-07-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
