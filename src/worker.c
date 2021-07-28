@@ -23,6 +23,7 @@
 
 #include "utils/jsonb.h"
 
+#include <curl/curl.h>
 #include <curl/multi.h>
 
 PG_MODULE_MAGIC;
@@ -102,7 +103,29 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 	return realsize;
 }
 
-static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
+static struct curl_slist *
+header_array_to_slist(ArrayType *array, struct curl_slist *headers)
+{
+	ArrayIterator iterator;
+	Datum value;
+	bool isnull;
+	char *header;
+
+	iterator = array_create_iterator(array, 0, NULL);
+
+	while (array_iterate(iterator, &value, &isnull))
+	{
+		if (isnull) continue;
+
+		header = TextDatumGetCString(value);
+		headers = curl_slist_append(headers, header);
+	}
+	array_free_iterator(iterator);
+
+	return headers;
+}
+
+static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeaders, char *reqBody, int64 id, HTAB *curlDataMap)
 {
 	CURL *eh = curl_easy_init();
 
@@ -120,14 +143,30 @@ static int init(CURLM *cm, char *url, int64 id, HTAB *curlDataMap)
 		cdata->headers = headers;
 	}
 
+	reqHeaders = curl_slist_append(reqHeaders, "User-Agent: pg_net/0.0.1");
+
+	if (strcasecmp(method, "GET") == 0) {
+		if (reqBody) {
+			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
+			curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "GET");
+		}
+	} else if (strcasecmp(method, "POST") == 0) {
+		if (reqBody) {
+			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
+		}
+	} else {
+		elog(ERROR, "error: Unsupported request method %s\n", method);
+	}
+
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, body_cb);
 	curl_easy_setopt(eh, CURLOPT_WRITEDATA, cdata->body);
 	curl_easy_setopt(eh, CURLOPT_HEADERFUNCTION, header_cb);
 	curl_easy_setopt(eh, CURLOPT_HEADERDATA, cdata->headers);
 	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
 	curl_easy_setopt(eh, CURLOPT_URL, url);
+	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
-	curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
+	// curl_easy_setopt(eh, CURLOPT_VERBOSE, 1); // for debugging
 	return curl_multi_add_handle(cm, eh);
 }
 
@@ -204,7 +243,13 @@ worker_main(Datum main_arg)
 
 		appendStringInfo(&select_query, "\
 			SELECT\
-			  q.id, q.url\
+				q.id,\
+				q.method,\
+				q.url,\
+				array(\
+					select key || ': ' || value from jsonb_each_text(q.headers)\
+				),\
+				q.body\
 			FROM net.http_request_queue q \
 			LEFT JOIN net._http_response r ON q.id = r.id \
 			WHERE r.id IS NULL");
@@ -223,17 +268,37 @@ worker_main(Datum main_arg)
 
 			for (int j = 0; j < SPI_processed; j++)
 			{
+					struct curl_slist *headers = NULL;
+					// FIXME: Need to free headers, but only *after* curl_multi stuff during cleanup.
+					// Maybe store in cdata?
+					// curl_slist_free_all(headers);
+
 					int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
-					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
+					char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
+					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
 
-					elog(DEBUG1, "Making a request to %s with id %ld", url, id);
+					Datum headersBin;
+					Datum bodyBin;
+					ArrayType *pgHeaders;
+					char *body = NULL;
 
-					res = init(cm, url, id, curlDataMap);
+					headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
+					if (!tupIsNull) {
+						pgHeaders = DatumGetArrayTypeP(headersBin);
+						headers = header_array_to_slist(pgHeaders, headers);
+					}
+					bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
+					if (!tupIsNull) body = TextDatumGetCString(bodyBin);
+
+					elog(DEBUG1, "Making a %s request to %s with id %ld", method, url, id);
+
+					res = init(cm, method, url, headers, body, id, curlDataMap);
 
 					if(res) {
 						elog(ERROR, "error: init() returned %d\n", res);
 					}
 					res = curl_multi_perform(cm, &still_running);
+
 					if(res != CURLM_OK) {
 							elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
 					}
