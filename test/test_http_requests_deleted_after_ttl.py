@@ -3,16 +3,13 @@ import time
 import pytest
 from sqlalchemy import text
 
-
-@pytest.mark.skip(reason="pending implementation")
 def test_http_requests_deleted_after_ttl(sess):
     """Check that http requests are deleted within a few seconds of their ttl"""
     # Create a request
     (request_id,) = sess.execute(
         """
         select net.http_get(
-            url:='https://httpbin.org/anything',
-            ttl:='2 seconds'
+            'https://httpbin.org/anything'
         );
     """
     ).fetchone()
@@ -20,11 +17,14 @@ def test_http_requests_deleted_after_ttl(sess):
     # Commit so background worker can start
     sess.commit()
 
+    # Sleep a while for ensuring the request is completed
+    time.sleep(2)
+
     # Confirm that the request was retrievable
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=false);
+        select * from net.http_collect_response(:request_id);
     """
         ),
         {"request_id": request_id},
@@ -32,16 +32,16 @@ def test_http_requests_deleted_after_ttl(sess):
     assert response[0] == "SUCCESS"
 
     # Sleep until after request should have been deleted
-    time.sleep(5)
+    time.sleep(3)
 
     # Ensure collecting the resposne now results in an error
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=true);
+        select * from net.http_collect_response(:request_id);
     """
         ),
         {"request_id": request_id},
     ).fetchone()
+    # TODO an ERROR status doesn't seem correct here
     assert response[0] == "ERROR"
-    assert "not found" in response[2]

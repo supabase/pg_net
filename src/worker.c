@@ -23,10 +23,14 @@
 
 #include "utils/jsonb.h"
 
+#include "tcop/utility.h"
+
 #include <curl/curl.h>
 #include <curl/multi.h>
 
 PG_MODULE_MAGIC;
+
+static char *ttl = NULL;
 
 void _PG_init(void);
 void worker_main(Datum main_arg) pg_attribute_noreturn();
@@ -40,12 +44,23 @@ typedef struct _CurlData
 } CurlData;
 
 static volatile sig_atomic_t got_sigterm = false;
+static volatile sig_atomic_t got_sighup = false;
 
 static void
 handle_sigterm(SIGNAL_ARGS)
 {
 	int save_errno = errno;
 	got_sigterm = true;
+	if (MyProc)
+		SetLatch(&MyProc->procLatch);
+	errno = save_errno;
+}
+
+static void
+handle_sighup(SIGNAL_ARGS)
+{
+	int			save_errno = errno;
+	got_sighup = true;
 	if (MyProc)
 		SetLatch(&MyProc->procLatch);
 	errno = save_errno;
@@ -202,6 +217,7 @@ worker_main(Datum main_arg)
 	int hashFlags = 0;
 
 	pqsignal(SIGTERM, handle_sigterm);
+	pqsignal(SIGHUP, handle_sighup);
 
 	BackgroundWorkerUnblockSignals();
 
@@ -225,6 +241,7 @@ worker_main(Datum main_arg)
 		StringInfoData	select_query;
 		StringInfoData	query_insert_response_ok;
 		StringInfoData	query_insert_response_bad;
+		StringInfoData	delete_query;
 
 		/* Wait 10 seconds */
 		WaitLatch(&MyProc->procLatch,
@@ -238,9 +255,33 @@ worker_main(Datum main_arg)
 			continue;
 		}
 
+		if (got_sighup) {
+			got_sighup = false;
+			ProcessConfigFile(PGC_SIGHUP);
+		}
+
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 		SPI_connect();
+
+		initStringInfo(&delete_query);
+		appendStringInfo(&delete_query, "DELETE FROM net.http_request_queue WHERE created < clock_timestamp() - $1");
+
+		{
+
+			int argCount = 1;
+			Oid argTypes[1];
+			Datum argValues[1];
+
+			argTypes[0] = INTERVALOID;
+			argValues[0] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
+
+			if (SPI_execute_with_args(delete_query.data, argCount, argTypes, argValues, NULL,
+							false, 0) != SPI_OK_DELETE)
+			{
+				elog(ERROR, "SPI_exec failed: %s", delete_query.data);
+			}
+		}
 
 		initStringInfo(&select_query);
 
@@ -447,6 +488,14 @@ _PG_init(void)
 	worker.bgw_main_arg = (Datum) 0;
 	worker.bgw_notify_pid = 0;
 	RegisterBackgroundWorker(&worker);
+
+	DefineCustomStringVariable("pg_net.ttl",
+							   "time to live for request/response rows",
+							   "should be a valid interval type",
+							   &ttl,
+							   "3 days",
+							   PGC_SIGHUP, 0,
+								 NULL, NULL, NULL);
 }
 
 PG_FUNCTION_INFO_V1(_urlencode_string);
