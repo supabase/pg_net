@@ -104,7 +104,7 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 }
 
 static struct curl_slist *
-header_array_to_slist(ArrayType *array, struct curl_slist *headers)
+pg_text_array_to_slist(ArrayType *array, struct curl_slist *headers)
 {
 	ArrayIterator iterator;
 	Datum value;
@@ -119,6 +119,7 @@ header_array_to_slist(ArrayType *array, struct curl_slist *headers)
 
 		header = TextDatumGetCString(value);
 		headers = curl_slist_append(headers, header);
+		pfree(header);
 	}
 	array_free_iterator(iterator);
 
@@ -287,7 +288,7 @@ worker_main(Datum main_arg)
 					headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
 					if (!tupIsNull) {
 						pgHeaders = DatumGetArrayTypeP(headersBin);
-						headers = header_array_to_slist(pgHeaders, headers);
+						headers = pg_text_array_to_slist(pgHeaders, headers);
 					}
 					bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
 					if (!tupIsNull) body = TextDatumGetCString(bodyBin);
@@ -460,5 +461,49 @@ Datum _urlencode_string(PG_FUNCTION_ARGS)
 	pfree(str);
 
 	PG_RETURN_TEXT_P(cstring_to_text(urlencoded_str));
+}
+
+PG_FUNCTION_INFO_V1(_encode_url_with_params_array);
+Datum _encode_url_with_params_array(PG_FUNCTION_ARGS)
+{
+	CURLU *h = curl_url();
+	CURLUcode rc;
+
+	char *url = text_to_cstring(PG_GETARG_TEXT_P(0));
+	ArrayType *params = PG_GETARG_ARRAYTYPE_P(1);
+	char *full_url = NULL;
+
+	ArrayIterator iterator;
+	Datum value;
+	bool isnull;
+	char *param;
+
+	rc = curl_url_set(h, CURLUPART_URL, url, 0);
+	if (rc != CURLUE_OK) {
+		elog(ERROR, "curl_url returned: %d", rc);
+	}
+
+	iterator = array_create_iterator(params, 0, NULL);
+	while (array_iterate(iterator, &value, &isnull)) {
+		if (isnull) continue;
+
+		param = TextDatumGetCString(value);
+		rc = curl_url_set(h, CURLUPART_QUERY, param, CURLU_APPENDQUERY);
+		if (rc != CURLUE_OK) {
+			elog(ERROR, "curl_url returned: %d", rc);
+		}
+		pfree(param);
+	}
+	array_free_iterator(iterator);
+
+	rc = curl_url_get(h, CURLUPART_URL, &full_url, 0);
+	if (rc != CURLUE_OK) {
+		elog(ERROR, "curl_url returned: %d", rc);
+	}
+
+	pfree(url);
+	curl_url_cleanup(h);
+
+	PG_RETURN_TEXT_P(cstring_to_text(full_url));
 }
 // clang-format on

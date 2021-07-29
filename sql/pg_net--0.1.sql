@@ -12,7 +12,6 @@ create table net.http_request_queue(
     id bigserial primary key,
     method net.http_method not null,
     url text not null,
-    params jsonb not null,
     headers jsonb not null,
     body bytea,
     timeout_milliseconds int not null,
@@ -91,6 +90,15 @@ as $$
         jsonb_each_text(params) js(elem, val)
 $$;
 
+-- API: Private
+create or replace function net._encode_url_with_params_array(url text, params_array text[])
+    -- url encoded string
+    returns text
+
+    language 'c'
+    immutable
+as 'pg_net';
+
 
 -- Interface to make an async request
 -- API: Public
@@ -115,10 +123,21 @@ create or replace function net.http_get(
 as $$
 declare
     request_id bigint;
+    params_array text[];
 begin
+    select coalesce(array_agg(net._urlencode_string(key) || '=' || net._urlencode_string(value)), '{}')
+    into params_array
+    from jsonb_each_text(params);
+
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, params, headers, timeout_milliseconds, delete_after)
-    values ('GET', url || coalesce(net._urlencode(params), ''), params, headers, timeout_milliseconds, timezone('utc', now()) + ttl)
+    insert into net.http_request_queue(method, url, headers, timeout_milliseconds, delete_after)
+    values (
+        'GET',
+        net._encode_url_with_params_array(url, params_array),
+        headers,
+        timeout_milliseconds,
+        timezone('utc', now()) + ttl
+    )
     returning id
     into request_id;
 
@@ -150,10 +169,22 @@ create or replace function net.http_post(
 as $$
 declare
     request_id bigint;
+    params_array text[];
 begin
+    select coalesce(array_agg(net._urlencode_string(key) || '=' || net._urlencode_string(value)), '{}')
+    into params_array
+    from jsonb_each_text(params);
+
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, params, headers, body, timeout_milliseconds, delete_after)
-    values ('POST', url || coalesce(net._urlencode(params), ''), params, headers, body, timeout_milliseconds, timezone('utc', now()) + ttl)
+    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds, delete_after)
+    values (
+        'POST',
+        net._encode_url_with_params_array(url, params_array),
+        headers,
+        body,
+        timeout_milliseconds,
+        timezone('utc', now()) + ttl
+    )
     returning id
     into request_id;
 
