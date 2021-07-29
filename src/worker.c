@@ -445,4 +445,18 @@ _PG_init(void)
 	worker.bgw_notify_pid = 0;
 	RegisterBackgroundWorker(&worker);
 }
+
+Datum _urlencode_string(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(_urlencode_string);
+Datum _urlencode_string(PG_FUNCTION_ARGS)
+{
+	char *str = text_to_cstring(PG_GETARG_TEXT_P(0));
+	char *urlencoded_str = NULL;
+
+	urlencoded_str = curl_escape(str, strlen(str));
+
+	pfree(str);
+
+	PG_RETURN_TEXT_P(cstring_to_text(urlencoded_str));
+}
 // clang-format on
