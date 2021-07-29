@@ -14,8 +14,11 @@ create table net.http_request_queue(
     url text not null,
     headers jsonb not null,
     body bytea,
-    timeout_milliseconds int not null
+    timeout_milliseconds int not null,
+    created timestamptz not null default now()
 );
+
+create index created_idx on net.http_request_queue (created);
 
 -- Associates a response with a request
 -- API: Private
