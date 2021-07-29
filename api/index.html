@@ -622,10 +622,14 @@
 </td></tr></table>
 <h3 id="nethttp_post">net.http_post</h3>
 <h5 id="description_1">description</h5>
-<p>Create an HTTP POST request returning the request's id</p>
+<p>Create an HTTP POST request with a JSON body, returning the request's id</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>HTTP requests are not started until the transaction is committed</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>the body's character set encoding matches the database's <code>server_encoding</code> setting</p>
 </div>
 <h5 id="signature_1">signature</h5>
 <table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
@@ -651,13 +655,13 @@
     <span class="c1">-- url for the request</span>
     <span class="n">url</span> <span class="nb">text</span><span class="p">,</span>
     <span class="c1">-- body of the POST request</span>
-    <span class="n">body</span> <span class="n">bytea</span> <span class="k">default</span> <span class="k">null</span><span class="p">,</span>
+    <span class="n">body</span> <span class="n">jsonb</span> <span class="k">default</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
     <span class="c1">-- key/value pairs to be url encoded and appended to the `url`</span>
-    <span class="n">params</span> <span class="n">jsonb</span> <span class="k">DEFAULT</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="n">params</span> <span class="n">jsonb</span> <span class="k">default</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
     <span class="c1">-- key/values to be included in request headers</span>
-    <span class="n">headers</span> <span class="n">jsonb</span> <span class="k">DEFAULT</span> <span class="s1">&#39;{&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="n">headers</span> <span class="n">jsonb</span> <span class="k">default</span> <span class="s1">&#39;{&quot;Content-Type&quot;: &quot;application/json&quot;}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
     <span class="c1">-- the maximum number of milliseconds the request may take before being cancelled</span>
-    <span class="n">timeout_milliseconds</span> <span class="nb">int</span> <span class="k">DEFAULT</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">timeout_milliseconds</span> <span class="nb">int</span> <span class="k">default</span> <span class="mi">1000</span><span class="p">,</span>
     <span class="c1">-- the minimum amount of time the response should be persisted</span>
     <span class="n">ttl</span> <span class="nb">interval</span> <span class="k">default</span> <span class="s1">&#39;3 days&#39;</span>
 <span class="p">)</span>
@@ -670,20 +674,18 @@
 </code></pre></div>
 </td></tr></table>
 <h5 id="usage_1">usage</h5>
-<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 1</span>
-<span class="normal"> 2</span>
-<span class="normal"> 3</span>
-<span class="normal"> 4</span>
-<span class="normal"> 5</span>
-<span class="normal"> 6</span>
-<span class="normal"> 7</span>
-<span class="normal"> 8</span>
-<span class="normal"> 9</span>
-<span class="normal">10</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">select</span>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span>
+<span class="normal">2</span>
+<span class="normal">3</span>
+<span class="normal">4</span>
+<span class="normal">5</span>
+<span class="normal">6</span>
+<span class="normal">7</span>
+<span class="normal">8</span>
+<span class="normal">9</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">select</span>
     <span class="n">net</span><span class="p">.</span><span class="n">http_post</span><span class="p">(</span>
         <span class="n">url</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;https://httpbin.org/post&#39;</span><span class="p">,</span>
-        <span class="n">body</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;{&quot;hello&quot;: &quot;world&quot;}&#39;</span><span class="p">,</span>
-        <span class="n">headers</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;{&quot;content-type&quot;: &quot;application/json&quot;, &quot;accept&quot;: &quot;application/json&quot;}&#39;</span>
+        <span class="n">body</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;{&quot;hello&quot;: &quot;world&quot;}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
     <span class="p">);</span>
 <span class="n">request_id</span>
 <span class="c1">----------</span>
@@ -752,7 +754,7 @@ where <code>response</code> is a composite
 <span class="normal">2</span>
 <span class="normal">3</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">status_code</span> <span class="nb">integer</span>
 <span class="n">headers</span> <span class="n">jsonb</span>
-<span class="n">content</span> <span class="nb">text</span>
+<span class="n">body</span> <span class="nb">text</span>
 </code></pre></div>
 </td></tr></table></p>
 <p>Possible values for <code>net.http_response_result.status</code> are <code>('PENDING', 'SUCCESS', 'ERROR')</code></p>
