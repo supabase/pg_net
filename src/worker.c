@@ -56,7 +56,7 @@ body_cb(void *contents, size_t size, size_t nmemb, void *userp)
 {
 	size_t realsize = size * nmemb;
 	StringInfo si = (StringInfo)userp;
-	appendBinaryStringInfo(si, (const char*)contents, (int)realsize);
+	appendBinaryStringInfoNT(si, (const char*)contents, (int)realsize);
 	return realsize;
 }
 
@@ -318,7 +318,7 @@ worker_main(Datum main_arg)
 
 		initStringInfo(&query_insert_response_ok);
 		appendStringInfo(&query_insert_response_ok, "\
-			insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
+			insert into net._http_response(id, status_code, body, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
 
 		initStringInfo(&query_insert_response_bad);
 		appendStringInfo(&query_insert_response_bad, "\
@@ -353,6 +353,8 @@ worker_main(Datum main_arg)
 											false, 1) != SPI_OK_INSERT)
 							{
 								elog(ERROR, "SPI_exec failed: %s", query_insert_response_bad.data);
+
+
 							}
 						} else {
 							int argCount = 6;
@@ -362,6 +364,7 @@ worker_main(Datum main_arg)
 							CurlData *cdata = NULL;
 							char *contentType = NULL;
 							bool timedOut = false;
+							bytea *body_data = NULL;
 
 							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
@@ -379,12 +382,14 @@ worker_main(Datum main_arg)
 							argValues[1] = Int32GetDatum(http_status_code);
 							nulls[1] = ' ';
 
-							argTypes[2] = CSTRINGOID;
-							argValues[2] = CStringGetDatum(cdata->body->data);
-							if(cdata->body->data[0] == '\0')
-								nulls[2] = 'n';
-							else
-								nulls[2] = ' ';
+							argTypes[2] = BYTEAOID;
+
+							body_data = (bytea *) palloc(cdata->body->len + VARHDRSZ);
+							SET_VARSIZE(body_data, cdata->body->len + VARHDRSZ);
+							memcpy(VARDATA(body_data), cdata->body->data, cdata->body->len);
+
+							argValues[2] = PointerGetDatum(body_data);
+							nulls[2] = ' ';
 
 							argTypes[3] = JSONBOID;
 							argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->headers, WJB_END_OBJECT, NULL)));
@@ -409,6 +414,7 @@ worker_main(Datum main_arg)
 
 							pfree(cdata->body->data);
 							pfree(cdata->body);
+							pfree(body_data);
 						}
 
 						curl_multi_remove_handle(cm, eh);

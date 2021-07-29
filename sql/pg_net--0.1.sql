@@ -29,7 +29,7 @@ create table net._http_response(
     status_code integer,
     content_type text,
     headers jsonb,
-    content text,
+    body bytea,
     timed_out bool,
     error_msg text
 );
@@ -171,7 +171,7 @@ create type net.request_status as enum ('PENDING', 'SUCCESS', 'ERROR');
 create type net.http_response AS (
     status_code integer,
     headers jsonb,
-    content text
+    body bytea
 );
 
 -- State wrapper around responses
@@ -245,7 +245,7 @@ begin
         (
             rec.status_code,
             rec.headers,
-            rec.content
+            rec.body
         )::net.http_response
     )::net.http_response_result;
 end;
