@@ -167,6 +167,7 @@ begin
         lower(header_name) = 'content-type'
     limit
         1;
+    select coalesce(content_type, '') into content_type;
 
     -- Confirm that the content-type is set as "application/json"
     if content_type <> 'application/json' then

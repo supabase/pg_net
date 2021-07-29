@@ -153,6 +153,27 @@ def test_http_post_wrong_header_exception(sess):
     assert did_raise
 
 
+def test_http_post_no_content_type_exception(sess):
+    """Confirm that a missing content type raises exception"""
+
+    did_raise = False
+
+    try:
+        sess.execute(
+            """
+            select net.http_post(
+                url:='https://httpbin.org/post',
+                headers:='{}'::jsonb
+            );
+        """
+        ).fetchone()
+    except:
+        sess.rollback()
+        did_raise = True
+
+    assert did_raise
+
+
 def test_http_post_no_body_exception(sess):
     """Confirm that a null body raises exception"""
 
