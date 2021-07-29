@@ -14,12 +14,8 @@ create table net.http_request_queue(
     url text not null,
     headers jsonb not null,
     body bytea,
-    timeout_milliseconds int not null,
-    -- Available for delete after this date
-    delete_after timestamp not null
+    timeout_milliseconds int not null
 );
-create index ix_http_request_queue_delete_after on net.http_request_queue (delete_after);
-
 
 -- Associates a response with a request
 -- API: Private
@@ -95,9 +91,7 @@ create or replace function net.http_get(
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 1000,
-    -- the minimum amount of time the response should be persisted
-    ttl interval default '3 days'
+    timeout_milliseconds int default 1000
 )
     -- request_id reference
     returns bigint
@@ -115,13 +109,12 @@ begin
     from jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, timeout_milliseconds, delete_after)
+    insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
     values (
         'GET',
         net._encode_url_with_params_array(url, params_array),
         headers,
-        timeout_milliseconds,
-        timezone('utc', now()) + ttl
+        timeout_milliseconds
     )
     returning id
     into request_id;
@@ -142,9 +135,7 @@ create or replace function net.http_post(
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 1000,
-    -- the minimum amount of time the response should be persisted
-    ttl interval default '3 days'
+    timeout_milliseconds int DEFAULT 1000
 )
     -- request_id reference
     returns bigint
@@ -192,14 +183,13 @@ begin
         jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds, delete_after)
+    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
     values (
         'POST',
         net._encode_url_with_params_array(url, params_array),
         headers,
         body::text::bytea,
-        timeout_milliseconds,
-        timezone('utc', now()) + ttl
+        timeout_milliseconds
     )
     returning id
     into request_id;

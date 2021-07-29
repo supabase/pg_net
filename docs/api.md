@@ -19,9 +19,7 @@ net.http_get(
     -- key/values to be included in request headers
     headers jsonb DEFAULT '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000,
-    -- the minimum amount of time the response should be persisted
-    ttl interval default '3 days',
+    timeout_milliseconds int DEFAULT 1000
 )
     -- request_id reference
     returns bigint
@@ -65,9 +63,7 @@ net.http_post(
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 1000,
-    -- the minimum amount of time the response should be persisted
-    ttl interval default '3 days'
+    timeout_milliseconds int DEFAULT 1000
 )
     -- request_id reference
     returns bigint
@@ -92,7 +88,7 @@ request_id
 
 ### net.http_collect_response
 
-##### description 
+##### description
 Given a `request_id` reference, retrieve the response.
 
 When `async:=false` is set it is recommended that [statement_timeout](https://www.postgresql.org/docs/13/runtime-config-client.html) is set for the maximum amount of time the caller is willing to wait in case the response is slow to populate.
