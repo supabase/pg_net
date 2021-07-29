@@ -281,3 +281,6 @@ begin
     )::net.http_response_result;
 end;
 $$;
+
+grant all on schema net to postgres;
+grant all on all tables in schema net to postgres;
