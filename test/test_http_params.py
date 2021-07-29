@@ -12,7 +12,7 @@ def test_urlencode(sess):
         )
     ).fetchone()
 
-    assert encoded_str == "?key=value&other=other+value%2F"
+    assert encoded_str == "?key=value&other=other%20value%2F"
 
 
 def test_http_get_url_params_set(sess):
