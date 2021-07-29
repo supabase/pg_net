@@ -15,11 +15,11 @@ net.http_get(
     -- url for the request
     url text,
     -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb DEFAULT '{}'::jsonb,
+    params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb DEFAULT '{}'::jsonb,
+    headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000
+    timeout_milliseconds int default 1000
 )
     -- request_id reference
     returns bigint
@@ -63,7 +63,7 @@ net.http_post(
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000
+    timeout_milliseconds int default 1000
 )
     -- request_id reference
     returns bigint
@@ -78,8 +78,8 @@ net.http_post(
 select
     net.http_post(
         url:='https://httpbin.org/post',
-        body:='{"hello": "world"}'::jsonb,
-    );
+        body:='{"hello": "world"}'::jsonb
+    ) as request_id;
 request_id
 ----------
          1
@@ -101,7 +101,7 @@ When `async:=false` is set it is recommended that [statement_timeout](https://ww
 ```sql
 net.http_collect_response(
     -- request_id reference
-    request_id id,
+    request_id bigint,
     -- when `true`, return immediately. when `false` wait for the request to complete before returning
     async bool default true
 )
@@ -115,7 +115,11 @@ net.http_collect_response(
 
 ##### usage
 ```sql
-select net.http_get('https://news.ycombinator.com') as request_id;
+select
+    net.http_post(
+        url:='https://httpbin.org/post',
+        body:='{"hello": "world"}'::jsonb
+    ) as request_id;
 request_id
 ----------
          1
@@ -125,12 +129,41 @@ select * from net.http_collect_response(1, async:=false);
 status  | message | response
 --------+---------+----------
 SUCCESS        ok        ...
+
+
+select
+    (response).body::json
+from
+    net.http_collect_response(request_id:=1);
+                               body
+-------------------------------------------------------------------
+ {
+   "args": {},
+   "data": "{\"hello\": \"world\"}",
+   "files": {},
+   "form": {},
+   "headers": {
+     "Accept": "*/*",
+     "Content-Length": "18",
+     "Content-Type": "application/json",
+     "Host": "httpbin.org",
+     "User-Agent": "pg_net/0.1",
+     "X-Amzn-Trace-Id": "Root=1-61031a5c-7e1afeae69bffa8614d8e48e"
+   },
+   "json": {
+     "hello": "world"
+   },
+   "origin": "135.63.38.488",
+   "url": "https://httpbin.org/post"
+ }
+(1 row)
 ```
+
 where `response` is a composite
+
 ```sql
 status_code integer
 headers jsonb
 body text
 ```
-
 Possible values for `net.http_response_result.status` are `('PENDING', 'SUCCESS', 'ERROR')`

@@ -1,4 +1,4 @@
-Tested to work on PostgreSQL 12 and 13.
+Tested with PostgreSQL 12 and 13.
 
 ## Setup
 

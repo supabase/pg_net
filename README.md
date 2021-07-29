@@ -16,4 +16,10 @@
 
 ---
 
-A PostgreSQL extension providing an async networking interface accessible via SQL using a [background worker](https://www.postgresql.org/docs/current/bgworker.html) and curl.
+pg_net is a PostgreSQL extension exposing a SQL interface for async networking with a focus on scalability and UX.
+
+Features:
+
+- async http GET requests
+- async http POST requests with a JSON payload
+- +300 requests/sec
