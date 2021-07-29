@@ -167,7 +167,12 @@ begin
         lower(header_name) = 'content-type'
     limit
         1;
-    select coalesce(content_type, '') into content_type;
+
+    -- If the user provided new headers and omitted the content type
+    -- add it back in automatically
+    if content_type is null then
+        select headers || '{"Content-Type": "application/json"}'::jsonb into headers;
+    end if;
 
     -- Confirm that the content-type is set as "application/json"
     if content_type <> 'application/json' then

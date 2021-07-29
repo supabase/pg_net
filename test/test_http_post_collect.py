@@ -153,25 +153,33 @@ def test_http_post_wrong_header_exception(sess):
     assert did_raise
 
 
-def test_http_post_no_content_type_exception(sess):
-    """Confirm that a missing content type raises exception"""
+def test_http_post_no_content_type_coerce(sess):
+    """Confirm that a missing content type coerces to application/json"""
 
-    did_raise = False
-
-    try:
-        sess.execute(
-            """
-            select net.http_post(
-                url:='https://httpbin.org/post',
-                headers:='{}'::jsonb
-            );
+    # Create a request
+    request_id, = sess.execute(
         """
-        ).fetchone()
-    except:
-        sess.rollback()
-        did_raise = True
+        select net.http_post(
+            url:='https://httpbin.org/post',
+            headers:='{"other": "val"}'::jsonb
+        );
+    """
+    ).fetchone()
 
-    assert did_raise
+
+    headers, = sess.execute(
+        """
+        select
+            headers
+        from
+            net.http_request_queue
+        where
+            id = :request_id
+    """, {"request_id": request_id}
+    ).fetchone()
+
+    assert headers["Content-Type"] == "application/json"
+    assert headers["other"] == "val"
 
 
 def test_http_post_no_body_exception(sess):
