@@ -1,5 +1,6 @@
 create schema if not exists net;
 
+
 create domain net.http_method as text
 check (
     value ilike 'get' or
