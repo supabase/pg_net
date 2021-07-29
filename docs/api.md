@@ -56,7 +56,7 @@ net.http_post(
     -- url for the request
     url text,
     -- body of the POST request
-    body bytea default null,
+    body text default null,
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb DEFAULT '{}'::jsonb,
     -- key/values to be included in request headers
