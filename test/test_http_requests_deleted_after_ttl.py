@@ -1,7 +1,8 @@
-import pytest
 import time
 
+import pytest
 from sqlalchemy import text
+
 
 @pytest.mark.skip(reason="pending implementation")
 def test_http_requests_deleted_after_ttl(sess):

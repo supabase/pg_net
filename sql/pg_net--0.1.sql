@@ -91,11 +91,11 @@ create or replace function net.http_get(
     -- url for the request
     url text,
     -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb DEFAULT '{}'::jsonb,
+    params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb DEFAULT '{}'::jsonb,
+    headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000,
+    timeout_milliseconds int default 1000,
     -- the minimum amount of time the response should be persisted
     ttl interval default '3 days'
 )
@@ -136,13 +136,13 @@ create or replace function net.http_post(
     -- url for the request
     url text,
     -- body of the POST request
-    body text default null,
+    body jsonb default '{}'::jsonb,
     -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb DEFAULT '{}'::jsonb,
+    params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb DEFAULT '{"Content-Type": "application/x-www-form-urlencoded"}'::jsonb,
+    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000,
+    timeout_milliseconds int default 1000,
     -- the minimum amount of time the response should be persisted
     ttl interval default '3 days'
 )
@@ -155,10 +155,35 @@ as $$
 declare
     request_id bigint;
     params_array text[];
+    content_type text;
 begin
-    select coalesce(array_agg(net._urlencode_string(key) || '=' || net._urlencode_string(value)), '{}')
-    into params_array
-    from jsonb_each_text(params);
+
+    -- Exctract the content_type from headers
+    select
+        header_value into content_type
+    from
+        jsonb_each_text(coalesce(headers, '{}'::jsonb)) r(header_name, header_value)
+    where
+        lower(header_name) = 'content-type'
+    limit
+        1;
+
+    -- Confirm that the content-type is set as "application/json"
+    if content_type <> 'application/json' then
+        raise exception 'Content-Type header must be "application/json"';
+    end if;
+
+    -- Confirm body is set since http method switches on if body exists
+    if body is null then
+        raise exception 'body must not be null';
+    end if;
+
+    select
+        coalesce(array_agg(net._urlencode_string(key) || '=' || net._urlencode_string(value)), '{}')
+    into
+        params_array
+    from
+        jsonb_each_text(params);
 
     -- Add to the request queue
     insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds, delete_after)
@@ -166,7 +191,7 @@ begin
         'POST',
         net._encode_url_with_params_array(url, params_array),
         headers,
-        body::bytea,
+        body::text::bytea,
         timeout_milliseconds,
         timezone('utc', now()) + ttl
     )
@@ -187,7 +212,7 @@ create type net.request_status as enum ('PENDING', 'SUCCESS', 'ERROR');
 create type net.http_response AS (
     status_code integer,
     headers jsonb,
-    content text
+    body text
 );
 
 -- State wrapper around responses

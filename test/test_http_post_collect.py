@@ -8,7 +8,7 @@ def test_http_post_returns_id(sess):
         """
         select net.http_post(
             url:='https://httpbin.org/post',
-            body:='{}'
+            body:='{}'::jsonb
         );
     """
     ).fetchone()
@@ -23,8 +23,7 @@ def test_http_post_collect_sync_success(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
-            body:='{}'
+            url:='https://httpbin.org/post'
         );
     """
     ).fetchone()
@@ -58,7 +57,7 @@ def test_http_post_collect_async_pending(sess):
         """
         select net.http_post(
             url:='https://httpbin.org/post',
-            body:='{}'
+            body:='{}'::jsonb
         );
     """
     ).fetchone()
@@ -92,8 +91,8 @@ def test_http_post_collect_non_empty_body(sess):
         """
         select net.http_post(
             url:='https://httpbin.org/post',
-            body:='{"hello": "world"}',
-            headers:='{"content-type": "application/json", "accept": "application/json"}'
+            body:='{"hello": "world"}'::jsonb,
+            headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
         );
     """
     ).fetchone()
@@ -110,10 +109,69 @@ def test_http_post_collect_non_empty_body(sess):
         ),
         {"request_id": request_id},
     ).fetchone()
-    print(response)
     assert response is not None
     assert response[0] == "SUCCESS"
     assert "ok" in response[1]
     assert "json" in response[2]
     assert "hello" in response[2]
     assert "world" in response[2]
+
+    # Make sure response is json
+    (response_json,) = sess.execute(
+        text(
+            """
+        select
+            ((x.response).body)::jsonb body_json
+        from
+            net.http_collect_response(:request_id, async:=false) x;
+    """
+        ),
+        {"request_id": request_id},
+    ).fetchone()
+
+    assert response_json["json"]["hello"] == "world"
+
+
+def test_http_post_wrong_header_exception(sess):
+    """Confirm that non application/json raises exception"""
+
+    did_raise = False
+
+    try:
+        sess.execute(
+            """
+            select net.http_post(
+                url:='https://httpbin.org/post',
+                headers:='{"Content-Type": "application/text"}'::jsonb
+            );
+        """
+        ).fetchone()
+    except:
+        sess.rollback()
+        did_raise = True
+
+    assert did_raise
+
+
+def test_http_post_no_body_exception(sess):
+    """Confirm that a null body raises exception"""
+
+    # NOTE: this is incorrect http spec behvaior
+    # body should be allowed to be null
+
+    did_raise = False
+
+    try:
+        sess.execute(
+            """
+            select net.http_post(
+                url:='https://httpbin.org/post',
+                body:=null
+            );
+        """
+        ).fetchone()
+    except:
+        sess.rollback()
+        did_raise = True
+
+    assert did_raise

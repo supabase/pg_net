@@ -44,10 +44,13 @@ request_id
 ### net.http_post
 
 ##### description
-Create an HTTP POST request returning the request's id
+Create an HTTP POST request with a JSON body, returning the request's id
 
 !!! note
     HTTP requests are not started until the transaction is committed
+
+!!! note
+    the body's character set encoding matches the database's `server_encoding` setting
 
 
 ##### signature
@@ -56,13 +59,13 @@ net.http_post(
     -- url for the request
     url text,
     -- body of the POST request
-    body text default null,
+    body jsonb default '{}'::jsonb,
     -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb DEFAULT '{}'::jsonb,
+    params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb DEFAULT '{"Content-Type": "application/x-www-form-urlencoded"}'::jsonb,
+    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000,
+    timeout_milliseconds int default 1000,
     -- the minimum amount of time the response should be persisted
     ttl interval default '3 days'
 )
@@ -79,8 +82,7 @@ net.http_post(
 select
     net.http_post(
         url:='https://httpbin.org/post',
-        body:='{"hello": "world"}',
-        headers:='{"content-type": "application/json", "accept": "application/json"}'
+        body:='{"hello": "world"}'::jsonb,
     );
 request_id
 ----------
@@ -132,7 +134,7 @@ where `response` is a composite
 ```sql
 status_code integer
 headers jsonb
-content text
+body text
 ```
 
 Possible values for `net.http_response_result.status` are `('PENDING', 'SUCCESS', 'ERROR')`
