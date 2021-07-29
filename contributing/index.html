@@ -424,7 +424,7 @@
                 
                   <h1>Contributing</h1>
                 
-                <p>pg_netis OSS. PR and issues are welcome.</p>
+                <p>pg_net is OSS. PR and issues are welcome.</p>
 <h2 id="development">Development</h2>
 <p><a href="https://nixos.org/download.html">Nix</a> is required to set up the environment.</p>
 <h3 id="testing">Testing</h3>
@@ -440,10 +440,10 @@
 $ nix-shell
 
 <span class="c1"># test on pg 12</span>
-$ net-with-pg-12 make installcheck
+$ net-with-pg-12 python -m pytest -vv<span class="s2">&quot;</span>
 
-<span class="c1"># test on pg 13</span>
-$ net-with-pg-13 make installcheck
+<span class="s2"># test on pg 13</span>
+$<span class="s2"> net-with-pg-13 python -m pytest -vv&quot;</span>
 </code></pre></div>
 </td></tr></table>
 <h3 id="documentation">Documentation</h3>
