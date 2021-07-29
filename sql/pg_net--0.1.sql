@@ -75,21 +75,6 @@ create or replace function net._urlencode_string(string varchar)
     strict
 as 'pg_net';
 
--- url encode key/value pairs from a jsonb object
--- API: Private
-create or replace function net._urlencode(params jsonb)
-    -- url encoded string
-    returns text
-
-    language sql
-    immutable
-as $$
-    select
-        '?' || string_agg(net._urlencode_string(elem::text) || '=' || net._urlencode_string(val::text), '&'::text)
-	from
-        jsonb_each_text(params) js(elem, val)
-$$;
-
 -- API: Private
 create or replace function net._encode_url_with_params_array(url text, params_array text[])
     -- url encoded string

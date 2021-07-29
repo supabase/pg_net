@@ -144,7 +144,7 @@ static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeader
 		cdata->headers = headers;
 	}
 
-	reqHeaders = curl_slist_append(reqHeaders, "User-Agent: pg_net/0.0.1");
+	reqHeaders = curl_slist_append(reqHeaders, "User-Agent: pg_net/0.1");
 
 	if (strcasecmp(method, "GET") == 0) {
 		if (reqBody) {
@@ -449,7 +449,6 @@ _PG_init(void)
 	RegisterBackgroundWorker(&worker);
 }
 
-Datum _urlencode_string(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(_urlencode_string);
 Datum _urlencode_string(PG_FUNCTION_ARGS)
 {

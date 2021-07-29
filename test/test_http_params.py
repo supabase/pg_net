@@ -1,20 +1,6 @@
 from sqlalchemy import text
 
 
-def test_urlencode(sess):
-    """test urlencoding a jsonb object"""
-
-    (encoded_str,) = sess.execute(
-        text(
-            """
-        select net._urlencode('{"key": "value", "other": "other value/"}'::jsonb)
-    """
-        )
-    ).fetchone()
-
-    assert encoded_str == "?key=value&other=other%20value%2F"
-
-
 def test_http_get_url_params_set(sess):
     """Check that headers are being set
 
