@@ -130,7 +130,11 @@ request_id
 select * from net.http_collect_response(1, async:=false);
 status  | message | response
 --------+---------+----------
-SUCCESS        ok        ...
+SUCCESS        ok   (
+                      status_code := 200,
+                      headers     := '{"date": ...}',
+                      body        := '{"args": ...}'
+                    )::net.http_response_result
 
 
 select
