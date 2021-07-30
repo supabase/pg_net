@@ -17,7 +17,10 @@ net.http_get(
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb
+    headers jsonb default '{}'::jsonb,
+    -- WARNING: this is currently ignored, so there is no timeout
+    -- the maximum number of milliseconds the request may take before being cancelled
+    timeout_milliseconds int default 1000
 )
     -- request_id reference
     returns bigint
@@ -59,7 +62,10 @@ net.http_post(
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb default '{"Content-Type": "application/json"}'::jsonb
+    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
+    -- WARNING: this is currently ignored, so there is no timeout
+    -- the maximum number of milliseconds the request may take before being cancelled
+    timeout_milliseconds int default 1000
 )
     -- request_id reference
     returns bigint
