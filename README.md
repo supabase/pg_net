@@ -22,4 +22,3 @@ Features:
 
 - async http GET requests
 - async http POST requests with a JSON payload
-- +300 requests/sec
