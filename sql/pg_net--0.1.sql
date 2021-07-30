@@ -14,7 +14,6 @@ create table net.http_request_queue(
     url text not null,
     headers jsonb not null,
     body bytea,
-    timeout_milliseconds int not null,
     created timestamptz not null default now()
 );
 
@@ -92,9 +91,7 @@ create or replace function net.http_get(
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 1000
+    headers jsonb default '{}'::jsonb
 )
     -- request_id reference
     returns bigint
@@ -112,12 +109,11 @@ begin
     from jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers)
     values (
         'GET',
         net._encode_url_with_params_array(url, params_array),
-        headers,
-        timeout_milliseconds
+        headers
     )
     returning id
     into request_id;
@@ -136,9 +132,7 @@ create or replace function net.http_post(
     -- key/value pairs to be url encoded and appended to the `url`
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
-    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000
+    headers jsonb default '{"Content-Type": "application/json"}'::jsonb
 )
     -- request_id reference
     returns bigint
@@ -186,13 +180,12 @@ begin
         jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, body)
     values (
         'POST',
         net._encode_url_with_params_array(url, params_array),
         headers,
-        body::text::bytea,
-        timeout_milliseconds
+        body::text::bytea
     )
     returning id
     into request_id;
