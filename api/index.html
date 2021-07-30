@@ -585,13 +585,15 @@
 <span class="normal">14</span>
 <span class="normal">15</span>
 <span class="normal">16</span>
-<span class="normal">17</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span>
+<span class="normal">17</span>
+<span class="normal">18</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_get</span><span class="p">(</span>
     <span class="c1">-- url for the request</span>
     <span class="n">url</span> <span class="nb">text</span><span class="p">,</span>
     <span class="c1">-- key/value pairs to be url encoded and appended to the `url`</span>
     <span class="n">params</span> <span class="n">jsonb</span> <span class="k">default</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
     <span class="c1">-- key/values to be included in request headers</span>
     <span class="n">headers</span> <span class="n">jsonb</span> <span class="k">default</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="c1">-- WARNING: this is currently ignored, so there is no timeout</span>
     <span class="c1">-- the maximum number of milliseconds the request may take before being cancelled</span>
     <span class="n">timeout_milliseconds</span> <span class="nb">int</span> <span class="k">default</span> <span class="mi">1000</span>
 <span class="p">)</span>
@@ -645,7 +647,8 @@
 <span class="normal">15</span>
 <span class="normal">16</span>
 <span class="normal">17</span>
-<span class="normal">18</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_post</span><span class="p">(</span>
+<span class="normal">18</span>
+<span class="normal">19</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="n">net</span><span class="p">.</span><span class="n">http_post</span><span class="p">(</span>
     <span class="c1">-- url for the request</span>
     <span class="n">url</span> <span class="nb">text</span><span class="p">,</span>
     <span class="c1">-- body of the POST request</span>
@@ -654,6 +657,7 @@
     <span class="n">params</span> <span class="n">jsonb</span> <span class="k">default</span> <span class="s1">&#39;{}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
     <span class="c1">-- key/values to be included in request headers</span>
     <span class="n">headers</span> <span class="n">jsonb</span> <span class="k">default</span> <span class="s1">&#39;{&quot;Content-Type&quot;: &quot;application/json&quot;}&#39;</span><span class="p">::</span><span class="n">jsonb</span><span class="p">,</span>
+    <span class="c1">-- WARNING: this is currently ignored, so there is no timeout</span>
     <span class="c1">-- the maximum number of milliseconds the request may take before being cancelled</span>
     <span class="n">timeout_milliseconds</span> <span class="nb">int</span> <span class="k">default</span> <span class="mi">1000</span>
 <span class="p">)</span>
@@ -761,7 +765,11 @@
 <span class="normal">39</span>
 <span class="normal">40</span>
 <span class="normal">41</span>
-<span class="normal">42</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">select</span>
+<span class="normal">42</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span></pre></div></td><td class="code"><div class="highlight"><pre><span></span><code><span class="k">select</span>
     <span class="n">net</span><span class="p">.</span><span class="n">http_post</span><span class="p">(</span>
         <span class="n">url</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;https://httpbin.org/post&#39;</span><span class="p">,</span>
         <span class="n">body</span><span class="p">:</span><span class="o">=</span><span class="s1">&#39;{&quot;hello&quot;: &quot;world&quot;}&#39;</span><span class="p">::</span><span class="n">jsonb</span>
@@ -774,7 +782,11 @@
 <span class="k">select</span> <span class="o">*</span> <span class="k">from</span> <span class="n">net</span><span class="p">.</span><span class="n">http_collect_response</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">async</span><span class="p">:</span><span class="o">=</span><span class="k">false</span><span class="p">);</span>
 <span class="n">status</span>  <span class="o">|</span> <span class="n">message</span> <span class="o">|</span> <span class="n">response</span>
 <span class="c1">--------+---------+----------</span>
-<span class="n">SUCCESS</span>        <span class="n">ok</span>        <span class="p">...</span>
+<span class="n">SUCCESS</span>        <span class="n">ok</span>   <span class="p">(</span>
+                      <span class="n">status_code</span> <span class="p">:</span><span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
+                      <span class="n">headers</span>     <span class="p">:</span><span class="o">=</span> <span class="s1">&#39;{&quot;date&quot;: ...}&#39;</span><span class="p">,</span>
+                      <span class="n">body</span>        <span class="p">:</span><span class="o">=</span> <span class="s1">&#39;{&quot;args&quot;: ...}&#39;</span>
+                    <span class="p">)::</span><span class="n">net</span><span class="p">.</span><span class="n">http_response_result</span>
 
 
 <span class="k">select</span>
