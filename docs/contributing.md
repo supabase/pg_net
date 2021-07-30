@@ -1,4 +1,4 @@
-pg_netis OSS. PR and issues are welcome.
+pg_net is OSS. PR and issues are welcome.
 
 
 ## Development
@@ -14,10 +14,10 @@ For testing locally, execute:
 $ nix-shell
 
 # test on pg 12
-$ net-with-pg-12 make installcheck
+$ net-with-pg-12 python -m pytest -vv"
 
 # test on pg 13
-$ net-with-pg-13 make installcheck
+$ net-with-pg-13 python -m pytest -vv"
 ```
 
 ### Documentation
