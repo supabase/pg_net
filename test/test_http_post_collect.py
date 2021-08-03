@@ -16,6 +16,21 @@ def test_http_post_returns_id(sess):
     assert request_id == 1
 
 
+def test_http_post_special_chars_body(sess):
+    """net.http_post returns a bigint id"""
+
+    (request_id,) = sess.execute(
+        """
+        select net.http_post(
+            url:='https://httpbin.org/post',
+            body:=json_build_object('foo', 'ba"r')::jsonb
+        );
+    """
+    ).fetchone()
+
+    assert request_id == 1
+
+
 def test_http_post_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
