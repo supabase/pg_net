@@ -192,7 +192,7 @@ begin
         'POST',
         net._encode_url_with_params_array(url, params_array),
         headers,
-        body::text::bytea,
+        convert_to(body::text, 'UTF8'),
         timeout_milliseconds
     )
     returning id
