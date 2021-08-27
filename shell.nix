@@ -19,9 +19,8 @@ let
     };
   pgWithExt = { postgresql } :
     let pg = postgresql.withPackages (p: [ (net_worker {inherit postgresql;}) ]);
-        # Do `export LOGMIN=DEBUG2` outside nix-shell to get more detailed logging
         LOGMIN = builtins.getEnv "LOGMIN";
-        logMin = if LOGMIN == "" then "WARNING" else LOGMIN;
+        logMin = if LOGMIN == "" then "WARNING" else LOGMIN; # warning is the default in pg
     in ''
       export PATH=${pg}/bin:"$PATH"
 
