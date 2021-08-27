@@ -5,8 +5,8 @@ pg_net is OSS. PR and issues are welcome.
 
 [Nix](https://nixos.org/download.html) is required to set up the environment.
 
-
 ### Testing
+
 For testing locally, execute:
 
 ```bash
@@ -19,6 +19,43 @@ $ net-with-pg-12 python -m pytest -vv"
 # test on pg 13
 $ net-with-pg-13 python -m pytest -vv"
 ```
+
+### Debugging
+
+You can turn on logging level to see curl traces with
+
+```
+$ export LOGMIN=DEBUG1 # must be done outside nix-shell, then go in nix-shell as usual
+
+$ nix-shell
+
+$ net-with-pg-12 psql
+```
+
+```sql
+select net.http_get('http://localhost:3000/projects');
+
+-- * Trying ::1:3000...
+-- * connect to ::1 port 3000 failed: Connection refused
+-- * Trying 127.0.0.1:3000...
+-- * Connected to localhost (127.0.0.1) port 3000 (#0)
+-- > GET /projects HTTP/1.1
+-- Host: localhost:3000
+-- Accept: */*
+-- User-Agent: pg_net/0.1
+--
+-- * Mark bundle as not supporting multiuse
+-- < HTTP/1.1 200 OK
+-- < Transfer-Encoding: chunked
+-- < Date: Fri, 27 Aug 2021 00:14:37 GMT
+-- < Server: postgrest/7.0.0 (UNKNOWN)
+-- < Content-Type: application/json; charset=utf-8
+-- < Content-Range: 0-58/*
+-- < Content-Location: /projects
+-- <
+-- * Connection #0 to host localhost left intact
+```
+
 
 ### Documentation
 

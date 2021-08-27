@@ -80,6 +80,7 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 {
 	size_t realsize = size * nmemb;
 	JsonbParseState *headers = (JsonbParseState *)userp;
+
 	/* per curl docs, the status code is included in the header data
 	 * (it starts with: HTTP/1.1 200 OK or HTTP/2 200 OK)*/
 	bool firstLine = strncmp(contents, "HTTP/", 5) == 0;
@@ -93,11 +94,8 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 		char *tmp = pstrdup(contents);
 		JsonbValue	key, val;
 
-		elog(DEBUG1, "FullHeaderLine: %s\n", tmp);
-
 		/*The header comes as "Header-Key: val", split by whitespace and ditch the colon later*/
 		token = strtok(tmp, " ");
-		elog(DEBUG1, "Key: %s\n", token);
 
 		key.type = jbvString;
 		key.val.string.val = token;
@@ -107,7 +105,6 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 
 		/*Every header line ends with CRLF, split and remove it*/
 		token = strtok(NULL, "\r\n");
-		elog(DEBUG1, "Value: %s\n", token);
 
 		val.type = jbvString;
 		val.val.string.val = token;
@@ -182,8 +179,8 @@ static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeader
 	curl_easy_setopt(eh, CURLOPT_URL, url);
 	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
-	// curl_easy_setopt(eh, CURLOPT_VERBOSE, 1); // for debugging
-	curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
+	if (log_min_messages <= DEBUG1)
+		curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 	return curl_multi_add_handle(cm, eh);
 }
@@ -251,7 +248,6 @@ worker_main(Datum main_arg)
 		ResetLatch(&MyProc->procLatch);
 
 		if(!isExtensionLoaded()){
-			elog(DEBUG1, "Extension not loaded");
 			continue;
 		}
 
@@ -334,8 +330,6 @@ worker_main(Datum main_arg)
 					bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
 					if (!tupIsNull) body = TextDatumGetCString(bodyBin);
 
-					elog(DEBUG1, "Making a %s request to %s with id %ld", method, url, id);
-
 					res = init(cm, method, url, headers, body, id, curlDataMap);
 
 					if(res) {
@@ -391,8 +385,6 @@ worker_main(Datum main_arg)
 							argTypes[1] = CSTRINGOID;
 							argValues[1] = CStringGetDatum(error_msg);
 
-							elog(DEBUG1, "%s\n", error_msg);
-
 							if (SPI_execute_with_args(query_insert_response_bad.data, argCount, argTypes, argValues, NULL,
 											false, 1) != SPI_OK_INSERT)
 							{
@@ -410,8 +402,6 @@ worker_main(Datum main_arg)
 							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
 							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
-
-							elog(DEBUG1, "GET of %ld returned http status code %d\n", id, http_status_code);
 
 							cdata = hash_search(curlDataMap, &id, HASH_FIND, &isPresent);
 
