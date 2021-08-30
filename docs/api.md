@@ -153,7 +153,7 @@ from
      "Content-Length": "18",
      "Content-Type": "application/json",
      "Host": "httpbin.org",
-     "User-Agent": "pg_net/0.1",
+     "User-Agent": "pg_net/0.2",
      "X-Amzn-Trace-Id": "Root=1-61031a5c-7e1afeae69bffa8614d8e48e"
    },
    "json": {

@@ -42,7 +42,7 @@ select net.http_get('http://localhost:3000/projects');
 -- > GET /projects HTTP/1.1
 -- Host: localhost:3000
 -- Accept: */*
--- User-Agent: pg_net/0.1
+-- User-Agent: pg_net/0.2
 --
 -- * Mark bundle as not supporting multiuse
 -- < HTTP/1.1 200 OK
