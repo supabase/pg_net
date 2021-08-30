@@ -156,7 +156,7 @@ static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeader
 		cdata->headers = headers;
 	}
 
-	reqHeaders = curl_slist_append(reqHeaders, "User-Agent: pg_net/0.1");
+	reqHeaders = curl_slist_append(reqHeaders, "User-Agent: pg_net/0.2");
 
 	if (strcasecmp(method, "GET") == 0) {
 		if (reqBody) {
