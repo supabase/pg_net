@@ -8,7 +8,7 @@ REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 REGRESS_OPTS = --use-existing --inputdir=test
 
 MODULE_big = pg_net
-OBJS = src/worker.o
+OBJS = src/worker.o src/util.o
 
 all: sql/$(EXTENSION)--$(EXTVERSION).sql
 
