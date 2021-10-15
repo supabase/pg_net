@@ -4,3 +4,4 @@ venv/
 site/
 regression.*
 __pycache__/
+.deployment.nixops*
