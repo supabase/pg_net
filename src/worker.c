@@ -30,6 +30,7 @@
 PG_MODULE_MAGIC;
 
 static char *ttl = NULL;
+static int batch_size = 500;
 
 void _PG_init(void);
 void worker_main(Datum main_arg) pg_attribute_noreturn();
@@ -291,54 +292,68 @@ worker_main(Datum main_arg)
 				q.body\
 			FROM net.http_request_queue q \
 			LEFT JOIN net._http_response r ON q.id = r.id \
-			WHERE r.id IS NULL");
+			WHERE r.id IS NULL \
+			LIMIT $1");
 
-		if (SPI_execute(select_query.data, true, 0) == SPI_OK_SELECT)
 		{
-			bool tupIsNull = false;
+			int argCount = 1;
+			Oid argTypes[1];
+			Datum argValues[1];
 
-			res = curl_global_init(CURL_GLOBAL_ALL);
+			argTypes[0] = INT4OID;
+			argValues[0] = Int32GetDatum(batch_size);
 
-			if(res) {
-				elog(ERROR, "error: curl_global_init() returned %d\n", res);
-			}
-
-			cm = curl_multi_init();
-
-			for (int j = 0; j < SPI_processed; j++)
+			if (SPI_execute_with_args(select_query.data, argCount, argTypes, argValues, NULL, true, 0) == SPI_OK_SELECT)
 			{
-					struct curl_slist *headers = NULL;
-					// FIXME: Need to free headers, but only *after* curl_multi stuff during cleanup.
-					// Maybe store in cdata?
-					// curl_slist_free_all(headers);
+				bool tupIsNull = false;
 
-					int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
-					char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
-					char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
+				res = curl_global_init(CURL_GLOBAL_ALL);
 
-					Datum headersBin;
-					Datum bodyBin;
-					ArrayType *pgHeaders;
-					char *body = NULL;
+				if(res) {
+					elog(ERROR, "error: curl_global_init() returned %d\n", res);
+				}
 
-					headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
-					if (!tupIsNull) {
-						pgHeaders = DatumGetArrayTypeP(headersBin);
-						headers = pg_text_array_to_slist(pgHeaders, headers);
-					}
-					bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
-					if (!tupIsNull) body = TextDatumGetCString(bodyBin);
+				cm = curl_multi_init();
 
-					res = init(cm, method, url, headers, body, id, curlDataMap);
+				for (int j = 0; j < SPI_processed; j++)
+				{
+						struct curl_slist *headers = NULL;
+						// FIXME: Need to free headers, but only *after* curl_multi stuff during cleanup.
+						// Maybe store in cdata?
+						// curl_slist_free_all(headers);
 
-					if(res) {
-						elog(ERROR, "error: init() returned %d\n", res);
-					}
-					res = curl_multi_perform(cm, &still_running);
+						int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
+						char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
+						char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
 
-					if(res != CURLM_OK) {
-							elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
-					}
+						Datum headersBin;
+						Datum bodyBin;
+						ArrayType *pgHeaders;
+						char *body = NULL;
+
+						headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
+						if (!tupIsNull) {
+							pgHeaders = DatumGetArrayTypeP(headersBin);
+							headers = pg_text_array_to_slist(pgHeaders, headers);
+						}
+						bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
+						if (!tupIsNull) body = TextDatumGetCString(bodyBin);
+
+						res = init(cm, method, url, headers, body, id, curlDataMap);
+
+						if(res) {
+							elog(ERROR, "error: init() returned %d\n", res);
+						}
+						res = curl_multi_perform(cm, &still_running);
+
+						if(res != CURLM_OK) {
+								elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
+						}
+				}
+			}
+			else
+			{
+				elog(ERROR, "SPI_exec failed: %s", select_query.data);
 			}
 		}
 
@@ -483,6 +498,15 @@ _PG_init(void)
 							   "should be a valid interval type",
 							   &ttl,
 							   "3 days",
+							   PGC_SIGHUP, 0,
+								 NULL, NULL, NULL);
+
+	DefineCustomIntVariable("pg_net.batch_size",
+							   "number of requests executed in one iteration of the background worker",
+							   NULL,
+							   &batch_size,
+							   500,
+								 0, PG_INT16_MAX,
 							   PGC_SIGHUP, 0,
 								 NULL, NULL, NULL);
 }
