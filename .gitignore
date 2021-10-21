@@ -5,3 +5,4 @@ site/
 regression.*
 __pycache__/
 .deployment.nixops*
+valgrindlog
