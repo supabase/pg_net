@@ -1,3 +1,5 @@
+#define PG14_GTE (PG_VERSION_NUM >= 140000)
+
 #include <postgres.h>
 
 #include <access/xact.h>
@@ -11,7 +13,13 @@
 #include <utils/guc.h>
 #include <utils/jsonb.h>
 #include <utils/snapmgr.h>
+
+#if PG14_GTE
 #include <utils/wait_event.h>
+#else
+#include <pgstat.h>
+#include "catalog/pg_type.h"
+#endif
 
 #include <uv.h>
 
