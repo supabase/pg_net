@@ -484,27 +484,6 @@ static void idle_cb(uv_idle_t *idle) {
 
             char *body = NULL;
 
-            // TODO: We currently insert an id-only row to the response table to
-            // differentiate requests not in progress, requests in progress, and
-            // requests fulfilled (whether successful or failed).
-            //
-            // But this creates a possibility for a request recognized as in
-            // progress despite not being processed by curl, e.g. because the
-            // worker crashed while fulfilling the request.
-            //
-            // One solution to this is for the worker to always start in a known
-            // good state, e.g. by TRUNCATEing the http_request_queue.
-            char *sql = "INSERT INTO net._http_response(id) VALUES ($1)";
-            Oid argtypes[1] = {id_type};
-            Datum Values[1] = {id_binary_value};
-
-            int rc =
-                SPI_execute_with_args(sql, 1, argtypes, Values, NULL, false, 0);
-            if (rc != SPI_OK_INSERT) {
-                elog(ERROR, "SPI_execute() failed with error code %d:\n%s", rc,
-                     sql);
-            }
-
             memcpy(method, method_tmp, strlen(method_tmp) + 1);
             memcpy(url, url_tmp, strlen(url_tmp) + 1);
             tmp = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 4,
@@ -522,6 +501,29 @@ static void idle_cb(uv_idle_t *idle) {
             }
 
             submit_request(id, method, url, headers, body);
+
+            // TODO: We currently insert an id-only row to the response table to
+            // differentiate requests not in progress, requests in progress, and
+            // requests fulfilled (whether successful or failed).
+            //
+            // But this creates a possibility for a request recognized as in
+            // progress despite not being processed by curl, e.g. because the
+            // worker crashed while fulfilling the request.
+            //
+            // One solution to this is for the worker to always start in a known
+            // good state, e.g. by TRUNCATEing the http_request_queue.
+            {
+                char *sql = "INSERT INTO net._http_response(id) VALUES ($1)";
+                Oid argtypes[1] = {id_type};
+                Datum Values[1] = {id_binary_value};
+
+                int rc = SPI_execute_with_args(sql, 1, argtypes, Values, NULL,
+                                               false, 0);
+                if (rc != SPI_OK_INSERT) {
+                    elog(ERROR, "SPI_execute() failed with error code %d:\n%s",
+                         rc, sql);
+                }
+            }
         }
     }
     SPI_finish();
