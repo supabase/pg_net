@@ -20,5 +20,8 @@ EXTRA_CLEAN = sql/$(EXTENSION)--$(EXTVERSION).sql
 PG_CONFIG = pg_config
 SHLIB_LINK = -lcurl -luv
 
+# Find <curl/curl.h> and <uv.h> from system headers
+PG_CPPFLAGS := $(CPPFLAGS)
+
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
