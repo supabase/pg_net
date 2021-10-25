@@ -11,6 +11,7 @@
 #include <utils/builtins.h>
 #include <utils/guc.h>
 #include <utils/jsonb.h>
+#include <utils/memutils.h>
 #include <utils/snapmgr.h>
 
 #include <uv.h>
@@ -54,6 +55,7 @@ struct curl_context {
 };
 
 static void destroy_curl_ctx_cb(uv_handle_t *handle) {
+    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
     struct curl_context *ctx = (struct curl_context *)handle->data;
     if (ctx->method) {
         free(ctx->method);
@@ -71,11 +73,12 @@ static void destroy_curl_ctx_cb(uv_handle_t *handle) {
     // if (ctx->response_headers) {
     //     pfree(ctx->response_headers);
     // }
-    // if (ctx->response_body) {
-    //     pfree(ctx->response_body->data);
-    //     pfree(ctx->response_body);
-    // }
+    if (ctx->response_body) {
+        pfree(ctx->response_body->data);
+        pfree(ctx->response_body);
+    }
     free(ctx);
+    MemoryContextSwitchTo(mem_ctx);
 }
 
 static void destroy_curl_ctx(struct curl_context *ctx) {
@@ -95,14 +98,21 @@ static bool is_extension_loaded(void) {
 }
 
 static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
+    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
     size_t realsize = size * nmemb;
     StringInfo si = (StringInfo)userp;
+
+    elog(LOG, "body_cb");
+
     appendBinaryStringInfo(si, (const char *)contents, (int)realsize);
+
+    MemoryContextSwitchTo(mem_ctx);
     return realsize;
 }
 
 static size_t header_cb(void *contents, size_t size, size_t nmemb,
                         void *userp) {
+    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
     size_t realsize = size * nmemb;
     JsonbParseState *headers = (JsonbParseState *)userp;
 
@@ -111,6 +121,8 @@ static size_t header_cb(void *contents, size_t size, size_t nmemb,
     bool firstLine = strncmp(contents, "HTTP/", 5) == 0;
     /* the final(end of headers) last line is empty - just a CRLF */
     bool lastLine = strncmp(contents, "\r\n", 2) == 0;
+
+    elog(LOG, "header_cb");
 
     /*Ignore non-header data in the first header line and last header line*/
     if (!firstLine && !lastLine) {
@@ -138,6 +150,7 @@ static size_t header_cb(void *contents, size_t size, size_t nmemb,
         (void)pushJsonbValue(&headers, WJB_VALUE, &val);
     }
 
+    MemoryContextSwitchTo(mem_ctx);
     return realsize;
 }
 
@@ -166,9 +179,11 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
 
 static void submit_request(int64 id, char *method, char *url,
                            struct curl_slist *headers, char *body) {
+    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
     CURL *handle = curl_easy_init();
     struct curl_context *ctx = (struct curl_context *)malloc(sizeof(*ctx));
 
+    elog(LOG, "submit request");
     headers = curl_slist_append(headers, "User-Agent: pg_net/0.2");
 
     ctx->id = id;
@@ -176,10 +191,10 @@ static void submit_request(int64 id, char *method, char *url,
     ctx->url = url;
     ctx->request_headers = headers;
     ctx->request_body = body;
-    ctx->response_headers = NULL;
+    /* ctx->response_headers = NULL; */
     ctx->response_body = makeStringInfo();
 
-    pushJsonbValue(&ctx->response_headers, WJB_BEGIN_OBJECT, NULL);
+    /* pushJsonbValue(&ctx->response_headers, WJB_BEGIN_OBJECT, NULL); */
 
     if (strcasecmp(method, "GET") == 0) {
         if (body) {
@@ -195,8 +210,8 @@ static void submit_request(int64 id, char *method, char *url,
     }
 
     // FIXME
-    // curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, body_cb);
-    // curl_easy_setopt(handle, CURLOPT_WRITEDATA, ctx->response_body);
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, body_cb);
+    curl_easy_setopt(handle, CURLOPT_WRITEDATA, ctx->response_body);
     // curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, header_cb);
     // curl_easy_setopt(handle, CURLOPT_HEADERDATA, ctx->response_headers);
     curl_easy_setopt(handle, CURLOPT_URL, url);
@@ -208,6 +223,8 @@ static void submit_request(int64 id, char *method, char *url,
     curl_easy_setopt(handle, CURLOPT_PROTOCOLS,
                      CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_multi_add_handle(cm, handle);
+
+    MemoryContextSwitchTo(mem_ctx);
 }
 
 static void check_curl_multi_info(void) {
@@ -282,7 +299,12 @@ static void check_curl_multi_info(void) {
                 nulls[0] = ' ';
 
                 argTypes[1] = CSTRINGOID;
-                nulls[1] = 'n';
+                argValues[1] = CStringGetDatum(ctx->response_body->data);
+                if (ctx->response_body->data[0] == '\0') {
+                    nulls[1] = 'n';
+                } else {
+                    nulls[1] = ' ';
+                }
 
                 argTypes[2] = JSONBOID;
                 nulls[2] = 'n';
