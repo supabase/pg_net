@@ -17,8 +17,8 @@
 #if PG14_GTE
 #include <utils/wait_event.h>
 #else
+#include <catalog/pg_type.h>
 #include <pgstat.h>
-#include "catalog/pg_type.h"
 #endif
 
 #include <uv.h>
@@ -27,10 +27,10 @@
 
 PG_MODULE_MAGIC;
 
-static char *ttl;
-
 void _PG_init(void);
 void worker_main(Datum main_arg) pg_attribute_noreturn();
+
+static char *ttl;
 
 static volatile sig_atomic_t got_sighup = false;
 
@@ -61,7 +61,7 @@ struct curl_context {
     StringInfo response_body;
 };
 
-void destroy_curl_ctx_cb(uv_handle_t *handle) {
+static void destroy_curl_ctx_cb(uv_handle_t *handle) {
     struct curl_context *ctx = (struct curl_context *)handle->data;
     if (ctx->method) {
         free(ctx->method);
@@ -86,16 +86,19 @@ void destroy_curl_ctx_cb(uv_handle_t *handle) {
     free(ctx);
 }
 
-void destroy_curl_ctx(struct curl_context *ctx) {
+static void destroy_curl_ctx(struct curl_context *ctx) {
     elog(DEBUG2, "destroy_curl_ctx");
 
     uv_close((uv_handle_t *)&ctx->poll, destroy_curl_ctx_cb);
 }
 
-bool is_extension_loaded(void) {
+static bool is_extension_loaded(void) {
+    Oid extension_oid;
+
     StartTransactionCommand();
-    Oid extension_oid = get_extension_oid("pg_net", true);
+    extension_oid = get_extension_oid("pg_net", true);
     CommitTransactionCommand();
+
     return OidIsValid(extension_oid);
 }
 
@@ -169,13 +172,13 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
     return headers;
 }
 
-void submit_request(int64 id, char *method, char *url,
-                    struct curl_slist *headers, char *body) {
+static void submit_request(int64 id, char *method, char *url,
+                           struct curl_slist *headers, char *body) {
     CURL *handle = curl_easy_init();
+    struct curl_context *ctx = (struct curl_context *)malloc(sizeof(*ctx));
 
     headers = curl_slist_append(headers, "User-Agent: pg_net/0.2");
 
-    struct curl_context *ctx = (struct curl_context *)malloc(sizeof(*ctx));
     ctx->id = id;
     ctx->method = method;
     ctx->url = url;
@@ -215,12 +218,13 @@ void submit_request(int64 id, char *method, char *url,
     curl_multi_add_handle(cm, handle);
 }
 
-void check_curl_multi_info(void) {
-    elog(DEBUG2, "check_curl_multi_info");
-
+static void check_curl_multi_info(void) {
     struct curl_context *ctx;
     CURLMsg *msg;
     int pending;
+    int rc;
+
+    elog(DEBUG2, "check_curl_multi_info");
 
     while ((msg = curl_multi_info_read(cm, &pending))) {
         switch (msg->msg) {
@@ -230,7 +234,7 @@ void check_curl_multi_info(void) {
             StartTransactionCommand();
             PushActiveSnapshot(GetTransactionSnapshot());
             SPI_connect();
-            int rc = msg->data.result;
+            rc = msg->data.result;
             if (rc != CURLE_OK) {
                 char *sql = "UPDATE\n"
                             "  net._http_response\n"
@@ -325,13 +329,15 @@ void check_curl_multi_info(void) {
     }
 }
 
-void poll_cb(uv_poll_t *req, int status, int events) {
+static void poll_cb(uv_poll_t *req, int status, int events) {
+    int flags = 0;
+    struct curl_context *context;
+    int running_handles;
+
     elog(DEBUG2, "poll_cb: status %d, events %d", status, events);
 
     uv_timer_stop(&timer);
 
-    int running_handles;
-    int flags = 0;
     if (status < 0)
         flags = CURL_CSELECT_ERR;
     if (!status && events & UV_READABLE)
@@ -339,22 +345,25 @@ void poll_cb(uv_poll_t *req, int status, int events) {
     if (!status && events & UV_WRITABLE)
         flags |= CURL_CSELECT_OUT;
 
-    struct curl_context *context = (struct curl_context *)req;
+    context = (struct curl_context *)req;
 
     curl_multi_socket_action(cm, context->socket_fd, flags, &running_handles);
     check_curl_multi_info();
 }
 
-int socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
-              void *socketp) {
+static int socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
+                     void *socketp) {
+    struct curl_context *ctx;
+
     elog(DEBUG2, "socket_cb: socket %d, action %d", s, what);
 
-    struct curl_context *ctx;
     curl_easy_getinfo(easy, CURLINFO_PRIVATE, &ctx);
+
     if (what == CURL_POLL_IN || what == CURL_POLL_OUT) {
         if (!socketp) {
+            int r;
             ctx->socket_fd = s;
-            int r = uv_poll_init_socket(loop, &ctx->poll, s);
+            r = uv_poll_init_socket(loop, &ctx->poll, s);
             if (r != 0) {
                 elog(ERROR, "uv_poll_init_socket() error: %s", uv_strerror(r));
             }
@@ -383,14 +392,14 @@ int socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
     return 0;
 }
 
-void on_timeout(uv_timer_t *req) {
+static void on_timeout(uv_timer_t *req) {
     int running_handles;
     curl_multi_socket_action(cm, CURL_SOCKET_TIMEOUT, 0, &running_handles);
     elog(DEBUG2, "on_timeout: %d running handles", running_handles);
     check_curl_multi_info();
 }
 
-void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
+static void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
     elog(DEBUG2, "timer_cb: %ld ms", timeout_ms);
     // NOTE: 0 means directly call socket_action, but we'll do it in a bit
     if (timeout_ms <= 0) {
@@ -399,7 +408,7 @@ void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
     uv_timer_start(&timer, on_timeout, timeout_ms, 0);
 }
 
-void idle_cb(uv_idle_t *idle) {
+static void idle_cb(uv_idle_t *idle) {
     // NOTE: Too noisy. If you want to log this at all, change the log level and
     // set the timeout on WaitLatch to, say, 1000ms.
     elog(DEBUG5, "idle_cb");
@@ -430,14 +439,15 @@ void idle_cb(uv_idle_t *idle) {
         int argCount = 1;
         Oid argTypes[1];
         Datum argValues[1];
+        int rc;
 
         argTypes[0] = INTERVALOID;
         argValues[0] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl),
                                            ObjectIdGetDatum(InvalidOid),
                                            Int32GetDatum(-1));
 
-        int rc = SPI_execute_with_args(sql, argCount, argTypes, argValues, NULL,
-                                       false, 0);
+        rc = SPI_execute_with_args(sql, argCount, argTypes, argValues, NULL,
+                                   false, 0);
         if (rc != SPI_OK_DELETE) {
             elog(ERROR, "SPI_exec failed with error code %d:\n%s", rc, sql);
         }
@@ -463,43 +473,24 @@ void idle_cb(uv_idle_t *idle) {
 
         if (SPI_processed > 0) {
             bool isnull;
+            Datum tmp;
 
             Oid id_type = SPI_gettypeid(SPI_tuptable->tupdesc, 1);
             Datum id_binary_value = SPI_getbinval(
                 SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &isnull);
-            char *method_tmp = TextDatumGetCString(SPI_getbinval(
-                SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 2, &isnull));
-            char *url_tmp = TextDatumGetCString(SPI_getbinval(
-                SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 3, &isnull));
-
             int64 id = DatumGetInt64(id_binary_value);
 
+            char *method_tmp = TextDatumGetCString(SPI_getbinval(
+                SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 2, &isnull));
             char *method = (char *)malloc(strlen(method_tmp) + 1);
-            memcpy(method, method_tmp, strlen(method_tmp) + 1);
 
+            char *url_tmp = TextDatumGetCString(SPI_getbinval(
+                SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 3, &isnull));
             char *url = (char *)malloc(strlen(url_tmp) + 1);
-            memcpy(url, url_tmp, strlen(url_tmp) + 1);
 
             struct curl_slist *headers = NULL;
-            {
-                Datum tmp = SPI_getbinval(SPI_tuptable->vals[0],
-                                          SPI_tuptable->tupdesc, 4, &isnull);
-                if (!isnull) {
-                    headers = pg_text_array_to_slist(DatumGetArrayTypeP(tmp),
-                                                     headers);
-                }
-            }
 
             char *body = NULL;
-            {
-                Datum tmp = SPI_getbinval(SPI_tuptable->vals[0],
-                                          SPI_tuptable->tupdesc, 5, &isnull);
-                if (!isnull) {
-                    char *body_tmp = TextDatumGetCString(tmp);
-                    body = (char *)malloc(strlen(body_tmp) + 1);
-                    memcpy(body, body_tmp, strlen(body_tmp) + 1);
-                }
-            }
 
             // TODO: We currently insert an id-only row to the response table to
             // differentiate requests not in progress, requests in progress, and
@@ -522,6 +513,22 @@ void idle_cb(uv_idle_t *idle) {
                      sql);
             }
 
+            memcpy(method, method_tmp, strlen(method_tmp) + 1);
+            memcpy(url, url_tmp, strlen(url_tmp) + 1);
+            tmp = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 4,
+                                &isnull);
+            if (!isnull) {
+                headers =
+                    pg_text_array_to_slist(DatumGetArrayTypeP(tmp), headers);
+            }
+            tmp = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 5,
+                                &isnull);
+            if (!isnull) {
+                char *body_tmp = TextDatumGetCString(tmp);
+                body = (char *)malloc(strlen(body_tmp) + 1);
+                memcpy(body, body_tmp, strlen(body_tmp) + 1);
+            }
+
             submit_request(id, method, url, headers, body);
         }
     }
@@ -531,6 +538,8 @@ void idle_cb(uv_idle_t *idle) {
 }
 
 void worker_main(Datum main_arg) {
+    int rc;
+
     pqsignal(SIGTERM, handle_sigterm);
     pqsignal(SIGHUP, handle_sighup);
     BackgroundWorkerUnblockSignals();
@@ -542,9 +551,9 @@ void worker_main(Datum main_arg) {
     uv_idle_init(loop, &idle);
     uv_idle_start(&idle, idle_cb);
 
-    int err = curl_global_init(CURL_GLOBAL_ALL);
-    if (err) {
-        elog(ERROR, "curl_global_init() error: %s", curl_easy_strerror(err));
+    rc = curl_global_init(CURL_GLOBAL_DEFAULT);
+    if (rc) {
+        elog(ERROR, "curl_global_init() error: %s", curl_easy_strerror(rc));
     }
 
     uv_timer_init(loop, &timer);
