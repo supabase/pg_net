@@ -70,7 +70,8 @@ begin
         select *
         into rec
         from net._http_response
-        where id = request_id;
+        where id = request_id
+        and status_code is not null;
 
         if rec is null then
             -- Wait 50 ms before checking again
