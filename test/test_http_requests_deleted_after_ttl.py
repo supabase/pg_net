@@ -17,14 +17,11 @@ def test_http_requests_deleted_after_ttl(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Sleep a while for ensuring the request is completed
-    time.sleep(2)
-
     # Confirm that the request was retrievable
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id);
+        select * from net.http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
