@@ -427,12 +427,9 @@ static void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
 }
 
 static void idle_cb(uv_idle_t *idle) {
-    // NOTE: Too noisy. If you want to log this at all, change the log level and
-    // set the timeout on WaitLatch to, say, 1000ms.
-    elog(DEBUG5, "idle_cb");
-
+    // 50ms sleep inbetween loop iterations.
     WaitLatch(&MyProc->procLatch,
-              WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 0,
+              WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 50,
               PG_WAIT_EXTENSION);
     ResetLatch(&MyProc->procLatch);
 
