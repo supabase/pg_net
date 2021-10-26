@@ -438,6 +438,11 @@ static void idle_cb(uv_idle_t *idle) {
         return;
     }
 
+    if (got_sighup) {
+        got_sighup = false;
+        ProcessConfigFile(PGC_SIGHUP);
+    }
+
     // NOTE: Needs verification: any (p)allocations we do within the transaction
     // seems to be freed automatically. Probably because it's within a memory
     // context that is local to the transaction.
