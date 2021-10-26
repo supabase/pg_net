@@ -53,11 +53,12 @@ struct curl_context {
     char *request_body;
     JsonbParseState *response_headers;
     StringInfo response_body;
+    MemoryContext mem_ctx;
 };
 
 static void destroy_curl_ctx_cb(uv_handle_t *handle) {
-    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
     struct curl_context *ctx = (struct curl_context *)handle->data;
+    MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
     if (ctx->method) {
         free(ctx->method);
     }
@@ -70,16 +71,10 @@ static void destroy_curl_ctx_cb(uv_handle_t *handle) {
     if (ctx->request_body) {
         free(ctx->request_body);
     }
-    // FIXME
-    // if (ctx->response_headers) {
-    //     pfree(ctx->response_headers);
-    // }
-    if (ctx->response_body) {
-        pfree(ctx->response_body->data);
-        pfree(ctx->response_body);
-    }
-    free(ctx);
+    // response_body & response_headers should be freed when mem_ctx is freed.
     MemoryContextSwitchTo(mem_ctx);
+    MemoryContextDelete(ctx->mem_ctx);
+    free(ctx);
 }
 
 static void destroy_curl_ctx(struct curl_context *ctx) {
@@ -99,11 +94,12 @@ static bool is_extension_loaded(void) {
 }
 
 static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
-    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
+    struct curl_context *ctx = (struct curl_context *)userp;
+    MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
     size_t realsize = size * nmemb;
-    StringInfo si = (StringInfo)userp;
+    StringInfo si = ctx->response_body;
 
-    elog(LOG, "body_cb");
+    elog(DEBUG1, "body_cb");
 
     appendBinaryStringInfo(si, (const char *)contents, (int)realsize);
 
@@ -113,9 +109,10 @@ static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 
 static size_t header_cb(void *contents, size_t size, size_t nmemb,
                         void *userp) {
-    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
+    struct curl_context *ctx = (struct curl_context *)userp;
+    MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
     size_t realsize = size * nmemb;
-    JsonbParseState *headers = (JsonbParseState *)userp;
+    JsonbParseState *headers = ctx->response_headers;
 
     /* per curl docs, the status code is included in the header data
      * (it starts with: HTTP/1.1 200 OK or HTTP/2 200 OK)*/
@@ -123,7 +120,7 @@ static size_t header_cb(void *contents, size_t size, size_t nmemb,
     /* the final(end of headers) last line is empty - just a CRLF */
     bool lastLine = strncmp(contents, "\r\n", 2) == 0;
 
-    elog(LOG, "header_cb");
+    elog(DEBUG1, "header_cb");
 
     /*Ignore non-header data in the first header line and last header line*/
     if (!firstLine && !lastLine) {
@@ -180,22 +177,26 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
 
 static void submit_request(int64 id, char *method, char *url,
                            struct curl_slist *headers, char *body) {
-    MemoryContext mem_ctx = MemoryContextSwitchTo(TopMemoryContext);
+    MemoryContext mem_ctx =
+        AllocSetContextCreate(TopMemoryContext, NULL, ALLOCSET_DEFAULT_SIZES);
     CURL *handle = curl_easy_init();
     struct curl_context *ctx = (struct curl_context *)malloc(sizeof(*ctx));
 
-    elog(LOG, "submit request");
+    elog(DEBUG1, "submit request");
+
     headers = curl_slist_append(headers, "User-Agent: pg_net/0.2");
 
+    ctx->mem_ctx = mem_ctx;
+    mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
     ctx->id = id;
     ctx->method = method;
     ctx->url = url;
     ctx->request_headers = headers;
     ctx->request_body = body;
-    /* ctx->response_headers = NULL; */
+    ctx->response_headers = NULL;
     ctx->response_body = makeStringInfo();
 
-    /* pushJsonbValue(&ctx->response_headers, WJB_BEGIN_OBJECT, NULL); */
+    pushJsonbValue(&ctx->response_headers, WJB_BEGIN_OBJECT, NULL);
 
     if (strcasecmp(method, "GET") == 0) {
         if (body) {
@@ -212,9 +213,9 @@ static void submit_request(int64 id, char *method, char *url,
 
     // FIXME
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, body_cb);
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, ctx->response_body);
-    // curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, header_cb);
-    // curl_easy_setopt(handle, CURLOPT_HEADERDATA, ctx->response_headers);
+    curl_easy_setopt(handle, CURLOPT_WRITEDATA, ctx);
+    curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, header_cb);
+    curl_easy_setopt(handle, CURLOPT_HEADERDATA, ctx);
     curl_easy_setopt(handle, CURLOPT_URL, url);
     curl_easy_setopt(handle, CURLOPT_HTTPHEADER, ctx->request_headers);
     curl_easy_setopt(handle, CURLOPT_PRIVATE, (void *)ctx);
@@ -308,7 +309,9 @@ static void check_curl_multi_info(void) {
                 }
 
                 argTypes[2] = JSONBOID;
-                nulls[2] = 'n';
+                argValues[2] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(
+                    &ctx->response_headers, WJB_END_OBJECT, NULL)));
+                nulls[2] = ' ';
 
                 argTypes[3] = CSTRINGOID;
                 argValues[3] = CStringGetDatum(contentType);
