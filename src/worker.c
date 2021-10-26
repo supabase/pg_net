@@ -211,7 +211,6 @@ static void submit_request(int64 id, char *method, char *url,
         elog(ERROR, "error: Unsupported request method %s\n", method);
     }
 
-    // FIXME
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, body_cb);
     curl_easy_setopt(handle, CURLOPT_WRITEDATA, ctx);
     curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, header_cb);
@@ -270,8 +269,6 @@ static void check_curl_multi_info(void) {
                     elog(ERROR, "SPI_exec failed:\n%s", sql);
                 }
             } else {
-                // FIXME: content & headers
-
                 char *sql = "UPDATE\n"
                             "  net._http_response\n"
                             "SET\n"
@@ -295,6 +292,9 @@ static void check_curl_multi_info(void) {
                                   &http_status_code);
                 curl_easy_getinfo(msg->easy_handle, CURLINFO_CONTENT_TYPE,
                                   &contentType);
+                // NOTE: ctx mysteriously becomes NULL after the getinfo calls
+                // above.
+                curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &ctx);
 
                 argTypes[0] = INT4OID;
                 argValues[0] = Int32GetDatum(http_status_code);
