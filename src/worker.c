@@ -1,6 +1,7 @@
 #include <postgres.h>
 
 #include <access/xact.h>
+#include <catalog/pg_type.h>
 #include <commands/extension.h>
 #include <executor/spi.h>
 #include <miscadmin.h>
