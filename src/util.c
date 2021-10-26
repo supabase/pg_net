@@ -34,7 +34,8 @@ Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
 
     rc = curl_url_set(h, CURLUPART_URL, url, 0);
     if (rc != CURLUE_OK) {
-        elog(ERROR, "%s", curl_easy_strerror(rc));
+        // TODO: Use curl_url_strerror once released.
+        elog(ERROR, "%s", curl_easy_strerror((CURLcode)rc));
     }
 
     iterator = array_create_iterator(params, 0, NULL);

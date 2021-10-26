@@ -449,17 +449,15 @@ static void idle_cb(uv_idle_t *idle) {
         char *sql = "DELETE FROM\n"
                     "  net.http_request_queue\n"
                     "WHERE\n"
-                    "  created < clock_timestamp() - $1";
+                    "  clock_timestamp() - created > $1::interval";
 
         int argCount = 1;
         Oid argTypes[1];
         Datum argValues[1];
         int rc;
 
-        argTypes[0] = INTERVALOID;
-        argValues[0] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl),
-                                           ObjectIdGetDatum(InvalidOid),
-                                           Int32GetDatum(-1));
+        argTypes[0] = TEXTOID;
+        argValues[0] = CStringGetTextDatum(ttl);
 
         rc = SPI_execute_with_args(sql, argCount, argTypes, argValues, NULL,
                                    false, 0);
