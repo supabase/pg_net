@@ -337,7 +337,6 @@ static void check_curl_multi_info(void) {
             PopActiveSnapshot();
             CommitTransactionCommand();
 
-            destroy_curl_ctx(ctx);
             curl_multi_remove_handle(cm, msg->easy_handle);
             curl_easy_cleanup(msg->easy_handle);
             break;
@@ -349,7 +348,7 @@ static void check_curl_multi_info(void) {
 
 static void poll_cb(uv_poll_t *req, int status, int events) {
     int flags = 0;
-    struct curl_context *context;
+    struct curl_context *ctx;
     int running_handles;
 
     elog(DEBUG2, "poll_cb: status %d, events %d", status, events);
@@ -363,14 +362,14 @@ static void poll_cb(uv_poll_t *req, int status, int events) {
     if (!status && events & UV_WRITABLE)
         flags |= CURL_CSELECT_OUT;
 
-    context = (struct curl_context *)req;
+    ctx = (struct curl_context *)req->data;
 
-    curl_multi_socket_action(cm, context->socket_fd, flags, &running_handles);
+    curl_multi_socket_action(cm, ctx->socket_fd, flags, &running_handles);
     check_curl_multi_info();
 }
 
-static int socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
-                     void *socketp) {
+static void socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
+                      void *socketp) {
     struct curl_context *ctx;
 
     elog(DEBUG2, "socket_cb: socket %d, action %d", s, what);
@@ -400,14 +399,13 @@ static int socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
     case CURL_POLL_REMOVE:
         if (socketp) {
             uv_poll_stop(&((struct curl_context *)socketp)->poll);
+            destroy_curl_ctx((struct curl_context *)socketp);
             curl_multi_assign(cm, s, NULL);
         }
         break;
     default:
         elog(ERROR, "Unexpected curl socket action: %d", what);
     }
-
-    return 0;
 }
 
 static void on_timeout(uv_timer_t *req) {
@@ -429,7 +427,7 @@ static void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
 static void idle_cb(uv_idle_t *idle) {
     // 50ms sleep inbetween loop iterations.
     WaitLatch(&MyProc->procLatch,
-              WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 100,
+              WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000,
               PG_WAIT_EXTENSION);
     ResetLatch(&MyProc->procLatch);
 
@@ -484,7 +482,7 @@ static void idle_cb(uv_idle_t *idle) {
             "FROM net.http_request_queue q\n"
             "LEFT JOIN net._http_response r ON q.id = r.id\n"
             "WHERE r.id IS NULL\n"
-            "LIMIT 100";
+            "LIMIT 500";
         rc = SPI_execute(sql, true, 0);
         if (rc != SPI_OK_SELECT) {
             elog(ERROR, "SPI_execute() failed with error code %d:\n%s", rc,
