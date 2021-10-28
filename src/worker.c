@@ -429,7 +429,7 @@ static void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
 static void idle_cb(uv_idle_t *idle) {
     // 50ms sleep inbetween loop iterations.
     WaitLatch(&MyProc->procLatch,
-              WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 50,
+              WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 100,
               PG_WAIT_EXTENSION);
     ResetLatch(&MyProc->procLatch);
 
@@ -460,6 +460,8 @@ static void idle_cb(uv_idle_t *idle) {
         Oid argTypes[1];
         Datum argValues[1];
         int rc;
+        Datum *ids;
+        int64 num_requests;
 
         argTypes[0] = TEXTOID;
         argValues[0] = CStringGetTextDatum(ttl);
@@ -482,43 +484,49 @@ static void idle_cb(uv_idle_t *idle) {
             "FROM net.http_request_queue q\n"
             "LEFT JOIN net._http_response r ON q.id = r.id\n"
             "WHERE r.id IS NULL\n"
-            "LIMIT 1";
-        rc = SPI_execute(sql, true, 1);
+            "LIMIT 100";
+        rc = SPI_execute(sql, true, 0);
         if (rc != SPI_OK_SELECT) {
             elog(ERROR, "SPI_execute() failed with error code %d:\n%s", rc,
                  sql);
         }
 
-        if (SPI_processed > 0) {
+        num_requests = SPI_processed;
+        ids = (Datum *)palloc(sizeof(*ids) * num_requests);
+
+        for (int64 i = 0; i < num_requests; i++) {
             bool isnull;
             Datum tmp;
 
             Oid id_type = SPI_gettypeid(SPI_tuptable->tupdesc, 1);
             Datum id_binary_value = SPI_getbinval(
-                SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &isnull);
+                SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 1, &isnull);
             int64 id = DatumGetInt64(id_binary_value);
 
             char *method_tmp = TextDatumGetCString(SPI_getbinval(
-                SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 2, &isnull));
+                SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 2, &isnull));
             char *method = (char *)malloc(strlen(method_tmp) + 1);
 
             char *url_tmp = TextDatumGetCString(SPI_getbinval(
-                SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 3, &isnull));
+                SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 3, &isnull));
             char *url = (char *)malloc(strlen(url_tmp) + 1);
 
             struct curl_slist *headers = NULL;
 
             char *body = NULL;
 
+            // XXX
+            ids[i] = id_binary_value;
+
             memcpy(method, method_tmp, strlen(method_tmp) + 1);
             memcpy(url, url_tmp, strlen(url_tmp) + 1);
-            tmp = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 4,
+            tmp = SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 4,
                                 &isnull);
             if (!isnull) {
                 headers =
                     pg_text_array_to_slist(DatumGetArrayTypeP(tmp), headers);
             }
-            tmp = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 5,
+            tmp = SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 5,
                                 &isnull);
             if (!isnull) {
                 char *body_tmp = TextDatumGetCString(tmp);
@@ -527,28 +535,28 @@ static void idle_cb(uv_idle_t *idle) {
             }
 
             submit_request(id, method, url, headers, body);
+        }
 
-            // TODO: We currently insert an id-only row to the response table to
-            // differentiate requests not in progress, requests in progress, and
-            // requests fulfilled (whether successful or failed).
-            //
-            // But this creates a possibility for a request recognized as in
-            // progress despite not being processed by curl, e.g. because the
-            // worker crashed while fulfilling the request.
-            //
-            // One solution to this is for the worker to always start in a known
-            // good state, e.g. by TRUNCATEing the http_request_queue.
-            {
-                char *sql = "INSERT INTO net._http_response(id) VALUES ($1)";
-                Oid argtypes[1] = {id_type};
-                Datum Values[1] = {id_binary_value};
+        // TODO: We currently insert an id-only row to the response table to
+        // differentiate requests not in progress, requests in progress, and
+        // requests fulfilled (whether successful or failed).
+        //
+        // But this creates a possibility for a request recognized as in
+        // progress despite not being processed by curl, e.g. because the
+        // worker crashed while fulfilling the request.
+        //
+        // One solution to this is for the worker to always start in a known
+        // good state, e.g. by TRUNCATEing the http_request_queue.
+        for (int64 i = 0; i < num_requests; i++) {
+            char *sql = "INSERT INTO net._http_response(id) VALUES ($1)";
+            Oid argtypes[1] = {INT8OID};
+            Datum Values[1] = {ids[i]};
 
-                int rc = SPI_execute_with_args(sql, 1, argtypes, Values, NULL,
-                                               false, 0);
-                if (rc != SPI_OK_INSERT) {
-                    elog(ERROR, "SPI_execute() failed with error code %d:\n%s",
-                         rc, sql);
-                }
+            int rc =
+                SPI_execute_with_args(sql, 1, argtypes, Values, NULL, false, 0);
+            if (rc != SPI_OK_INSERT) {
+                elog(ERROR, "SPI_execute() failed with error code %d:\n%s", rc,
+                     sql);
             }
         }
     }
