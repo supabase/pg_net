@@ -85,6 +85,17 @@ select net.http_get('http://server') from generate_series(1,1000);
 # run `top` on another shell(another `nixops ssh -d pg_net client`) to check the worker behavior
 ```
 
+#### Testing a slow response
+
+```bash
+nixops ssh -d pg_net client
+
+# takes 32 seconds to respond
+select net.http_get('http://server/slow-reply');
+```
+
+#### Destroying the setup
+
 To destroy the instances:
 
 ```bash
