@@ -353,8 +353,6 @@ static void poll_cb(uv_poll_t *req, int status, int events) {
 
     elog(DEBUG2, "poll_cb: status %d, events %d", status, events);
 
-    uv_timer_stop(&timer);
-
     if (status < 0)
         flags = CURL_CSELECT_ERR;
     if (!status && events & UV_READABLE)
@@ -417,11 +415,15 @@ static void on_timeout(uv_timer_t *req) {
 
 static void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
     elog(DEBUG2, "timer_cb: %ld ms", timeout_ms);
-    // NOTE: 0 means directly call socket_action, but we'll do it in a bit
-    if (timeout_ms <= 0) {
-        timeout_ms = 1;
+    if (timeout_ms < 0) {
+        uv_timer_stop(&timer);
+    } else {
+        // NOTE: 0 means directly call socket_action, but we'll do it in a bit
+        if (timeout_ms == 0) {
+            timeout_ms = 1;
+        }
+        uv_timer_start(&timer, on_timeout, timeout_ms, 0);
     }
-    uv_timer_start(&timer, on_timeout, timeout_ms, 0);
 }
 
 static void idle_cb(uv_idle_t *idle) {
@@ -621,3 +623,4 @@ void _PG_init(void) {
     bgw.bgw_restart_time = 10;
     RegisterBackgroundWorker(&bgw);
 }
+
