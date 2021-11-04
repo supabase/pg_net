@@ -15,9 +15,9 @@
 #include <utils/memutils.h>
 #include <utils/snapmgr.h>
 
-#include <uv.h>
-
 #include <curl/curl.h>
+
+#include <uv.h>
 
 PG_MODULE_MAGIC;
 
@@ -43,9 +43,8 @@ static void handle_sighup(SIGNAL_ARGS) {
     errno = save_errno;
 }
 
-struct curl_context {
-    uv_poll_t poll;
-    curl_socket_t socket_fd;
+struct curl_data {
+    bool done;
     int64 id;
     char *method;
     char *url;
@@ -56,31 +55,40 @@ struct curl_context {
     MemoryContext mem_ctx;
 };
 
-static void destroy_curl_ctx_cb(uv_handle_t *handle) {
-    struct curl_context *ctx = (struct curl_context *)handle->data;
-    MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
-    if (ctx->method) {
-        free(ctx->method);
+struct curl_context {
+    uv_poll_t poll;
+    curl_socket_t socket_fd;
+    struct curl_data *data;
+};
+
+static void close_cb(uv_handle_t *handle) {
+    struct curl_context *ctx =
+        (struct curl_context *)uv_handle_get_data(handle);
+
+    elog(LOG, "curl_close_cb %ld", ctx->data->id);
+
+    if (ctx->data->done) {
+        MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->data->mem_ctx);
+        if (ctx->data->method) {
+            free(ctx->data->method);
+        }
+        if (ctx->data->url) {
+            free(ctx->data->url);
+        }
+        if (ctx->data->request_headers) {
+            curl_slist_free_all(ctx->data->request_headers);
+        }
+        if (ctx->data->request_body) {
+            free(ctx->data->request_body);
+        }
+        // response_body &response_headers should be freed when mem_ctx is
+        // freed.
+        MemoryContextSwitchTo(mem_ctx);
+        MemoryContextDelete(ctx->data->mem_ctx);
+        free(ctx->data);
     }
-    if (ctx->url) {
-        free(ctx->url);
-    }
-    if (ctx->request_headers) {
-        curl_slist_free_all(ctx->request_headers);
-    }
-    if (ctx->request_body) {
-        free(ctx->request_body);
-    }
-    // response_body & response_headers should be freed when mem_ctx is freed.
-    MemoryContextSwitchTo(mem_ctx);
-    MemoryContextDelete(ctx->mem_ctx);
+
     free(ctx);
-}
-
-static void destroy_curl_ctx(struct curl_context *ctx) {
-    elog(DEBUG2, "destroy_curl_ctx");
-
-    uv_close((uv_handle_t *)&ctx->poll, destroy_curl_ctx_cb);
 }
 
 static bool is_extension_loaded(void) {
@@ -94,12 +102,12 @@ static bool is_extension_loaded(void) {
 }
 
 static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
-    struct curl_context *ctx = (struct curl_context *)userp;
-    MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
+    struct curl_data *data = (struct curl_data *)userp;
+    MemoryContext mem_ctx = MemoryContextSwitchTo(data->mem_ctx);
     size_t realsize = size * nmemb;
-    StringInfo si = ctx->response_body;
+    StringInfo si = data->response_body;
 
-    elog(DEBUG1, "body_cb");
+    /* elog(LOG, "body_cb"); */
 
     appendBinaryStringInfo(si, (const char *)contents, (int)realsize);
 
@@ -109,10 +117,10 @@ static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 
 static size_t header_cb(void *contents, size_t size, size_t nmemb,
                         void *userp) {
-    struct curl_context *ctx = (struct curl_context *)userp;
-    MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
+    struct curl_data *data = (struct curl_data *)userp;
+    MemoryContext mem_ctx = MemoryContextSwitchTo(data->mem_ctx);
     size_t realsize = size * nmemb;
-    JsonbParseState *headers = ctx->response_headers;
+    JsonbParseState *headers = data->response_headers;
 
     /* per curl docs, the status code is included in the header data
      * (it starts with: HTTP/1.1 200 OK or HTTP/2 200 OK)*/
@@ -120,16 +128,18 @@ static size_t header_cb(void *contents, size_t size, size_t nmemb,
     /* the final(end of headers) last line is empty - just a CRLF */
     bool lastLine = strncmp(contents, "\r\n", 2) == 0;
 
-    elog(DEBUG1, "header_cb");
+    /* elog(LOG, "header_cb"); */
 
-    /*Ignore non-header data in the first header line and last header line*/
+    /*Ignore non-header data in the first header line and last header
+line*/
     if (!firstLine && !lastLine) {
         /*TODO: make the parsing more robust, test with invalid headers*/
         char *token;
         char *tmp = pstrdup(contents);
         JsonbValue key, val;
 
-        /*The header comes as "Header-Key: val", split by whitespace and ditch
+        /*The header comes as "Header-Key: val", split by whitespace and
+ditch
          * the colon later*/
         token = strtok(tmp, " ");
 
@@ -177,69 +187,74 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
 
 static void submit_request(int64 id, char *method, char *url,
                            struct curl_slist *headers, char *body) {
+    struct curl_data *data = (struct curl_data *)malloc(sizeof(*data));
     MemoryContext mem_ctx =
         AllocSetContextCreate(TopMemoryContext, NULL, ALLOCSET_DEFAULT_SIZES);
-    CURL *handle = curl_easy_init();
-    struct curl_context *ctx = (struct curl_context *)malloc(sizeof(*ctx));
+    CURL *easy = curl_easy_init();
 
-    elog(DEBUG1, "submit request");
+    /* elog(LOG, "submit_request"); */
 
     headers = curl_slist_append(headers, "User-Agent: pg_net/0.2");
 
-    ctx->mem_ctx = mem_ctx;
-    mem_ctx = MemoryContextSwitchTo(ctx->mem_ctx);
-    ctx->id = id;
-    ctx->method = method;
-    ctx->url = url;
-    ctx->request_headers = headers;
-    ctx->request_body = body;
-    ctx->response_headers = NULL;
-    ctx->response_body = makeStringInfo();
+    data->mem_ctx = mem_ctx;
+    mem_ctx = MemoryContextSwitchTo(data->mem_ctx);
+    data->done = false;
+    data->id = id;
+    data->method = method;
+    data->url = url;
+    data->request_headers = headers;
+    data->request_body = body;
+    data->response_headers = NULL;
+    data->response_body = makeStringInfo();
 
-    pushJsonbValue(&ctx->response_headers, WJB_BEGIN_OBJECT, NULL);
+    pushJsonbValue(&data->response_headers, WJB_BEGIN_OBJECT, NULL);
 
     if (strcasecmp(method, "GET") == 0) {
         if (body) {
-            curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body);
-            curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "GET");
+            curl_easy_setopt(easy, CURLOPT_POSTFIELDS, body);
+            curl_easy_setopt(easy, CURLOPT_CUSTOMREQUEST, "GET");
         }
     } else if (strcasecmp(method, "POST") == 0) {
         if (body) {
-            curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body);
+            curl_easy_setopt(easy, CURLOPT_POSTFIELDS, body);
         }
     } else {
         elog(ERROR, "error: Unsupported request method %s\n", method);
     }
 
-    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, body_cb);
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, ctx);
-    curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, header_cb);
-    curl_easy_setopt(handle, CURLOPT_HEADERDATA, ctx);
-    curl_easy_setopt(handle, CURLOPT_URL, url);
-    curl_easy_setopt(handle, CURLOPT_HTTPHEADER, ctx->request_headers);
-    curl_easy_setopt(handle, CURLOPT_PRIVATE, (void *)ctx);
+    curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, body_cb);
+    curl_easy_setopt(easy, CURLOPT_WRITEDATA, data);
+    curl_easy_setopt(easy, CURLOPT_HEADERFUNCTION, header_cb);
+    curl_easy_setopt(easy, CURLOPT_HEADERDATA, data);
+    curl_easy_setopt(easy, CURLOPT_URL, url);
+    curl_easy_setopt(easy, CURLOPT_HTTPHEADER, data->request_headers);
+    curl_easy_setopt(easy, CURLOPT_PRIVATE, (void *)data);
     if (log_min_messages <= DEBUG2) {
-        curl_easy_setopt(handle, CURLOPT_VERBOSE, 1);
+        curl_easy_setopt(easy, CURLOPT_VERBOSE, 1);
     }
-    curl_easy_setopt(handle, CURLOPT_PROTOCOLS,
-                     CURLPROTO_HTTP | CURLPROTO_HTTPS);
-    curl_multi_add_handle(cm, handle);
+    curl_easy_setopt(easy, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    curl_multi_add_handle(cm, easy);
 
     MemoryContextSwitchTo(mem_ctx);
 }
 
 static void check_curl_multi_info(void) {
-    struct curl_context *ctx;
+    struct curl_data *data;
+    CURL *easy;
     CURLMsg *msg;
     int pending;
     int rc;
 
-    elog(DEBUG2, "check_curl_multi_info");
+    /* elog(LOG, "check_curl_multi_info"); */
 
     while ((msg = curl_multi_info_read(cm, &pending))) {
         switch (msg->msg) {
         case CURLMSG_DONE:
-            curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &ctx);
+            easy = msg->easy_handle;
+            curl_easy_getinfo(easy, CURLINFO_PRIVATE, &data);
+            data->done = true;
+
+            elog(LOG, "CURLMSG_DONE: %ld", data->id);
 
             StartTransactionCommand();
             PushActiveSnapshot(GetTransactionSnapshot());
@@ -262,7 +277,7 @@ static void check_curl_multi_info(void) {
                 argValues[0] = CStringGetDatum(error_msg);
 
                 argTypes[1] = INT8OID;
-                argValues[1] = Int64GetDatum(ctx->id);
+                argValues[1] = Int64GetDatum(data->id);
 
                 if (SPI_execute_with_args(sql, argCount, argTypes, argValues,
                                           NULL, false, 0) != SPI_OK_UPDATE) {
@@ -294,15 +309,15 @@ static void check_curl_multi_info(void) {
                                   &contentType);
                 // NOTE: ctx mysteriously becomes NULL after the getinfo calls
                 // above.
-                curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &ctx);
+                curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &data);
 
                 argTypes[0] = INT4OID;
                 argValues[0] = Int32GetDatum(http_status_code);
                 nulls[0] = ' ';
 
                 argTypes[1] = CSTRINGOID;
-                argValues[1] = CStringGetDatum(ctx->response_body->data);
-                if (ctx->response_body->data[0] == '\0') {
+                argValues[1] = CStringGetDatum(data->response_body->data);
+                if (data->response_body->data[0] == '\0') {
                     nulls[1] = 'n';
                 } else {
                     nulls[1] = ' ';
@@ -310,7 +325,7 @@ static void check_curl_multi_info(void) {
 
                 argTypes[2] = JSONBOID;
                 argValues[2] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(
-                    &ctx->response_headers, WJB_END_OBJECT, NULL)));
+                    &data->response_headers, WJB_END_OBJECT, NULL)));
                 nulls[2] = ' ';
 
                 argTypes[3] = CSTRINGOID;
@@ -325,7 +340,7 @@ static void check_curl_multi_info(void) {
                 nulls[4] = ' ';
 
                 argTypes[5] = INT8OID;
-                argValues[5] = Int64GetDatum(ctx->id);
+                argValues[5] = Int64GetDatum(data->id);
                 nulls[5] = ' ';
 
                 if (SPI_execute_with_args(sql, argCount, argTypes, argValues,
@@ -337,8 +352,8 @@ static void check_curl_multi_info(void) {
             PopActiveSnapshot();
             CommitTransactionCommand();
 
-            curl_multi_remove_handle(cm, msg->easy_handle);
-            curl_easy_cleanup(msg->easy_handle);
+            curl_multi_remove_handle(cm, easy);
+            curl_easy_cleanup(easy);
             break;
         default:
             elog(ERROR, "Unexpected CURLMSG: %d", msg->msg);
@@ -346,12 +361,13 @@ static void check_curl_multi_info(void) {
     }
 }
 
-static void poll_cb(uv_poll_t *req, int status, int events) {
+static void poll_cb(uv_poll_t *poll, int status, int events) {
     int flags = 0;
     struct curl_context *ctx;
     int running_handles;
 
-    elog(DEBUG2, "poll_cb: status %d, events %d", status, events);
+    /* elog(LOG, "poll_cb: req %p, status %d, events %d", poll, status, events);
+     */
 
     if (status < 0)
         flags = CURL_CSELECT_ERR;
@@ -360,61 +376,77 @@ static void poll_cb(uv_poll_t *req, int status, int events) {
     if (!status && events & UV_WRITABLE)
         flags |= CURL_CSELECT_OUT;
 
-    ctx = (struct curl_context *)req->data;
+    ctx = (struct curl_context *)uv_handle_get_data((uv_handle_t *)poll);
 
     curl_multi_socket_action(cm, ctx->socket_fd, flags, &running_handles);
+
     check_curl_multi_info();
 }
 
-static void socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
-                      void *socketp) {
+static int socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
+                     void *socketp) {
     struct curl_context *ctx;
+    struct curl_data *data;
+    int events = 0;
 
-    elog(DEBUG2, "socket_cb: socket %d, action %d", s, what);
+    curl_easy_getinfo(easy, CURLINFO_PRIVATE, &data);
 
-    curl_easy_getinfo(easy, CURLINFO_PRIVATE, &ctx);
-
-    if (what == CURL_POLL_IN || what == CURL_POLL_OUT) {
-        if (!socketp) {
-            int r;
-            ctx->socket_fd = s;
-            r = uv_poll_init_socket(loop, &ctx->poll, s);
-            if (r != 0) {
-                elog(ERROR, "uv_poll_init_socket() error: %s", uv_strerror(r));
-            }
-            ctx->poll.data = ctx;
-            curl_multi_assign(cm, s, (void *)ctx);
-        }
-    }
+    elog(LOG, "socket_cb: socket %d, action %d, socketp %p", s, what, socketp);
 
     switch (what) {
     case CURL_POLL_IN:
-        uv_poll_start(&ctx->poll, UV_READABLE, poll_cb);
-        break;
     case CURL_POLL_OUT:
-        uv_poll_start(&ctx->poll, UV_WRITABLE, poll_cb);
+    case CURL_POLL_INOUT:
+        if (socketp) {
+            ctx = (struct curl_context *)socketp;
+        } else {
+            /* fprintf(stderr, "(%d) 1st socket_cb\n", data->id); */
+
+            ctx = (struct curl_context *)malloc(sizeof(*ctx));
+            ctx->socket_fd = s;
+            ctx->data = data;
+
+            uv_poll_init_socket(loop, &ctx->poll, s);
+            uv_handle_set_data((uv_handle_t *)&ctx->poll, (void *)ctx);
+
+            curl_multi_assign(cm, s, (void *)ctx);
+        }
+
+        if (what != CURL_POLL_IN)
+            events |= UV_WRITABLE;
+        if (what != CURL_POLL_OUT)
+            events |= UV_READABLE;
+
+        uv_poll_start(&ctx->poll, events, poll_cb);
         break;
     case CURL_POLL_REMOVE:
+        /* fprintf(stderr, "(%d) CURL_POLL_REMOVE\n", data->id); */
+
         if (socketp) {
-            uv_poll_stop(&((struct curl_context *)socketp)->poll);
-            destroy_curl_ctx((struct curl_context *)socketp);
+            ctx = (struct curl_context *)socketp;
+
+            uv_poll_stop(&ctx->poll);
+            uv_close((uv_handle_t *)&ctx->poll, close_cb);
+
             curl_multi_assign(cm, s, NULL);
+        } else {
+            elog(ERROR, "Missing socketp in CURL_POLL_REMOVE");
         }
         break;
     default:
-        elog(ERROR, "Unexpected curl socket action: %d", what);
+        elog(ERROR, "Unexpected CURL_POLL symbol: %d\n", what);
     }
+
+    return 0;
 }
 
 static void on_timeout(uv_timer_t *req) {
     int running_handles;
     curl_multi_socket_action(cm, CURL_SOCKET_TIMEOUT, 0, &running_handles);
-    elog(DEBUG2, "on_timeout: %d running handles", running_handles);
     check_curl_multi_info();
 }
 
-static void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
-    elog(DEBUG2, "timer_cb: %ld ms", timeout_ms);
+static int timer_cb(CURLM *cm, long timeout_ms, void *userp) {
     if (timeout_ms < 0) {
         uv_timer_stop(&timer);
     } else {
@@ -424,10 +456,11 @@ static void timer_cb(CURLM *cm, long timeout_ms, void *userp) {
         }
         uv_timer_start(&timer, on_timeout, timeout_ms, 0);
     }
+
+    return 0;
 }
 
 static void idle_cb(uv_idle_t *idle) {
-    // 50ms sleep inbetween loop iterations.
     WaitLatch(&MyProc->procLatch,
               WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000,
               PG_WAIT_EXTENSION);
@@ -483,8 +516,7 @@ static void idle_cb(uv_idle_t *idle) {
             "  q.body\n"
             "FROM net.http_request_queue q\n"
             "LEFT JOIN net._http_response r ON q.id = r.id\n"
-            "WHERE r.id IS NULL\n"
-            "LIMIT 500";
+            "WHERE r.id IS NULL";
         rc = SPI_execute(sql, true, 0);
         if (rc != SPI_OK_SELECT) {
             elog(ERROR, "SPI_execute() failed with error code %d:\n%s", rc,
@@ -515,7 +547,6 @@ static void idle_cb(uv_idle_t *idle) {
 
             char *body = NULL;
 
-            // XXX
             ids[i] = id_binary_value;
 
             memcpy(method, method_tmp, strlen(method_tmp) + 1);
@@ -535,6 +566,7 @@ static void idle_cb(uv_idle_t *idle) {
             }
 
             submit_request(id, method, url, headers, body);
+            elog(LOG, "submitted");
         }
 
         // TODO: We currently insert an id-only row to the response table to
@@ -587,6 +619,7 @@ void worker_main(Datum main_arg) {
     uv_timer_init(loop, &timer);
 
     cm = curl_multi_init();
+    curl_multi_setopt(cm, CURLMOPT_MAX_TOTAL_CONNECTIONS, 100);
     curl_multi_setopt(cm, CURLMOPT_SOCKETFUNCTION, socket_cb);
     curl_multi_setopt(cm, CURLMOPT_TIMERFUNCTION, timer_cb);
 
@@ -623,4 +656,3 @@ void _PG_init(void) {
     bgw.bgw_restart_time = 10;
     RegisterBackgroundWorker(&bgw);
 }
-
