@@ -61,6 +61,16 @@ struct curl_context {
     struct curl_data *data;
 };
 
+static bool is_extension_loaded(void) {
+    Oid extension_oid;
+
+    StartTransactionCommand();
+    extension_oid = get_extension_oid("pg_net", true);
+    CommitTransactionCommand();
+
+    return OidIsValid(extension_oid);
+}
+
 static void close_cb(uv_handle_t *handle) {
     struct curl_context *ctx =
         (struct curl_context *)uv_handle_get_data(handle);
@@ -89,16 +99,6 @@ static void close_cb(uv_handle_t *handle) {
     }
 
     free(ctx);
-}
-
-static bool is_extension_loaded(void) {
-    Oid extension_oid;
-
-    StartTransactionCommand();
-    extension_oid = get_extension_oid("pg_net", true);
-    CommitTransactionCommand();
-
-    return OidIsValid(extension_oid);
 }
 
 static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
