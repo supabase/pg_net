@@ -50,7 +50,7 @@ create table net._http_response(
     created timestamptz not null default now()
 );
 
-create index created_idx on net._http_response (created);
+create index on net._http_response (created);
 
 -- Blocks until an http_request is complete
 -- API: Private
