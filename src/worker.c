@@ -261,90 +261,87 @@ static void check_curl_multi_info(void) {
             SPI_connect();
             rc = msg->data.result;
             if (rc != CURLE_OK) {
-                char *sql = "UPDATE\n"
-                            "  net._http_response\n"
-                            "SET\n"
-                            "  error_msg = $1\n"
-                            "WHERE\n"
-                            "  id = $2";
+                char *sql = "INSERT INTO\n"
+                            "  net._http_response(id, error_msg)\n"
+                            "VALUES ($1, $2)";
 
-                int argCount = 2;
-                Oid argTypes[2];
-                Datum argValues[2];
+                int nargs = 2;
+                Oid argtypes[2];
+                Datum values[2];
+                const char *error_msg;
 
-                const char *error_msg = curl_easy_strerror(rc);
-                argTypes[0] = CSTRINGOID;
-                argValues[0] = CStringGetDatum(error_msg);
+                argtypes[0] = INT8OID;
+                values[0] = Int64GetDatum(data->id);
 
-                argTypes[1] = INT8OID;
-                argValues[1] = Int64GetDatum(data->id);
+                error_msg = curl_easy_strerror(rc);
+                argtypes[1] = CSTRINGOID;
+                values[1] = CStringGetDatum(error_msg);
 
-                if (SPI_execute_with_args(sql, argCount, argTypes, argValues,
-                                          NULL, false, 0) != SPI_OK_UPDATE) {
+                if (SPI_execute_with_args(sql, nargs, argtypes, values, NULL,
+                                          false, 0) != SPI_OK_INSERT) {
                     elog(ERROR, "SPI_exec failed:\n%s", sql);
                 }
             } else {
-                char *sql = "UPDATE\n"
-                            "  net._http_response\n"
-                            "SET\n"
-                            "  status_code = $1,\n"
-                            "  content = $2,\n"
-                            "  headers = $3,\n"
-                            "  content_type = $4,\n"
-                            "  timed_out = $5\n"
-                            "WHERE\n"
-                            "  id = $6";
+                char *sql = "INSERT INTO\n"
+                            "  net._http_response(\n"
+                            "    id,\n"
+                            "    status_code,\n"
+                            "    content,\n"
+                            "    headers,\n"
+                            "    content_type,\n"
+                            "    timed_out\n"
+                            "  )\n"
+                            "VALUES ($1, $2, $3, $4, $5, $6)";
 
-                int argCount = 6;
-                Oid argTypes[6];
-                Datum argValues[6];
+                int nargs = 6;
+                Oid argtypes[6];
+                Datum values[6];
                 char nulls[6];
-                int http_status_code;
-                char *contentType = NULL;
-                bool timedOut = false;
+                int status_code;
+                char *content_type = NULL;
+                bool timed_out = false;
 
-                curl_easy_getinfo(msg->easy_handle, CURLINFO_RESPONSE_CODE,
-                                  &http_status_code);
-                curl_easy_getinfo(msg->easy_handle, CURLINFO_CONTENT_TYPE,
-                                  &contentType);
+                curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &status_code);
+                curl_easy_getinfo(easy, CURLINFO_CONTENT_TYPE, &content_type);
                 // NOTE: ctx mysteriously becomes NULL after the getinfo calls
                 // above.
-                curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &data);
+                curl_easy_getinfo(easy, CURLINFO_PRIVATE, &data);
 
-                argTypes[0] = INT4OID;
-                argValues[0] = Int32GetDatum(http_status_code);
+                argtypes[0] = INT8OID;
+                values[0] = Int64GetDatum(data->id);
                 nulls[0] = ' ';
 
-                argTypes[1] = CSTRINGOID;
-                argValues[1] = CStringGetDatum(data->response_body->data);
+                argtypes[1] = INT4OID;
+                values[1] = Int32GetDatum(status_code);
+                nulls[1] = ' ';
+
+                argtypes[2] = CSTRINGOID;
+                values[2] = CStringGetDatum(data->response_body->data);
                 if (data->response_body->data[0] == '\0') {
-                    nulls[1] = 'n';
+                    nulls[2] = 'n';
                 } else {
-                    nulls[1] = ' ';
+                    nulls[2] = ' ';
                 }
 
-                argTypes[2] = JSONBOID;
-                argValues[2] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(
+                argtypes[3] = JSONBOID;
+                values[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(
                     &data->response_headers, WJB_END_OBJECT, NULL)));
-                nulls[2] = ' ';
+                nulls[3] = ' ';
 
-                argTypes[3] = CSTRINGOID;
-                argValues[3] = CStringGetDatum(contentType);
-                if (!contentType)
-                    nulls[3] = 'n';
-                else
-                    nulls[3] = ' ';
+                argtypes[4] = CSTRINGOID;
+                values[4] = CStringGetDatum(content_type);
+                if (!content_type) {
+                    nulls[4] = 'n';
+                } else {
+                    nulls[4] = ' ';
+                }
 
-                argTypes[4] = BOOLOID;
-                argValues[4] = BoolGetDatum(timedOut);
-                nulls[4] = ' ';
-
-                argTypes[5] = INT8OID;
-                argValues[5] = Int64GetDatum(data->id);
+                argtypes[5] = BOOLOID;
+                values[5] = BoolGetDatum(timed_out);
                 nulls[5] = ' ';
 
-                if (SPI_execute_with_args(sql, argCount, argTypes, argValues,
-                                          nulls, false, 0) != SPI_OK_UPDATE) {
+                if (SPI_execute_with_args(sql, nargs, argtypes, values, nulls,
+                                          false, 0) != SPI_OK_INSERT) {
                     elog(ERROR, "SPI_exec failed:\n%s", sql);
                 }
             }
@@ -477,64 +474,57 @@ static void idle_cb(uv_idle_t *idle) {
         ProcessConfigFile(PGC_SIGHUP);
     }
 
-    // NOTE: Needs verification: any (p)allocations we do within the transaction
-    // seems to be freed automatically. Probably because it's within a memory
-    // context that is local to the transaction.
+    // NOTE: Any (p)allocations we do within a transaction are freed
+    // automatically because it's within a memory context that is local to the
+    // transaction.
     // https://github.com/postgres/postgres/tree/master/src/backend/utils/mmgr
     StartTransactionCommand();
     PushActiveSnapshot(GetTransactionSnapshot());
     SPI_connect();
     {
         char *sql = "DELETE FROM\n"
-                    "  net.http_request_queue\n"
+                    "  net._http_response\n"
                     "WHERE\n"
                     "  clock_timestamp() - created > $1::interval";
-
-        int argCount = 1;
-        Oid argTypes[1];
-        Datum argValues[1];
+        int nargs = 1;
+        Oid argtypes[1];
+        Datum values[1];
         int rc;
-        Datum *ids;
-        int64 num_requests;
 
-        argTypes[0] = TEXTOID;
-        argValues[0] = CStringGetTextDatum(ttl);
+        argtypes[0] = TEXTOID;
+        values[0] = CStringGetTextDatum(ttl);
 
-        rc = SPI_execute_with_args(sql, argCount, argTypes, argValues, NULL,
-                                   false, 0);
+        rc =
+            SPI_execute_with_args(sql, nargs, argtypes, values, NULL, false, 0);
         if (rc != SPI_OK_DELETE) {
             elog(ERROR, "SPI_exec failed with error code %d:\n%s", rc, sql);
         }
-
-        sql =
-            "SELECT\n"
-            "  q.id,\n"
-            "  q.method,\n"
-            "  q.url,\n"
+    }
+    {
+        char *sql =
+            "DELETE FROM\n"
+            "  net.http_request_queue\n"
+            "RETURNING\n"
+            "  id,\n"
+            "  method,\n"
+            "  url,\n"
             "  array(\n"
-            "    select key || ': ' || value from jsonb_each_text(q.headers)\n"
+            "    select key || ': ' || value from jsonb_each_text(headers)\n"
             "  ),\n"
-            "  q.body\n"
-            "FROM net.http_request_queue q\n"
-            "LEFT JOIN net._http_response r ON q.id = r.id\n"
-            "WHERE r.id IS NULL";
-        rc = SPI_execute(sql, true, 0);
-        if (rc != SPI_OK_SELECT) {
+            "  body";
+
+        int rc = SPI_execute(sql, false, 0);
+        if (rc != SPI_OK_DELETE_RETURNING) {
             elog(ERROR, "SPI_execute() failed with error code %d:\n%s", rc,
                  sql);
         }
 
-        num_requests = SPI_processed;
-        ids = (Datum *)palloc(sizeof(*ids) * num_requests);
-
-        for (int64 i = 0; i < num_requests; i++) {
+        for (uint64 i = 0; i < SPI_processed; i++) {
             bool isnull;
             Datum tmp;
 
-            Oid id_type = SPI_gettypeid(SPI_tuptable->tupdesc, 1);
-            Datum id_binary_value = SPI_getbinval(
-                SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 1, &isnull);
-            int64 id = DatumGetInt64(id_binary_value);
+            int64 id = DatumGetInt64(SPI_getbinval(
+                SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 1, &isnull));
 
             char *method_tmp = TextDatumGetCString(SPI_getbinval(
                 SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 2, &isnull));
@@ -547,8 +537,6 @@ static void idle_cb(uv_idle_t *idle) {
             struct curl_slist *headers = NULL;
 
             char *body = NULL;
-
-            ids[i] = id_binary_value;
 
             memcpy(method, method_tmp, strlen(method_tmp) + 1);
             memcpy(url, url_tmp, strlen(url_tmp) + 1);
@@ -568,29 +556,6 @@ static void idle_cb(uv_idle_t *idle) {
 
             submit_request(id, method, url, headers, body);
             /* elog(LOG, "submitted"); */
-        }
-
-        // TODO: We currently insert an id-only row to the response table to
-        // differentiate requests not in progress, requests in progress, and
-        // requests fulfilled (whether successful or failed).
-        //
-        // But this creates a possibility for a request recognized as in
-        // progress despite not being processed by curl, e.g. because the
-        // worker crashed while fulfilling the request.
-        //
-        // One solution to this is for the worker to always start in a known
-        // good state, e.g. by TRUNCATEing the http_request_queue.
-        for (int64 i = 0; i < num_requests; i++) {
-            char *sql = "INSERT INTO net._http_response(id) VALUES ($1)";
-            Oid argtypes[1] = {INT8OID};
-            Datum Values[1] = {ids[i]};
-
-            int rc =
-                SPI_execute_with_args(sql, 1, argtypes, Values, NULL, false, 0);
-            if (rc != SPI_OK_INSERT) {
-                elog(ERROR, "SPI_execute() failed with error code %d:\n%s", rc,
-                     sql);
-            }
         }
     }
     SPI_finish();

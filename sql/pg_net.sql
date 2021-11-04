@@ -15,11 +15,8 @@ create table net.http_request_queue(
     headers jsonb not null,
     body bytea,
     -- TODO: respect this
-    timeout_milliseconds int not null,
-    created timestamptz not null default now()
+    timeout_milliseconds int not null
 );
-
-create index created_idx on net.http_request_queue (created);
 
 create or replace function net._check_worker_is_up() returns trigger as $$
 begin
@@ -43,14 +40,17 @@ execute procedure net._check_worker_is_up();
 -- Associates a response with a request
 -- API: Private
 create table net._http_response(
-    id bigint primary key references net.http_request_queue(id) on delete cascade,
+    id bigint primary key,
     status_code integer,
     content_type text,
     headers jsonb,
     content text,
     timed_out bool,
-    error_msg text
+    error_msg text,
+    created timestamptz not null default now()
 );
+
+create index created_idx on net._http_response (created);
 
 -- Blocks until an http_request is complete
 -- API: Private
@@ -70,8 +70,7 @@ begin
         select *
         into rec
         from net._http_response
-        where id = request_id
-        and status_code is not null;
+        where id = request_id;
 
         if rec is null then
             -- Wait 50 ms before checking again
@@ -276,19 +275,7 @@ begin
     if rec is null then
         -- The request is either still processing or the request_id provided does not exist
 
-        -- Check if a request exists with the given request_id
-        select count(1) > 0
-        into req_exists
-        from net.http_request_queue
-        where id = request_id;
-
-        if req_exists then
-            return (
-                'PENDING',
-                'request is pending processing',
-                null
-            )::net.http_response_result;
-        end if;
+        -- TODO: request in progress is indistinguishable from request that doesn't exist
 
         -- No request matching request_id found
         return (
