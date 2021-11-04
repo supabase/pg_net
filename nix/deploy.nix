@@ -74,10 +74,7 @@ in {
             listen [::]:80 ;
             server_name localhost;
 
-            location = /slow-reply {
-              echo_sleep 32.0;
-              echo 'this text will come in response body with HTTP 200 after 5 seconds';
-            }
+            ${builtins.readFile nginx/slow-reply.conf}
           }
         }
       '';
