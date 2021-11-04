@@ -56,7 +56,7 @@ select net.http_get('http://localhost:3000/projects');
 -- * Connection #0 to host localhost left intact
 ```
 
-### Reproduble setup for load testing
+### Reproducible setup for load testing
 
 This will deploy a client and server on t3a.nano. You must have `supabase-dev` setup in `.aws/credentials`.
 
@@ -84,6 +84,28 @@ select net.http_get('http://server');
 select net.http_get('http://server') from generate_series(1,1000);
 # run `top` on another shell(another `nixops ssh -d pg_net client`) to check the worker behavior
 ```
+
+#### Testing a slow response
+
+Locally:
+
+```bash
+net-with-pg-12 psql
+
+# takes some seconds to respond
+select net.http_get('http://localhost:8080/slow-reply');
+```
+
+With the cloud NixOps setup:
+
+```bash
+nixops ssh -d pg_net client
+
+# takes some seconds to respond
+select net.http_get('http://server/slow-reply');
+```
+
+#### Destroying the setup
 
 To destroy the instances:
 

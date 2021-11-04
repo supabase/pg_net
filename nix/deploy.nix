@@ -62,7 +62,23 @@ in {
       };
     };
 
-    services.nginx.enable = true;
+    services.nginx = {
+      enable = true;
+      package = pkgs.openresty;
+      config = ''
+        events {}
+
+        http {
+          server {
+            listen 0.0.0.0:80 ;
+            listen [::]:80 ;
+            server_name localhost;
+
+            ${builtins.readFile nginx/slow-reply.conf}
+          }
+        }
+      '';
+    };
     networking.firewall.allowedTCPPorts = [ 80 ];
   };
 
