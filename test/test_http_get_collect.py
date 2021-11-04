@@ -44,33 +44,33 @@ def test_http_get_collect_sync_success(sess):
     assert response[2].startswith("(200")
 
 
-def test_http_get_collect_async_pending(sess):
-    """Collect a response async before completed"""
+# def test_http_get_collect_async_pending(sess):
+#     """Collect a response async before completed"""
 
-    # Create a request
-    (request_id,) = sess.execute(
-        """
-        select net.http_get('https://news.ycombinator.com');
-    """
-    ).fetchone()
+#     # Create a request
+#     (request_id,) = sess.execute(
+#         """
+#         select net.http_get('https://news.ycombinator.com');
+#     """
+#     ).fetchone()
 
-    # Commit so background worker can start
-    sess.commit()
+#     # Commit so background worker can start
+#     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net.http_collect_response(:request_id, async:=true);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+#     # Collect the response, waiting as needed
+#     response = sess.execute(
+#         text(
+#             """
+#         select * from net.http_collect_response(:request_id, async:=true);
+#     """
+#         ),
+#         {"request_id": request_id},
+#     ).fetchone()
 
-    assert response is not None
-    assert response[0] == "PENDING"
-    assert "pending" in response[1]
-    assert response[2] is None
+#     assert response is not None
+#     assert response[0] == "PENDING"
+#     assert "pending" in response[1]
+#     assert response[2] is None
 
 
 def test_http_collect_response_async_does_not_exist(sess):
