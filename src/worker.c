@@ -65,7 +65,7 @@ static void close_cb(uv_handle_t *handle) {
     struct curl_context *ctx =
         (struct curl_context *)uv_handle_get_data(handle);
 
-    elog(LOG, "curl_close_cb %ld", ctx->data->id);
+    /* elog(LOG, "curl_close_cb %ld", ctx->data->id); */
 
     if (ctx->data->done) {
         MemoryContext mem_ctx = MemoryContextSwitchTo(ctx->data->mem_ctx);
@@ -254,7 +254,7 @@ static void check_curl_multi_info(void) {
             curl_easy_getinfo(easy, CURLINFO_PRIVATE, &data);
             data->done = true;
 
-            elog(LOG, "CURLMSG_DONE: %ld", data->id);
+            /* elog(LOG, "CURLMSG_DONE: %ld", data->id); */
 
             StartTransactionCommand();
             PushActiveSnapshot(GetTransactionSnapshot());
@@ -391,7 +391,8 @@ static int socket_cb(CURL *easy, curl_socket_t s, int what, void *userp,
 
     curl_easy_getinfo(easy, CURLINFO_PRIVATE, &data);
 
-    elog(LOG, "socket_cb: socket %d, action %d, socketp %p", s, what, socketp);
+    /* elog(LOG, "socket_cb: socket %d, action %d, socketp %p", s, what,
+     * socketp); */
 
     switch (what) {
     case CURL_POLL_IN:
@@ -566,7 +567,7 @@ static void idle_cb(uv_idle_t *idle) {
             }
 
             submit_request(id, method, url, headers, body);
-            elog(LOG, "submitted");
+            /* elog(LOG, "submitted"); */
         }
 
         // TODO: We currently insert an id-only row to the response table to
