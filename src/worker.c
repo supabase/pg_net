@@ -138,7 +138,7 @@ pg_text_array_to_slist(ArrayType *array, struct curl_slist *headers)
 	return headers;
 }
 
-static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeaders, char *reqBody, int64 id, HTAB *curlDataMap)
+static int init(CURLM *cm, char *method, char *url, int timeout_milliseconds, struct curl_slist *reqHeaders, char *reqBody, int64 id, HTAB *curlDataMap)
 {
 	CURL *eh = curl_easy_init();
 
@@ -178,6 +178,7 @@ static int init(CURLM *cm, char *method, char *url, struct curl_slist *reqHeader
 	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
 	curl_easy_setopt(eh, CURLOPT_URL, url);
 	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
+	curl_easy_setopt(eh, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
 	if (log_min_messages <= DEBUG1)
 		curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
@@ -286,6 +287,7 @@ worker_main(Datum main_arg)
 				q.id,\
 				q.method,\
 				q.url,\
+				q.timeout_milliseconds,\
 				array(\
 					select key || ': ' || value from jsonb_each_text(q.headers)\
 				),\
@@ -325,21 +327,22 @@ worker_main(Datum main_arg)
 						int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
 						char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
 						char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
+						int32 timeout_milliseconds = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull));
 
 						Datum headersBin;
 						Datum bodyBin;
 						ArrayType *pgHeaders;
 						char *body = NULL;
 
-						headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull);
+						headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
 						if (!tupIsNull) {
 							pgHeaders = DatumGetArrayTypeP(headersBin);
 							headers = pg_text_array_to_slist(pgHeaders, headers);
 						}
-						bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
+						bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 6, &tupIsNull);
 						if (!tupIsNull) body = TextDatumGetCString(bodyBin);
 
-						res = init(cm, method, url, headers, body, id, curlDataMap);
+						res = init(cm, method, url, timeout_milliseconds, headers, body, id, curlDataMap);
 
 						if(res) {
 							elog(ERROR, "error: init() returned %d\n", res);
