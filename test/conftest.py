@@ -18,7 +18,7 @@ def sess(engine):
     # Reset sequences and tables between tests
     session.execute(
         """
-    create extension pg_net;
+    create extension if not exists pg_net;
     """
     )
     session.commit()
@@ -30,6 +30,7 @@ def sess(engine):
     session.execute(
         """
     drop extension pg_net cascade;
+    create extension if not exists pg_net;
     """
     )
     session.commit()
