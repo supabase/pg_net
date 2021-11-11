@@ -66,7 +66,7 @@ Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
 }
 
 struct curl_slist *pg_text_array_to_slist(ArrayType *array,
-                                                 struct curl_slist *headers) {
+                                          struct curl_slist *headers) {
     ArrayIterator iterator;
     Datum value;
     bool isnull;
@@ -89,7 +89,7 @@ struct curl_slist *pg_text_array_to_slist(ArrayType *array,
 }
 
 /*TODO: make the parsing more robust, test with invalid headers*/
-void parseHeaders(char *contents, JsonbParseState *headers){
+void parseHeaders(char *contents, JsonbParseState *headers) {
     /* per curl docs, the status code is included in the header data
      * (it starts with: HTTP/1.1 200 OK or HTTP/2 200 OK)*/
     bool firstLine = strncmp(contents, "HTTP/", 5) == 0;

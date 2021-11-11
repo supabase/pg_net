@@ -26,6 +26,7 @@ mkShell {
         psycopg2
         sqlalchemy
       ];
+      format = callPackage ./nix/format.nix {};
     in
     [
       net-with-pg-12
@@ -33,6 +34,7 @@ mkShell {
       valgrind-net-with-pg-12
       pythonDeps
       nixops
+      format
     ];
   shellHook = ''
     export NIX_PATH="nixpkgs=${nixpkgs}:."
