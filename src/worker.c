@@ -135,7 +135,7 @@ static size_t header_cb(void *contents, size_t size, size_t nmemb,
     /*Ignore non-header data in the first header line and last header
 line*/
     if (!firstLine && !lastLine) {
-      parseHeaders(contents, headers);
+        parseHeaders(contents, headers);
     }
 
     MemoryContextSwitchTo(mem_ctx);
