@@ -7,7 +7,7 @@ TESTS = $(wildcard test/sql/*.sql)
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 REGRESS_OPTS = --use-existing --inputdir=test
 
-MODULE_big = pg_net
+MODULE_big = $(EXTENSION)
 OBJS = src/worker.o src/util.o
 
 all: sql/$(EXTENSION)--$(EXTVERSION).sql

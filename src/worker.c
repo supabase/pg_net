@@ -19,6 +19,8 @@
 
 #include <uv.h>
 
+#include "util.h"
+
 PG_MODULE_MAGIC;
 
 void _PG_init(void);
@@ -133,56 +135,11 @@ static size_t header_cb(void *contents, size_t size, size_t nmemb,
     /*Ignore non-header data in the first header line and last header
 line*/
     if (!firstLine && !lastLine) {
-        /*TODO: make the parsing more robust, test with invalid headers*/
-        char *token;
-        char *tmp = pstrdup(contents);
-        JsonbValue key, val;
-
-        /*The header comes as "Header-Key: val", split by whitespace and
-ditch
-         * the colon later*/
-        token = strtok(tmp, " ");
-
-        key.type = jbvString;
-        key.val.string.val = token;
-        /*strlen - 1 because we ditch the last char - the colon*/
-        key.val.string.len = strlen(token) - 1;
-        (void)pushJsonbValue(&headers, WJB_KEY, &key);
-
-        /*Every header line ends with CRLF, split and remove it*/
-        token = strtok(NULL, "\r\n");
-
-        val.type = jbvString;
-        val.val.string.val = token;
-        val.val.string.len = strlen(token);
-        (void)pushJsonbValue(&headers, WJB_VALUE, &val);
+      parseHeaders(contents, headers);
     }
 
     MemoryContextSwitchTo(mem_ctx);
     return realsize;
-}
-
-static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
-                                                 struct curl_slist *headers) {
-    ArrayIterator iterator;
-    Datum value;
-    bool isnull;
-    char *header;
-
-    iterator = array_create_iterator(array, 0, NULL);
-
-    while (array_iterate(iterator, &value, &isnull)) {
-        if (isnull) {
-            continue;
-        }
-
-        header = TextDatumGetCString(value);
-        headers = curl_slist_append(headers, header);
-        pfree(header);
-    }
-    array_free_iterator(iterator);
-
-    return headers;
 }
 
 static void submit_request(int64 id, char *method, char *url,
