@@ -14,7 +14,6 @@ create table net.http_request_queue(
     url text not null,
     headers jsonb not null,
     body bytea,
-    -- TODO: respect this
     timeout_milliseconds int not null
 );
 
@@ -114,7 +113,7 @@ create or replace function net.http_get(
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 1000
+    timeout_milliseconds int default 7000
 )
     -- request_id reference
     returns bigint
@@ -158,7 +157,7 @@ create or replace function net.http_post(
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000
+    timeout_milliseconds int DEFAULT 7000
 )
     -- request_id reference
     returns bigint

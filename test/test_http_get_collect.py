@@ -6,7 +6,7 @@ def test_http_get_returns_id(sess):
 
     (request_id,) = sess.execute(
         """
-        select net.http_get('https://news.ycombinator.com'); 
+        select net.http_get('https://news.ycombinator.com');
     """
     ).fetchone()
 

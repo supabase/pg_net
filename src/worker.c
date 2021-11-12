@@ -142,7 +142,7 @@ line*/
     return realsize;
 }
 
-static void submit_request(int64 id, char *method, char *url,
+static void submit_request(int64 id, char *method, char *url, int32 timeout_milliseconds,
                            struct curl_slist *headers, char *body) {
     struct curl_data *data = (struct curl_data *)malloc(sizeof(*data));
     MemoryContext mem_ctx =
@@ -185,6 +185,7 @@ static void submit_request(int64 id, char *method, char *url,
     curl_easy_setopt(easy, CURLOPT_HEADERDATA, data);
     curl_easy_setopt(easy, CURLOPT_URL, url);
     curl_easy_setopt(easy, CURLOPT_HTTPHEADER, data->request_headers);
+    curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
     curl_easy_setopt(easy, CURLOPT_PRIVATE, (void *)data);
     if (log_min_messages <= DEBUG2) {
         curl_easy_setopt(easy, CURLOPT_VERBOSE, 1);
@@ -465,6 +466,7 @@ static void idle_cb(uv_idle_t *idle) {
             "  id,\n"
             "  method,\n"
             "  url,\n"
+						"  timeout_milliseconds,\n"
             "  array(\n"
             "    select key || ': ' || value from jsonb_each_text(headers)\n"
             "  ),\n"
@@ -491,19 +493,21 @@ static void idle_cb(uv_idle_t *idle) {
                 SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 3, &isnull));
             char *url = (char *)malloc(strlen(url_tmp) + 1);
 
+            int32 timeout_milliseconds = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 4, &isnull));
+
             struct curl_slist *headers = NULL;
 
             char *body = NULL;
 
             memcpy(method, method_tmp, strlen(method_tmp) + 1);
             memcpy(url, url_tmp, strlen(url_tmp) + 1);
-            tmp = SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 4,
+            tmp = SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 5,
                                 &isnull);
             if (!isnull) {
                 headers =
                     pg_text_array_to_slist(DatumGetArrayTypeP(tmp), headers);
             }
-            tmp = SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 5,
+            tmp = SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 6,
                                 &isnull);
             if (!isnull) {
                 char *body_tmp = TextDatumGetCString(tmp);
@@ -511,7 +515,7 @@ static void idle_cb(uv_idle_t *idle) {
                 memcpy(body, body_tmp, strlen(body_tmp) + 1);
             }
 
-            submit_request(id, method, url, headers, body);
+            submit_request(id, method, url, timeout_milliseconds, headers, body);
             /* elog(LOG, "submitted"); */
         }
     }
