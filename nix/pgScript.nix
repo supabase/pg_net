@@ -14,7 +14,7 @@ let
     export PGUSER=postgres
     export PGDATABASE=postgres
 
-    trap 'pg_ctl stop -m i && rm -rf "$tmpdir" && openresty -s stop' sigint sigterm exit
+    trap 'pg_ctl stop -m i && rm -rf "$tmpdir" && kill $(jobs -p)' sigint sigterm exit
 
     PGTZ=UTC initdb --no-locale --encoding=UTF8 --nosync -U "$PGUSER"
 
