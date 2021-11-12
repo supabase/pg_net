@@ -34,7 +34,7 @@ mkShell {
       valgrind-net-with-pg-12
       pythonDeps
       nixops
-      format
+      format.do format.doCheck
     ];
   shellHook = ''
     export NIX_PATH="nixpkgs=${nixpkgs}:."
