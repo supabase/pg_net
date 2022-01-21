@@ -8,6 +8,8 @@ Create an HTTP GET request returning the request's id
 !!! note
     HTTP requests are not started until the transaction is committed
 
+!!! note
+    this is a Postgres SECURITY DEFINER function
 
 ##### signature
 ```sql
@@ -51,6 +53,8 @@ Create an HTTP POST request with a JSON body, returning the request's id
 !!! note
     the body's character set encoding matches the database's `server_encoding` setting
 
+!!! note
+    this is a Postgres SECURITY DEFINER function
 
 ##### signature
 ```sql
@@ -98,6 +102,8 @@ When `async:=false` is set it is recommended that [statement_timeout](https://ww
 !!! warning
     `net.http_collect_response` must be in a separate transaction from the calls to `net.http_<method>`
 
+!!! note
+    this is a Postgres SECURITY DEFINER function
 
 ##### signature
 ```sql
