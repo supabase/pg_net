@@ -21,11 +21,11 @@ let
     echo -e "Connect to this db from another shell using the following command: \n"
     echo -e "\t psql -h "$tmpdir" -U postgres \n"
 
-    ${valgrind}/bin/valgrind --log-file=${valgrindLogFile} \
+    ${valgrind}/bin/valgrind --log-file=${valgrindLogFile} --gen-suppressions=all \
     --leak-check=yes --trace-children=yes --track-origins=yes --suppressions=${./valgrind.supp} \
-    postgres -c shared_preload_libraries="pg_net" -c listen_addresses="" -k $PGDATA
+    postgres -c shared_preload_libraries="pg_net" -c listen_addresses="" -c autovacuum="off" -k $PGDATA
 
     rm -rf "$tmpdir"
   '';
 in
-writeShellScriptBin "valgrind-net-with-pg-${ver}" script
+writeShellScriptBin "net-with-valgrind-pg-${ver}" script
