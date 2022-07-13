@@ -18,9 +18,10 @@ mkShell {
       pgWithExt = { pg }: pg.withPackages (p: [ (callPackage ./nix/pg_net.nix { postgresql = pg;}) ]);
       pg12WithExt = pgWithExt { pg = postgresql_12;};
       pg13WithExt = pgWithExt { pg = postgresql_13;};
-      net-with-pg-12 = callPackage ./nix/pgScript.nix { postgresql = pg12WithExt; openresty = oldOpenresty; };
-      net-with-pg-13 = callPackage ./nix/pgScript.nix { postgresql = pg13WithExt; openresty = oldOpenresty; };
+      net-with-pg-12 = callPackage ./nix/pgScript.nix { postgresql = pg12WithExt; };
+      net-with-pg-13 = callPackage ./nix/pgScript.nix { postgresql = pg13WithExt; };
       valgrind-net-with-pg-12 = callPackage ./nix/pgValgrindScript.nix { postgresql = pg12WithExt; };
+      nginxScript = callPackage ./nix/nginxScript.nix { openresty = oldOpenresty; };
       pythonDeps = with pythonPackages; [
         pytest
         psycopg2
@@ -35,6 +36,7 @@ mkShell {
       pythonDeps
       nixops
       format.do format.doCheck
+      nginxScript
     ];
   shellHook = ''
     export NIX_PATH="nixpkgs=${nixpkgs}:."
