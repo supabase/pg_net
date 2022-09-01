@@ -1,8 +1,23 @@
 alter function net._encode_url_with_params_array ( text, text[]) strict;
-alter table net.http_request_queue drop constraint http_request_queue_pkey;
-alter table net._http_response drop constraint _http_response_pkey;
+
+alter table net.http_request_queue drop constraint http_request_queue_pkey cascade;
+alter table net._http_response drop constraint _http_response_pkey cascade;
+
 drop trigger ensure_worker_is_up on net.http_request_queue;
-alter function net._check_worker_is_up() rename to check_worker_is_up;
-drop index net._http_response_created_idx;
+drop function net._check_worker_is_up();
+
+create or replace function net.check_worker_is_up() returns void as $$
+begin
+  if not exists (select pid from pg_stat_activity where backend_type = 'pg_net worker') then
+    raise exception using
+      message = 'the pg_net background worker is not up'
+    , detail  = 'the pg_net background worker is down due to an internal error and cannot process requests'
+    , hint    = 'make sure that you didn''t modify any of pg_net internal tables';
+  end if;
+end
+$$ language plpgsql;
+
+drop index if exists net._http_response_created_idx;
+
 alter table net.http_request_queue set unlogged;
 alter table net._http_response set unlogged;
