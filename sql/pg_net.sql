@@ -8,7 +8,7 @@ check (
 
 -- Store pending requests. The background worker reads from here
 -- API: Private
-create table net.http_request_queue(
+create unlogged table net.http_request_queue(
     id bigserial,
     method net.http_method not null,
     url text not null,
@@ -31,7 +31,7 @@ $$ language plpgsql;
 
 -- Associates a response with a request
 -- API: Private
-create table net._http_response(
+create unlogged table net._http_response(
     id bigint,
     status_code integer,
     content_type text,
