@@ -9,7 +9,7 @@ check (
 -- Store pending requests. The background worker reads from here
 -- API: Private
 create table net.http_request_queue(
-    id bigserial primary key,
+    id bigserial,
     method net.http_method not null,
     url text not null,
     headers jsonb not null,
@@ -40,7 +40,7 @@ execute procedure net._check_worker_is_up();
 -- Associates a response with a request
 -- API: Private
 create table net._http_response(
-    id bigint primary key,
+    id bigint,
     status_code integer,
     content_type text,
     headers jsonb,
