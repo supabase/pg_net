@@ -1,7 +1,4 @@
-truncate net.http_request_queue;
-truncate net._http_response;
-
-drop index created_idx;
+drop index if exists created_idx;
 alter table net.http_request_queue drop created;
 
 alter table net._http_response drop constraint _http_response_id_fkey;
