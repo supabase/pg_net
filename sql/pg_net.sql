@@ -18,24 +18,16 @@ create table net.http_request_queue(
     timeout_milliseconds int not null
 );
 
-create or replace function net._check_worker_is_up() returns trigger as $$
+create or replace function net.check_worker_is_up() returns void as $$
 begin
   if not exists (select pid from pg_stat_activity where backend_type = 'pg_net worker') then
     raise exception using
-      message = 'the pg_net background worker must be up when doing requests'
+      message = 'the pg_net background worker is not up'
     , detail  = 'the pg_net background worker is down due to an internal error and cannot process requests'
-    , hint    = 'make sure that you didn''t modify any of pg_net internal tables or used them for foreign key references';
-    return null;
+    , hint    = 'make sure that you didn''t modify any of pg_net internal tables';
   end if;
-  return new;
 end
 $$ language plpgsql;
-
-create trigger ensure_worker_is_up
-after insert on net.http_request_queue
-for each statement
-execute procedure net._check_worker_is_up();
-
 
 -- Associates a response with a request
 -- API: Private

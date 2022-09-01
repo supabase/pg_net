@@ -14,7 +14,7 @@ def test_http_get_error_when_worker_down(sess):
     with pytest.raises(Exception) as execinfo:
         res = sess.execute(
             """
-            select net.http_get('https://news.ycombinator.com');
+            select net.check_worker_is_up();
         """
         )
-    assert "the pg_net background worker must be up when doing requests" in str(execinfo)
+    assert "the pg_net background worker is not up" in str(execinfo)
