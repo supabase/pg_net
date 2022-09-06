@@ -575,7 +575,7 @@ void _PG_init(void) {
     bgw.bgw_start_time = BgWorkerStart_RecoveryFinished;
     snprintf(bgw.bgw_library_name, BGW_MAXLEN, "pg_net");
     snprintf(bgw.bgw_function_name, BGW_MAXLEN, "worker_main");
-    snprintf(bgw.bgw_name, BGW_MAXLEN, "pg_net worker");
+    snprintf(bgw.bgw_name, BGW_MAXLEN, "pg_net 0.5.1 worker");
     bgw.bgw_restart_time = 10;
     RegisterBackgroundWorker(&bgw);
 }
