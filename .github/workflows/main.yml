@@ -17,5 +17,5 @@ jobs:
       - name: Run pytest tests
         run: nix-shell --run "net-with-pg-13 python -m pytest -vv"
 
-      - name: Check C files are formatted
-        run: nix-shell --run "net-check-format"
+      #- name: Check C files are formatted
+        #run: nix-shell --run "net-check-format"
