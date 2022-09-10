@@ -45,7 +45,8 @@ typedef struct _CurlData
 {
 	int64 id;
 	StringInfo body;
-	JsonbParseState *headers;
+	JsonbParseState* response_headers;
+	struct curl_slist* request_headers;
 } CurlData;
 
 static volatile sig_atomic_t got_sigterm = false;
@@ -100,48 +101,43 @@ header_cb(void *contents, size_t size, size_t nmemb, void *userp)
 	return realsize;
 }
 
-static int init(CURLM *cm, char *method, char *url, int timeout_milliseconds, struct curl_slist *reqHeaders, char *reqBody, int64 id, HTAB *curlDataMap)
+static CURLMcode init(CURLM *cm, char *method, char *url, int timeout_milliseconds, struct curl_slist *request_headers, char *reqBody, int64 id, CurlData *cdata)
 {
 	CURL *eh = curl_easy_init();
 
-	CurlData *cdata = NULL;
 	StringInfo body = makeStringInfo();
-	JsonbParseState *headers = NULL;
-	bool isPresent = false;
+	JsonbParseState *response_headers = NULL;
 
-	cdata = hash_search(curlDataMap, &id, HASH_ENTER, &isPresent);
-	if (!isPresent)
-	{
-		cdata->id = id;
-		cdata->body = body;
-		(void)pushJsonbValue(&headers, WJB_BEGIN_OBJECT, NULL);
-		cdata->headers = headers;
-	}
+	cdata->body = body;
+	(void)pushJsonbValue(&response_headers, WJB_BEGIN_OBJECT, NULL);
+	cdata->response_headers = response_headers;
+	cdata->id = id;
+	cdata->request_headers = request_headers;
 
-	reqHeaders = curl_slist_append(reqHeaders, "User-Agent: pg_net/0.2");
+	request_headers = curl_slist_append(request_headers, "User-Agent: pg_net/0.2");
 
 	if (strcasecmp(method, "GET") == 0) {
 		if (reqBody) {
 			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
 			curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "GET");
 		}
-	} else if (strcasecmp(method, "POST") == 0) {
+	}
+
+	if (strcasecmp(method, "POST") == 0) {
 		if (reqBody) {
 			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
 		}
-	} else {
-		elog(ERROR, "error: Unsupported request method %s\n", method);
 	}
 
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, body_cb);
 	curl_easy_setopt(eh, CURLOPT_WRITEDATA, cdata->body);
 	curl_easy_setopt(eh, CURLOPT_HEADERFUNCTION, header_cb);
-	curl_easy_setopt(eh, CURLOPT_HEADERDATA, cdata->headers);
+	curl_easy_setopt(eh, CURLOPT_HEADERDATA, cdata->response_headers);
 	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
 	curl_easy_setopt(eh, CURLOPT_URL, url);
-	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, reqHeaders);
+	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, cdata->request_headers);
 	curl_easy_setopt(eh, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
-	curl_easy_setopt(eh, CURLOPT_PRIVATE, id);
+	curl_easy_setopt(eh, CURLOPT_PRIVATE, cdata);
 	if (log_min_messages <= DEBUG1)
 		curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
@@ -168,29 +164,12 @@ worker_main(Datum main_arg)
 	int http_status_code;
 	int res;
 
-	HTAB *curlDataMap = NULL;
-	HASHCTL info;
-	int hashFlags = 0;
-
 	pqsignal(SIGTERM, handle_sigterm);
 	pqsignal(SIGHUP, handle_sighup);
 
 	BackgroundWorkerUnblockSignals();
 
 	BackgroundWorkerInitializeConnection("postgres", NULL, 0);
-
-	MemSet(&info, 0, sizeof(info));
-	info.keysize = sizeof(int64);
-	info.entrysize = sizeof(CurlData);
-	info.hash = tag_hash;
-	info.hcxt = AllocSetContextCreate(CurrentMemoryContext,
-											"pg_net context",
-											ALLOCSET_DEFAULT_MINSIZE,
-											ALLOCSET_DEFAULT_INITSIZE,
-											ALLOCSET_DEFAULT_MAXSIZE);
-	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-
-	curlDataMap = hash_create("pg_net curl data", 1024, &info, hashFlags);
 
 	while (!got_sigterm)
 	{
@@ -275,10 +254,7 @@ worker_main(Datum main_arg)
 
 				for (int j = 0; j < SPI_processed; j++)
 				{
-						struct curl_slist *headers = NULL;
-						// FIXME: Need to free headers, but only *after* curl_multi stuff during cleanup.
-						// Maybe store in cdata?
-						// curl_slist_free_all(headers);
+						struct curl_slist *request_headers = NULL;
 
 						int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
 						char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
@@ -289,24 +265,26 @@ worker_main(Datum main_arg)
 						Datum bodyBin;
 						ArrayType *pgHeaders;
 						char *body = NULL;
+						CurlData *cdata;
+
+						if (strcasecmp(method, "GET") != 0 && strcasecmp(method, "POST") != 0) {
+							elog(ERROR, "error: Unsupported request method %s\n", method);
+						}
 
 						headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
 						if (!tupIsNull) {
 							pgHeaders = DatumGetArrayTypeP(headersBin);
-							headers = pg_text_array_to_slist(pgHeaders, headers);
+							request_headers = pg_text_array_to_slist(pgHeaders, request_headers);
 						}
 						bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 6, &tupIsNull);
 						if (!tupIsNull) body = TextDatumGetCString(bodyBin);
 
-						res = init(cm, method, url, timeout_milliseconds, headers, body, id, curlDataMap);
+						cdata = palloc(sizeof(CurlData));
+
+						res = init(cm, method, url, timeout_milliseconds, request_headers, body, id, cdata);
 
 						if(res) {
 							elog(ERROR, "error: init() returned %d\n", res);
-						}
-						res = curl_multi_perform(cm, &still_running);
-
-						if(res != CURLM_OK) {
-								elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
 						}
 				}
 			}
@@ -318,13 +296,19 @@ worker_main(Datum main_arg)
 
 		do {
 				int numfds=0;
+
+				res = curl_multi_perform(cm, &still_running);
+
+				if(res != CURLM_OK) {
+						elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
+				}
+
 				/* Wait max. 30 seconds */
 				res = curl_multi_wait(cm, NULL, 0, 30*1000, &numfds);
+
 				if(res != CURLM_OK) {
 						elog(ERROR, "error: curl_multi_wait() returned %d\n", res);
 				}
-
-				curl_multi_perform(cm, &still_running);
 		} while(still_running);
 
 		initStringInfo(&query_insert_response_ok);
@@ -336,24 +320,21 @@ worker_main(Datum main_arg)
 			insert into net._http_response(id, error_msg) values ($1, $2)");
 
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
-				int64 id;
-				CURLcode return_code=0;
-				bool isPresent = false;
-
 				if (msg->msg == CURLMSG_DONE) {
+						CURLcode return_code = msg->data.result;
 						eh = msg->easy_handle;
-
-						return_code = msg->data.result;
-						curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
 
 						if (return_code != CURLE_OK) {
 							int argCount = 2;
 							Oid argTypes[2];
 							Datum argValues[2];
 							const char *error_msg = curl_easy_strerror(return_code);
+							CurlData *cdata = NULL;
+
+							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &cdata);
 
 							argTypes[0] = INT8OID;
-							argValues[0] = Int64GetDatum(id);
+							argValues[0] = Int64GetDatum(cdata->id);
 
 							argTypes[1] = CSTRINGOID;
 							argValues[1] = CStringGetDatum(error_msg);
@@ -374,12 +355,10 @@ worker_main(Datum main_arg)
 
 							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
-							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &id);
-
-							cdata = hash_search(curlDataMap, &id, HASH_FIND, &isPresent);
+							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &cdata);
 
 							argTypes[0] = INT8OID;
-							argValues[0] = Int64GetDatum(id);
+							argValues[0] = Int64GetDatum(cdata->id);
 							nulls[0] = ' ';
 
 							argTypes[1] = INT4OID;
@@ -394,7 +373,7 @@ worker_main(Datum main_arg)
 								nulls[2] = ' ';
 
 							argTypes[3] = JSONBOID;
-							argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->headers, WJB_END_OBJECT, NULL)));
+							argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->response_headers, WJB_END_OBJECT, NULL)));
 							nulls[3] = ' ';
 
 							argTypes[4] = CSTRINGOID;
@@ -416,11 +395,12 @@ worker_main(Datum main_arg)
 
 							pfree(cdata->body->data);
 							pfree(cdata->body);
+							curl_slist_free_all(cdata->request_headers);
+							pfree(cdata);
 						}
 
 						curl_multi_remove_handle(cm, eh);
 						curl_easy_cleanup(eh);
-						hash_search(curlDataMap, &id, HASH_REMOVE, &isPresent);
 				} else {
 						elog(ERROR, "error: after curl_multi_info_read(), CURLMsg=%d\n", msg->msg);
 				}
