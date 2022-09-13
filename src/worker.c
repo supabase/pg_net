@@ -178,7 +178,6 @@ worker_main(Datum main_arg)
 		StringInfoData	query_insert_response_bad;
 		StringInfoData	delete_query;
 
-		/* Wait 10 seconds */
 		WaitLatch(&MyProc->procLatch,
 					WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 					1000L,
@@ -200,16 +199,32 @@ worker_main(Datum main_arg)
 		SPI_connect();
 
 		initStringInfo(&delete_query);
-		appendStringInfo(&delete_query, "DELETE FROM net._http_response WHERE created < clock_timestamp() - $1");
+
+		appendStringInfo(&delete_query, "\
+			WITH\
+			rows AS (\
+				SELECT ctid\
+				FROM net._http_response\
+				WHERE created < $1 - $2\
+				ORDER BY created\
+				LIMIT $3\
+			)\
+			DELETE FROM net._http_response r\
+			USING rows WHERE r.ctid = rows.ctid");
 
 		{
+			int argCount = 3;
+			Oid argTypes[3];
+			Datum argValues[3];
 
-			int argCount = 1;
-			Oid argTypes[1];
-			Datum argValues[1];
+			argTypes[0] = TIMESTAMPTZOID;
+			argValues[0] = GetCurrentTimestamp();
 
-			argTypes[0] = INTERVALOID;
-			argValues[0] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
+			argTypes[1] = INTERVALOID;
+			argValues[1] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
+
+			argTypes[2] = INT4OID;
+			argValues[2] = Int32GetDatum(batch_size);
 
 			if (SPI_execute_with_args(delete_query.data, argCount, argTypes, argValues, NULL,
 							false, 0) != SPI_OK_DELETE)

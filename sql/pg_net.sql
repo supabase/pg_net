@@ -42,6 +42,8 @@ create unlogged table net._http_response(
     created timestamptz not null default now()
 );
 
+create index on net._http_response (created);
+
 -- Blocks until an http_request is complete
 -- API: Private
 create or replace function net._await_response(
