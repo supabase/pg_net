@@ -14,7 +14,6 @@ create unlogged table net.http_request_queue(
     url text not null,
     headers jsonb not null,
     body bytea,
-    -- TODO: respect this
     timeout_milliseconds int not null
 );
 

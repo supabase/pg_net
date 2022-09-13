@@ -28,6 +28,8 @@ let
 
     psql -v ON_ERROR_STOP=1 -f test/fixtures.sql -d contrib_regression
 
+    psql -v ON_ERROR_STOP=1 -f test/fixtures.sql -d postgres
+
     "$@"
   '';
 in

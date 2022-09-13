@@ -29,7 +29,7 @@ def test_http_requests_deleted_after_ttl(sess):
     assert response[0] == "SUCCESS"
 
     # Sleep until after request should have been deleted
-    time.sleep(3)
+    time.sleep(5)
 
     # Ensure collecting the resposne now results in an error
     response = sess.execute(

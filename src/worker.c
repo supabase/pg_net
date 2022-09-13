@@ -318,8 +318,7 @@ worker_main(Datum main_arg)
 						elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
 				}
 
-				/* Wait max. 30 seconds */
-				res = curl_multi_wait(cm, NULL, 0, 30*1000, &numfds);
+				res = curl_multi_wait(cm, NULL, 0, 0, &numfds);
 
 				if(res != CURLM_OK) {
 						elog(ERROR, "error: curl_multi_wait() returned %d\n", res);
