@@ -34,7 +34,7 @@
 
 PG_MODULE_MAGIC;
 
-static char *ttl = NULL;
+static char *ttl = "6 hours";
 static int batch_size = 500;
 char* database_name = "postgres";
 
@@ -324,7 +324,9 @@ worker_main(Datum main_arg)
 						elog(ERROR, "error: curl_multi_perform() returned %d\n", res);
 				}
 
-				res = curl_multi_wait(cm, NULL, 0, 0, &numfds);
+				/*wait at least 1 second(1000 ms) in case all responses are slow*/
+				/*this avoids busy waiting and higher CPU usage*/
+				res = curl_multi_wait(cm, NULL, 0, 1000, &numfds);
 
 				if(res != CURLM_OK) {
 						elog(ERROR, "error: curl_multi_wait() returned %d\n", res);
@@ -466,7 +468,7 @@ _PG_init(void)
 							   "time to live for request/response rows",
 							   "should be a valid interval type",
 							   &ttl,
-							   "3 days",
+							   "6 hours",
 							   PGC_SIGHUP, 0,
 								 NULL, NULL, NULL);
 
@@ -474,7 +476,7 @@ _PG_init(void)
 							   "number of requests executed in one iteration of the background worker",
 							   NULL,
 							   &batch_size,
-							   500,
+							   200,
 								 0, PG_INT16_MAX,
 							   PGC_SIGHUP, 0,
 								 NULL, NULL, NULL);
