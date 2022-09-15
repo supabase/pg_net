@@ -36,6 +36,7 @@ PG_MODULE_MAGIC;
 
 static char *ttl = NULL;
 static int batch_size = 500;
+char* database_name = "postgres";
 
 void _PG_init(void);
 void worker_main(Datum main_arg) pg_attribute_noreturn();
@@ -174,7 +175,7 @@ worker_main(Datum main_arg)
 
 	BackgroundWorkerUnblockSignals();
 
-	BackgroundWorkerInitializeConnection("postgres", NULL, 0);
+	BackgroundWorkerInitializeConnection(database_name, NULL, 0);
 
 	while (!got_sigterm)
 	{
@@ -477,4 +478,12 @@ _PG_init(void)
 								 0, PG_INT16_MAX,
 							   PGC_SIGHUP, 0,
 								 NULL, NULL, NULL);
+
+	DefineCustomStringVariable("pg_net.database_name",
+								"database where the pg_net worker is connected",
+								NULL,
+								&database_name,
+								"postgres",
+								PGC_SIGHUP, 0,
+								NULL, NULL, NULL);
 }
