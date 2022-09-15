@@ -197,25 +197,29 @@ def test_http_post_no_content_type_coerce(sess):
     assert headers["other"] == "val"
 
 
-def test_http_post_no_body_exception(sess):
-    """Confirm that a null body raises exception"""
+def test_http_post_empty_body(sess):
+    """net.http_post can post a null body"""
 
-    # NOTE: this is incorrect http spec behvaior
-    # body should be allowed to be null
-
-    did_raise = False
-
-    try:
-        sess.execute(
-            """
-            select net.http_post(
-                url:='https://httpbin.org/post',
-                body:=null
-            );
+    (request_id,) = sess.execute(
         """
-        ).fetchone()
-    except:
-        sess.rollback()
-        did_raise = True
+        select net.http_post(
+            url:='http://localhost:8080/echo-method',
+            body:=null
+        );
+    """
+    ).fetchone()
 
-    assert did_raise
+    sess.commit()
+
+    (body) = sess.execute(
+        text(
+            """
+        select
+            (x.response).body as body
+        from net.http_collect_response(:request_id, async:=false) x;
+    """
+        ),
+        {"request_id": request_id},
+    ).fetchone()
+
+    assert 'POST' in str(body)

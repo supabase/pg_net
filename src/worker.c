@@ -127,7 +127,12 @@ static CURLMcode init(CURLM *cm, char *method, char *url, int timeout_millisecon
 		if (reqBody) {
 			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
 		}
+		else {
+			curl_easy_setopt(eh, CURLOPT_POST, 1);
+			curl_easy_setopt(eh, CURLOPT_POSTFIELDSIZE, 0);
+		}
 	}
+
 
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, body_cb);
 	curl_easy_setopt(eh, CURLOPT_WRITEDATA, cdata->body);
