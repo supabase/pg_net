@@ -74,7 +74,7 @@ in {
             listen [::]:80 ;
             server_name localhost;
 
-            ${builtins.readFile nginx/slow-reply.conf}
+            ${builtins.readFile nginx/custom.conf}
           }
         }
       '';

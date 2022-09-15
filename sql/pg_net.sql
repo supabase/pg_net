@@ -186,11 +186,6 @@ begin
         raise exception 'Content-Type header must be "application/json"';
     end if;
 
-    -- Confirm body is set since http method switches on if body exists
-    if body is null then
-        raise exception 'body must not be null';
-    end if;
-
     select
         coalesce(array_agg(net._urlencode_string(key) || '=' || net._urlencode_string(value)), '{}')
     into
