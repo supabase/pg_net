@@ -34,6 +34,8 @@
 
 PG_MODULE_MAGIC;
 
+#define VERSION "0.6"
+
 static char *ttl = "6 hours";
 static int batch_size = 500;
 char* database_name = "postgres";
@@ -115,7 +117,7 @@ static CURLMcode init(CURLM *cm, char *method, char *url, int timeout_millisecon
 	cdata->id = id;
 	cdata->request_headers = request_headers;
 
-	request_headers = curl_slist_append(request_headers, "User-Agent: pg_net/0.2");
+	request_headers = curl_slist_append(request_headers, "User-Agent: pg_net/" VERSION);
 
 	if (strcasecmp(method, "GET") == 0) {
 		if (reqBody) {
@@ -458,7 +460,7 @@ _PG_init(void)
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
 	snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_net");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "worker_main");
-	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_net worker");
+	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_net " VERSION " worker");
 	worker.bgw_restart_time = 32;
 	worker.bgw_main_arg = (Datum) 0;
 	worker.bgw_notify_pid = 0;
