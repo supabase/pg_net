@@ -1,4 +1,4 @@
-drop index if exists _http_response_created_idx
+drop index if exists _http_response_created_idx;
 create index on net._http_response (created);
 
 create or replace function net.http_post(

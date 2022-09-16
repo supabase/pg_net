@@ -1,10 +1,10 @@
 alter function net._encode_url_with_params_array ( text, text[]) strict;
 
-alter table net.http_request_queue drop constraint http_request_queue_pkey cascade;
-alter table net._http_response drop constraint _http_response_pkey cascade;
+alter table net.http_request_queue drop constraint if exists http_request_queue_pkey cascade;
+alter table net._http_response drop constraint if exists _http_response_pkey cascade;
 
-drop trigger ensure_worker_is_up on net.http_request_queue;
-drop function net._check_worker_is_up();
+drop trigger if exists ensure_worker_is_up on net.http_request_queue;
+drop function if exists net._check_worker_is_up();
 
 create or replace function net.check_worker_is_up() returns void as $$
 begin
