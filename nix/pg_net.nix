@@ -1,9 +1,9 @@
-{ stdenv, postgresql, curl, libuv }:
+{ stdenv, postgresql, curl }:
 
 stdenv.mkDerivation {
   name = "pg_net";
 
-  buildInputs = [ postgresql curl libuv ];
+  buildInputs = [ postgresql curl ];
 
   src = ../.;
 
