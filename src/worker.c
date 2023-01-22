@@ -174,6 +174,7 @@ worker_main(Datum main_arg)
 
 	pqsignal(SIGTERM, handle_sigterm);
 	pqsignal(SIGHUP, handle_sighup);
+	pqsignal(SIGUSR1, procsignal_sigusr1_handler);
 
 	BackgroundWorkerUnblockSignals();
 
@@ -191,6 +192,8 @@ worker_main(Datum main_arg)
 					1000L,
 					PG_WAIT_EXTENSION);
 		ResetLatch(&MyProc->procLatch);
+
+		CHECK_FOR_INTERRUPTS();
 
 		if(!is_extension_loaded()){
       elog(DEBUG2, "worker_main: extension not yet loaded");
