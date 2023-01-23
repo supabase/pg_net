@@ -136,6 +136,9 @@ static CURLMcode init(CURLM *cm, char *method, char *url, int timeout_millisecon
 		}
 	}
 
+	if (strcasecmp(method, "DELETE") == 0) {
+		curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "DELETE");
+	}
 
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, body_cb);
 	curl_easy_setopt(eh, CURLOPT_WRITEDATA, cdata->body);
@@ -291,7 +294,7 @@ worker_main(Datum main_arg)
 						char *body = NULL;
 						CurlData *cdata;
 
-						if (strcasecmp(method, "GET") != 0 && strcasecmp(method, "POST") != 0) {
+						if (strcasecmp(method, "GET") != 0 && strcasecmp(method, "POST") != 0 && strcasecmp(method, "DELETE") != 0) {
 							elog(ERROR, "error: Unsupported request method %s\n", method);
 						}
 
