@@ -276,8 +276,8 @@ create type net.http_response_result as (
 
 
 -- Collect respones of an http request
--- API: Public
-create or replace function net.http_collect_response(
+-- API: Private
+create or replace function net._http_collect_response(
     -- request_id reference
     request_id bigint,
     -- when `true`, return immediately. when `false` wait for the request to complete before returning

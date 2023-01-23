@@ -24,7 +24,7 @@ def test_http_get_url_params_set(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=false);
+        select * from net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
@@ -58,7 +58,7 @@ def test_http_post_url_params_set(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=false);
+        select * from net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},

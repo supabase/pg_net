@@ -50,7 +50,7 @@ def test_http_post_collect_sync_success(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=false);
+        select * from net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
@@ -84,7 +84,7 @@ def test_http_post_collect_sync_success(sess):
 #     response = sess.execute(
 #         text(
 #             """
-#         select * from net.http_collect_response(:request_id, async:=true);
+#         select * from net._http_collect_response(:request_id, async:=true);
 #     """
 #         ),
 #         {"request_id": request_id},
@@ -119,7 +119,7 @@ def test_http_post_collect_non_empty_body(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=false);
+        select * from net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
@@ -138,7 +138,7 @@ def test_http_post_collect_non_empty_body(sess):
         select
             ((x.response).body)::jsonb body_json
         from
-            net.http_collect_response(:request_id, async:=false) x;
+            net._http_collect_response(:request_id, async:=false) x;
     """
         ),
         {"request_id": request_id},
@@ -216,7 +216,7 @@ def test_http_post_empty_body(sess):
             """
         select
             (x.response).body as body
-        from net.http_collect_response(:request_id, async:=false) x;
+        from net._http_collect_response(:request_id, async:=false) x;
     """
         ),
         {"request_id": request_id},
