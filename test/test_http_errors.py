@@ -46,7 +46,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=false);
+        select * from net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},

@@ -21,7 +21,7 @@ def test_http_requests_deleted_after_ttl(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id, async:=false);
+        select * from net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
@@ -35,7 +35,7 @@ def test_http_requests_deleted_after_ttl(sess):
     response = sess.execute(
         text(
             """
-        select * from net.http_collect_response(:request_id);
+        select * from net._http_collect_response(:request_id);
     """
         ),
         {"request_id": request_id},
