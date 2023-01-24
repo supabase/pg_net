@@ -1,4 +1,5 @@
 from sqlalchemy import text
+import time
 
 
 def test_http_get_returns_id(sess):
@@ -86,3 +87,41 @@ def test_http_collect_response_async_does_not_exist(sess):
     assert response[0] == "ERROR"
     assert "not found" in response[1]
     assert response[2] is None
+
+def test_http_get_responses_have_different_created_times(sess):
+    """Ensure the rows in net._http_response have different created times"""
+
+    sess.execute(
+        """
+        select net.http_get('http://localhost:8080/echo-method')
+    """
+    )
+    sess.commit()
+
+    time.sleep(1)
+
+    sess.execute(
+        """
+        select net.http_get('http://localhost:8080/echo-method')
+    """
+    )
+    sess.commit()
+
+    time.sleep(1)
+
+    sess.execute(
+        """
+        select net.http_get('http://localhost:8080/echo-method')
+    """
+    )
+    sess.commit()
+
+    time.sleep(1)
+
+    count = sess.execute(
+            """
+        select count(distinct created) from net._http_response;
+    """
+    ).scalar()
+
+    assert count == 3
