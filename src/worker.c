@@ -34,7 +34,7 @@
 
 PG_MODULE_MAGIC;
 
-#define VERSION "0.6"
+#define VERSION "0.7"
 
 static char *ttl = "6 hours";
 static int batch_size = 500;
