@@ -205,6 +205,7 @@ worker_main(Datum main_arg)
 			ProcessConfigFile(PGC_SIGHUP);
 		}
 
+		SetCurrentStatementStartTimestamp();
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 		SPI_connect();
@@ -216,26 +217,23 @@ worker_main(Datum main_arg)
 			rows AS (\
 				SELECT ctid\
 				FROM net._http_response\
-				WHERE created < $1 - $2\
+				WHERE created < now() - $1\
 				ORDER BY created\
-				LIMIT $3\
+				LIMIT $2\
 			)\
 			DELETE FROM net._http_response r\
 			USING rows WHERE r.ctid = rows.ctid");
 
 		{
-			int argCount = 3;
-			Oid argTypes[3];
-			Datum argValues[3];
+			int argCount = 2;
+			Oid argTypes[2];
+			Datum argValues[2];
 
-			argTypes[0] = TIMESTAMPTZOID;
-			argValues[0] = GetCurrentTimestamp();
+			argTypes[0] = INTERVALOID;
+			argValues[0] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
 
-			argTypes[1] = INTERVALOID;
-			argValues[1] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
-
-			argTypes[2] = INT4OID;
-			argValues[2] = Int32GetDatum(batch_size);
+			argTypes[1] = INT4OID;
+			argValues[1] = Int32GetDatum(batch_size);
 
 			if (SPI_execute_with_args(delete_query.data, argCount, argTypes, argValues, NULL,
 							false, 0) != SPI_OK_DELETE)
