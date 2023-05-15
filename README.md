@@ -14,7 +14,7 @@
     </a>
 </p>
 
-<h3>Documentation</h3>: <a href="https://supabase.github.io/pg_net" target="_blank">https://supabase.github.io/pg_net</a>
+<h3>Documentation</h3>:<a href="https://supabase.github.io/pg_net" target="_blank">https://supabase.github.io/pg_net</a>
 
 <hr />
 <h1>Contents</h1>
