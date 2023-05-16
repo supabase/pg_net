@@ -1,103 +1,52 @@
-<h1 style= 'border-bottom: 0;'>PG_NET</h1>
+# PG_NET
+*A PostgreSQL extension that enables asynchronous (non-blocking) HTTP/HTTPS requests with SQL*
 
-<em>a PostgreSQL extension that enables asynchronous (non-blocking) HTTP/HTTPS requests with SQL</em>
+![PostgreSQL version](https://img.shields.io/badge/postgresql-12+-blue.svg)
+[![License](https://img.shields.io/pypi/l/markdown-subtemplate.svg)](https://github.com/supabase/pg_net/blob/master/LICENSE)
+[![Tests](https://github.com/supabase/pg_net/actions/workflows/main.yml/badge.svg)](https://github.com/supabase/pg_net/actions)
 
-<p>
-    <a href="">
-        <img src="https://img.shields.io/badge/postgresql-12+-blue.svg" alt="PostgreSQL version" height="18">
-    </a>
-    <a href="https://github.com/supabase/pg_net/blob/master/LICENSE">
-        <img src="https://img.shields.io/pypi/l/markdown-subtemplate.svg" alt="License" height="18">
-    </a>
-    <a href="https://github.com/supabase/pg_net/actions">
-        <img src="https://github.com/supabase/pg_net/actions/workflows/main.yml/badge.svg" alt="Tests" height="18">
-    </a>
-</p>
+**Documentation**: [https://supabase.github.io/pg_net](https://supabase.github.io/pg_net)
 
-<strong>Documentation</strong>:<a href="https://supabase.github.io/pg_net" target="_blank">https://supabase.github.io/pg_net</a>
+---
 
-<hr />
-<h1>Contents</h1>
-<ul>
-    <li>
-        <a href='#introduction'>
-            Introduction
-        </a>
-    </li>
-    <li>
-        <a href='#technical_explanation'>Technical Explanation</a>
-    </li>
-    <li>
-        <a href='#installation'>Installation</a>
-    </li>
-    <li>
-        <a href='#making_requests'>
-            Requests API
-        </a>
-        <ul>
-            <li>
-                Monitoring requests
-            </li>
-            <li> 
-                GET requests
-            </li>
-            <li>
-                POST requests
-            </li>
-            <li>
-                DELETE requests
-            </li>
-        </ul>
-    </li>
-    <li>
-        <a href='#applied'>
-            Practical Examples
-        </a>
-        <ul>
-            <li>
-                Syncing data with an external data source with triggers
-            </li>
-            <li>
-                Calling a serverless function every minute with PG_CRON
-            </li>
-            <li>
-                Retrying failed requests
-            </li>
-        </ul>
-    </li>
-    <li>
-        <a href='#contributing'>Contributing</a>
-    </li>
-</ul>
+# Contents
+- [Introduction](#introduction)
+- [Technical Explanation](#technical-explanation)
+- [Installation](#installation)
+- [Requests API](#requests-api)
+    - Monitoring requests
+    - GET requests
+    - POST requests
+    - DELETE requests
+- [Practical Examples](#practical-examples)
+    - Syncing data with an external data source with triggers
+    - Calling a serverless function every minute with PG_CRON
+    - Retrying failed requests
+- [Contributing](#contributing)
 
-<hr />
+---
 
-<h1 id= 'introduction' >Introduction</h1>
-<p>
-    The PG_NET extension enables PostgreSQL to make asynchronous HTTP/HTTPS requests in SQL. It eliminates the need for servers to continuously poll for database changes and instead allows the database to proactively notify external resources about significant events. It seamlessly integrates with triggers, cron jobs (e.g., <a href='https://github.com/citusdata/pg_cron'>PG_CRON</a>), and procedures, unlocking numerous possibilities. Notably, PG_NET powers Supabase's Webhook functionality, highlighting its robustness and reliability.
-</p>
+# Introduction
+
+The PG_NET extension enables PostgreSQL to make asynchronous HTTP/HTTPS requests in SQL. It eliminates the need for servers to continuously poll for database changes and instead allows the database to proactively notify external resources about significant events. It seamlessly integrates with triggers, cron jobs (e.g., [PG_CRON](https://github.com/citusdata/pg_cron)), and procedures, unlocking numerous possibilities. Notably, PG_NET powers Supabase's Webhook functionality, highlighting its robustness and reliability.
 
 Common use cases for the PG_NET extension include:
 
-<ul>
-    <li>Calling external APIs</li>
-    <li>Syncing data with outside resources</li>
-    <li>Calling a serverless function when an event, such as an insert, occurred</li>
-</ul>
+- Calling external APIs
+- Syncing data with outside resources
+- Calling a serverless function when an event, such as an insert, occurred
 
 However, it is important to note that the extension has a few limitations. Currently, it only supports three types of asynchronous requests:
 
-<ul>
-    <li>async http GET requests</li>
-    <li>async http POST requests with a <em>JSON</em> payload</li>
-    <li>async http DELETE requests</li>
-</ul>
+- async http GET requests
+- async http POST requests with a *JSON* payload
+- async http DELETE requests
 
 Ultimately, though, PG_NET offers developers more flexibility in how they monitor and connect their database with external resources.
 
-<hr />
+---
 
-<h1 id='technical_explanation'>Technical Explanation</h1>
+# Technical Explanation
 
 The extension introduces a new `net` schema, which contains two unlogged tables, a type of table in PostgreSQL that offers performance improvements at the expense of durability. You can read more about unlogged tables [here](https://pgpedia.info/u/unlogged-table.html). The two tables are:
 
@@ -141,20 +90,21 @@ The extension employs C's [libCurl](https://curl.se/libcurl/c/) library within a
 
 Once a response is received, it gets stored in the `_http_response` table. By monitoring this table, you can keep track of response statuses and messages.
 
-<hr />
+---
 
-<h1 id='installation'>Installation</h1>
+# Installation
 
-<h3>Enabling the Extension with Supabase</h3>
+## Enabling the Extension with Supabase
+
 You can activate the `pg_net` extension via Supabase's dashboard by following these steps:
 
 1. Navigate to the 'Database' page.
 2. Select 'Extensions' from the sidebar.
 3. Search for "pg_net" and enable the extension.
 
-<h3>Local Setup</h3>
+## Local Setup
 
-<h4>Installation on Your Device/Server</h4>
+### Configuring Your Device/Server
 
 Clone this repo and run
 
@@ -168,26 +118,27 @@ To make the extension available to the database add on `postgresql.conf`:
 shared_preload_libraries = 'pg_net'
 ```
 
-<h4>Activation in PostgreSQL</h4>
+### Installing in PostgreSQL
+
 To activate the extension in PostgreSQL, run the create extension command. The extension creates its own schema named net to avoid naming conflicts.
 
 ```psql
 create extension pg_net;
 ```
 
-<h1 id= 'making_requests'>Requests API</h1>
+---
 
-<h3>Monitoring Requests</h3>
+# Requests API
 
-When you call a request function (http_get, http_post, http_delete), the function will return a request_id immediately. You can use this request_id with the net.\_http_collect_response function to check the results of your request.
+## Monitoring Requests
 
-The net.\_http_collect_response function can be used to fetch the response of a request. This function returns a custom type \_net.http_response_result\* that has three columns:
+When you call a request function (http_get, http_post, http_delete), the function will return a request_id immediately. You can use this request_id with the net.\_http_collect_response function to check the results of your request. This function returns a custom type \_net.http_response_result\* that has three columns:
 
-1. <strong>response</strong>: This is an aggregate of the response's status_code (integer), headers (JSONB), and body (text).
-2. <strong>status</strong>: This value indicates the execution status of the request itself, which can be either 'PENDING', 'SUCCESS', or 'ERROR'. It's important not to confuse this status with the HTTP status code of the response (like 200 for 'OK', 404 for 'Not Found', etc.) that is found in the response column
-3. <strong>message</strong>: This contains the response's message as text.
+1. **response**: This is an aggregate of the response's status_code (integer), headers (JSONB), and body (text).
+2. **status**: This value indicates the execution status of the request itself, which can be either 'PENDING', 'SUCCESS', or 'ERROR'. It's important not to confuse this status with the HTTP status code of the response (like 200 for 'OK', 404 for 'Not Found', etc.) that is found in the response column
+3. **message**: This contains the response's message as text.
 
-<h5>Observing a Request's Response</h5>
+#### Observing a Request's Response
 
 ```sql
 SELECT
@@ -202,7 +153,7 @@ FROM
 
 The individual values within the response column can be extracted as shown in the following SQL query:
 
-<h5>Extracting response values</h5>
+#### Extracting response values
 
 ```sql
 SELECT
@@ -216,8 +167,9 @@ FROM
     net._http_collect_response(<request_id>);
 ```
 
-<h3>GET requests</h3>
-<h4>net.http_get function signature</h4>
+## GET requests
+
+### net.http_get function signature
 
 ```sql
 net.http_get(
@@ -240,10 +192,10 @@ net.http_get(
     language plpgsql
 ```
 
-<h4>Examples:</h4>
-The following examples use the <a href='https://learning.postman.com/docs/developer/echo-api/'>Postman Echo API</a>.
+### Examples:
+The following examples use the [Postman Echo API](https://learning.postman.com/docs/developer/echo-api/).
 
-<h5>Calling an API</h5>
+#### Calling an API
 
 ```sql
 SELECT net.http_get (
@@ -258,10 +210,10 @@ SELECT net.http_get (
 >     *,
 >     ((response).body::JSON)->'args' AS args
 > FROM
->     net._http_collect_response(56);
+>     net._http_collect_response(<response_id>);
 > ```
 
-<h5>Calling an API with URL encoded params</h5>
+#### Calling an API with URL encoded params
 
 ```sql
 SELECT net.http_get(
@@ -272,7 +224,7 @@ SELECT net.http_get(
 ) AS request_id;
 ```
 
-<h5>Calling an API with an API key</h5>
+#### Calling an API with an API-KEY
 
 ```sql
 SELECT net.http_get(
@@ -281,9 +233,8 @@ SELECT net.http_get(
 ) AS request_id;
 ```
 
-<h3>POST requests</h3>
-
-<h4>net.http_post function signature</h4>
+## POST requests
+### net.http_post function signature
 
 ```sql
 net.http_post(
@@ -306,10 +257,10 @@ net.http_post(
     parallel safe
     language plpgsql
 ```
+### Examples:
+The following examples post to the [Postman Echo API](https://learning.postman.com/docs/developer/echo-api/).
 
-The following examples posts to the <a href='https://learning.postman.com/docs/developer/echo-api/'>Postman Echo API</a>
-
-<h5>Sending data to an API</h5>
+#### Sending data to an API
 
 ```sql
 SELECT net.http_post(
@@ -319,9 +270,9 @@ SELECT net.http_post(
 ) AS request_id;
 ```
 
-<h5>Sending single table row as a payload</h5>
+#### Sending single table row as a payload
 
-> NOTE: If multiple rows are sent using this method, each row will be sent as a seperate request.
+> NOTE: If multiple rows are sent using this method, each row will be sent as a separate request.
 
 ```sql
 WITH selected_row AS (
@@ -339,7 +290,7 @@ SELECT
 FROM selected_row;
 ```
 
-<h5>Sending multiple table rows as a payload</h5>
+#### Sending multiple table rows as a payload
 
 > WARNING: when sending multiple rows, be careful to limit your payload size.
 
@@ -360,11 +311,8 @@ SELECT
 FROM selected_rows;
 ```
 
-<hr />
-
-<h3>DELETE requests</h3>
-
-<h4>net.http_delete function signature</h4>
+## DELETE requests
+### net.http_delete function signature
 
 ```sql
 net.http_delete(
@@ -388,18 +336,18 @@ net.http_delete(
     security definer
 ```
 
-<h4>Examples:</h4>
-The following examples use the <a href='https://dummy.restapiexample.com/employees'>Dummy Rest API</a>.
+### Examples:
+The following examples use the [Dummy Rest API](https://dummy.restapiexample.com/employees).
 
-<h5>Sending a delete request to an API</h5>
+#### Sending a delete request to an API
 
 ```sql
-    SELECT net.http_delete(
-        'https://dummy.restapiexample.com/api/v1/delete/2'
-    ) AS request_id;
+SELECT net.http_delete(
+    'https://dummy.restapiexample.com/api/v1/delete/2'
+) AS request_id;
 ```
 
-<h5>Sending a delete request with a row id as a query param</h5>
+#### Sending a delete request with a row id as a query param
 
 ```sql
 WITH selected_id AS (
@@ -416,7 +364,7 @@ SELECT
 FROM selected_id;
 ```
 
-<h5>Sending a delete request with a row id as a path param</h5>
+#### Sending a delete request with a row id as a path param
 
 ```sql
 WITH selected_id AS (
@@ -432,11 +380,13 @@ SELECT
 FROM selected_row
 ```
 
-<h1 id= 'applied'>Practical Examples</h1>
+---
 
-<h3>Syncing data with an external data source with triggers</h3>
+# Practical Examples
 
-The following example comes from <a href='https://typesense.org/docs/guide/supabase-full-text-search.html#syncing-individual-deletes'>Typesense's Supabase Sync guide</a>
+## Syncing data with an external data source with triggers
+
+The following example comes from [Typesense's Supabase Sync guide](https://typesense.org/docs/guide/supabase-full-text-search.html#syncing-individual-deletes)
 
 ```sql
 -- Create the function to delete the record from Typesense
@@ -459,18 +409,16 @@ CREATE TRIGGER delete_products_trigger
     EXECUTE FUNCTION delete_products();
 ```
 
-<h3>Calling a serverless function every minute with PG_CRON</h3>
+## Calling a serverless function every minute with PG_CRON
 
-The <a href='https://github.com/citusdata/pg_cron'>PG_CRON</a> extension enables PostgreSQL to become its own cron server. With it you can schedule regular calls to activate serverless functions.
+The [PG_CRON](https://github.com/citusdata/pg_cron) extension enables PostgreSQL to become its own cron server. With it you can schedule regular calls to activate serverless functions.
 
 > Useful links:
 >
-> <ul>
->   <li><a href='https://supabase.com/docs/guides/database/extensions/pgcron'>Supabase Installation Guide</a></li>
->   <li><a href='https://crontab.guru/'>Cron Syntax Helper</a></li>
-> </ul>
+> * [Supabase PG_CRON Installation Guide](https://supabase.com/docs/guides/database/extensions/pgcron)
+> * [Cron Syntax Helper](https://crontab.guru/)
 
-<h3>Example Cron job to call serverless function</h3>
+### Example Cron job to call serverless function
 
 ```sql
 SELECT cron.schedule(
@@ -490,10 +438,11 @@ SELECT cron.schedule(
   );
 ```
 
-<h3>Retrying failed requests</h3>
+## Retrying failed requests
 
-<h3>Managing and Retrying Failed Requests</h3>
 Every request made is logged within the net._http_response table. To identify failed requests, you can execute a query on the table, filtering for requests where the status code is 500 or higher.
+
+### Finding failed requests
 
 ```sql
 SELECT
@@ -504,9 +453,7 @@ WHERE status_code >= 500;
 
 While the net.\_http_response table logs each request, it doesn't store all the necessary information to retry failed requests. To facilitate this, we need to create a request tracking table and a wrapper function around the PG_NET request functions. This will help us store the required details for each request.
 
-<h3>Creating a Request Tracker Table</h3>
-
-The following SQL script creates a request_tracker table to store detailed information about each request.
+### Creating a Request Tracker Table
 
 ```sql
 CREATE TABLE request_tracker(
@@ -519,9 +466,9 @@ CREATE TABLE request_tracker(
 )
 ```
 
-<h3>Creating a Request Wrapper Function</h3>
-
 Below is a function called request_wrapper, which wraps around the PG_NET request functions. This function records every request's details in the request_tracker table, facilitating future retries if needed.
+
+### Creating a Request Wrapper Function
 
 ```sql
 CREATE OR REPLACE FUNCTION request_wrapper(
@@ -569,7 +516,9 @@ $$
 LANGUAGE plpgsql;
 ```
 
-To retry a failed request recorded via the wrapper function, use the following query. This will select a failed request, retry it, and then remove the original request data from both the net.\_http_response and request_tracker tables.
+To retry a failed request recorded via the wrapper function, use the following query. This will select failed requests, retry them, and then remove the original request data from both the net.\_http_response and request_tracker tables.
+
+### Retrying failed requests
 
 ```sql
 WITH retry_request AS (
@@ -602,5 +551,6 @@ RETURNING *;
 
 The above function can be called using cron jobs or manually to retry failed requests. It may also be beneficial to clean the request_tracker table in the process.
 
-<h1 id='contributing'>Contributing</h1>
-Checkout the <a href='docs/contributing.md'>Contributing</a> page to learn more about adding to the project.
+# Contributing
+
+Checkout the [Contributing](docs/contributing.md) page to learn more about adding to the project.
