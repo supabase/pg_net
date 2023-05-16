@@ -19,7 +19,7 @@
     - POST requests
     - DELETE requests
 - [Practical Examples](#practical-examples)
-    - Syncing data with an external data source with triggers
+    - Syncing data with an external data source using triggers
     - Calling a serverless function every minute with PG_CRON
     - Retrying failed requests
 - [Contributing](#contributing)
@@ -384,7 +384,7 @@ FROM selected_row
 
 # Practical Examples
 
-## Syncing data with an external data source with triggers
+## Syncing data with an external data source using triggers
 
 The following example comes from [Typesense's Supabase Sync guide](https://typesense.org/docs/guide/supabase-full-text-search.html#syncing-individual-deletes)
 
@@ -422,20 +422,20 @@ The [PG_CRON](https://github.com/citusdata/pg_cron) extension enables PostgreSQL
 
 ```sql
 SELECT cron.schedule(
-    'cron-job-name',
-    '* * * * *', -- Executes every minute (cron syntax)
+	'cron-job-name',
+	'* * * * *', -- Executes every minute (cron syntax)
 	$$
-    -- SQL query
-    SELECT net.http_get(
-        -- URL of Edge function
-        url:='https://<reference id>.functions.Supabase.co/example',
-        headers:='{
-            "Content-Type": "application/json",
-            "Authorization": "Bearer <TOKEN>"
-        }'::JSONB
-    ) as request_id;
+	    -- SQL query
+	    SELECT net.http_get(
+		-- URL of Edge function
+		url:='https://<reference id>.functions.Supabase.co/example',
+		headers:='{
+		    "Content-Type": "application/json",
+		    "Authorization": "Bearer <TOKEN>"
+		}'::JSONB
+	    ) as request_id;
 	$$
-  );
+);
 ```
 
 ## Retrying failed requests
