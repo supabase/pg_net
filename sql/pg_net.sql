@@ -305,7 +305,7 @@ begin
     from net._http_response
     where id = request_id;
 
-    if rec is null then
+    if rec is null or rec.error_msg is not null then
         -- The request is either still processing or the request_id provided does not exist
 
         -- TODO: request in progress is indistinguishable from request that doesn't exist
@@ -313,7 +313,7 @@ begin
         -- No request matching request_id found
         return (
             'ERROR',
-            'request matching request_id not found',
+            coalesce(rec.error_msg, 'request matching request_id not found'),
             null
         )::net.http_response_result;
 
