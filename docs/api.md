@@ -20,7 +20,6 @@ net.http_get(
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
-    -- WARNING: this is currently ignored, so there is no timeout
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int default 1000
 )
@@ -67,7 +66,6 @@ net.http_post(
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
-    -- WARNING: this is currently ignored, so there is no timeout
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int default 1000
 )
@@ -85,6 +83,55 @@ select
     net.http_post(
         url:='https://httpbin.org/post',
         body:='{"hello": "world"}'::jsonb
+    ) as request_id;
+request_id
+----------
+         1
+(1 row)
+```
+
+### net.http_delete
+
+##### description
+Create an HTTP DELETE request, returning the request's id
+
+!!! note
+    HTTP requests are not started until the transaction is committed
+
+!!! note
+    the body's character set encoding matches the database's `server_encoding` setting
+
+!!! note
+    this is a Postgres SECURITY DEFINER function
+
+##### signature
+
+```sql
+net.http_delete(
+    -- url for the request
+    url text,
+    -- key/value pairs to be url encoded and appended to the `url`
+    params jsonb default '{}'::jsonb,
+    -- key/values to be included in request headers
+    headers jsonb default '{}'::jsonb,
+    -- the maximum number of milliseconds the request may take before being cancelled
+    timeout_milliseconds int default 2000
+)
+    -- request_id reference
+    returns bigint
+
+    strict
+    volatile
+    parallel safe
+    language plpgsql
+    security definer
+```
+
+##### usage
+```sql
+select
+    net.http_delete(
+        url:='https://dummy.restapiexample.com/api/v1/delete/2'
     ) as request_id;
 request_id
 ----------
