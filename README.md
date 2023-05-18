@@ -179,7 +179,6 @@ net.http_get(
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
-    -- WARNING: this is currently ignored, so there is no timeout
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int default 1000
 )
@@ -246,7 +245,6 @@ net.http_post(
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
-    -- WARNING: this is currently ignored, so there is no timeout
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int default 1000
 )
@@ -322,7 +320,6 @@ net.http_delete(
     params jsonb default '{}'::jsonb,
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
-    -- WARNING: this is currently ignored, so there is no timeout
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int default 2000
 )
