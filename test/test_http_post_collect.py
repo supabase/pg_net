@@ -191,8 +191,7 @@ def test_http_post_no_content_type_coerce(sess):
         ),
         {"request_id": request_id},
     ).fetchone()
-    duck
-    assert '"content-type"": "application/json"' in response[2]
+    assert '"content-type": "application/json"' in response[2]
     assert '"other": "val"' in response[2]
 
 
