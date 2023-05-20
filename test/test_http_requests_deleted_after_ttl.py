@@ -31,7 +31,7 @@ def test_http_requests_deleted_after_ttl(sess):
     # Sleep until after request should have been deleted
     time.sleep(5)
 
-    # Ensure collecting the resposne now results in an error
+    # Ensure collecting the response now results in an error
     response = sess.execute(
         text(
             """

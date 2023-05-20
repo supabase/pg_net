@@ -45,7 +45,7 @@ def test_http_post_url_params_set(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://postman-echo.com/get',
+            url:='https://postman-echo.com/post',
             params:='{"hello": "world"}'::jsonb
         );
     """

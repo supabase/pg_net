@@ -47,5 +47,5 @@ def test_http_delete_collect_sync_success(sess):
     assert response[2] is not None
     # psycopg2 does not deserialize nested composites
     assert response[2].startswith("(200")
-    assert "X-Baz" in response[2]
+    assert "x-baz" in response[2]
     assert "param-foo" in response[2]

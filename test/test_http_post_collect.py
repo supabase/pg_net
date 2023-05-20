@@ -182,19 +182,18 @@ def test_http_post_no_content_type_coerce(sess):
     ).fetchone()
 
 
-    headers, = sess.execute(
-        """
-        select
-            headers
-        from
-            net.http_request_queue
-        where
-            id = :request_id
-    """, {"request_id": request_id}
+    # Collect the response, waiting as needed
+    response = sess.execute(
+        text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
     ).fetchone()
-
-    assert headers["Content-Type"] == "application/json"
-    assert headers["other"] == "val"
+    duck
+    assert '"content-type"": "application/json"' in response[2]
+    assert '"other": "val"' in response[2]
 
 
 def test_http_post_empty_body(sess):
