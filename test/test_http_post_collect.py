@@ -7,7 +7,7 @@ def test_http_post_returns_id(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='https://postman-echo.com/post',
             body:='{}'::jsonb
         );
     """
@@ -22,7 +22,7 @@ def test_http_post_special_chars_body(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='https://postman-echo.com/post',
             body:=json_build_object('foo', 'ba"r')::jsonb
         );
     """
@@ -38,7 +38,7 @@ def test_http_post_collect_sync_success(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post'
+            url:='https://postman-echo.com/post'
         );
     """
     ).fetchone()
@@ -105,7 +105,7 @@ def test_http_post_collect_non_empty_body(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='https://postman-echo.com/post',
             body:='{"hello": "world"}'::jsonb,
             headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
         );
@@ -156,7 +156,7 @@ def test_http_post_wrong_header_exception(sess):
         sess.execute(
             """
             select net.http_post(
-                url:='https://httpbin.org/post',
+                url:='https://postman-echo.com/post',
                 headers:='{"Content-Type": "application/text"}'::jsonb
             );
         """
@@ -175,7 +175,7 @@ def test_http_post_no_content_type_coerce(sess):
     request_id, = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='https://postman-echo.com/post',
             headers:='{"other": "val"}'::jsonb
         );
     """

@@ -7,7 +7,7 @@ def test_http_headers_set(sess):
     (request_id,) = sess.execute(
         """
         select net.http_get(
-            url:='https://httpbin.org/headers',
+            url:='https://postman-echo.com/get',
             headers:='{"pytest-header": "pytest-header", "accept": "application/json"}'
         );
     """

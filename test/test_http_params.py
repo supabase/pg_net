@@ -5,13 +5,13 @@ def test_http_get_url_params_set(sess):
     """Check that headers are being set
 
     Test url is (use browser):
-    https://httpbin.org/anything?hello=world
+    https://postman-echo.com/get?hello=world
     """
     # Create a request
     (request_id,) = sess.execute(
         """
         select net.http_get(
-            url:='https://httpbin.org/anything',
+            url:='https://postman-echo.com/get',
             params:='{"hello": "world"}'::jsonb
         );
     """
@@ -39,13 +39,13 @@ def test_http_post_url_params_set(sess):
     """Check that headers are being set
 
     Test url is (use browser):
-    https://httpbin.org/anything?hello=world
+    https://postman-echo.com/get?hello=world
     """
     # Create a request
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/anything',
+            url:='https://postman-echo.com/get',
             params:='{"hello": "world"}'::jsonb
         );
     """

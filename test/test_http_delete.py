@@ -6,7 +6,7 @@ def test_http_delete_returns_id(sess):
     (request_id,) = sess.execute(
         """
         select net.http_get(
-            url:='https://httpbin.org/delete'
+            url:='https://postman-echo.com/delete'
         );
     """
     ).fetchone()
@@ -21,7 +21,7 @@ def test_http_delete_collect_sync_success(sess):
     (request_id,) = sess.execute(
         """
         select net.http_delete(
-            url:='https://httpbin.org/delete'
+            url:='https://postman-echo.com/delete'
         ,   params:= '{"param-foo": "bar"}'
         ,   headers:= '{"X-Baz": "foo"}'
         );
