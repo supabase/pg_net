@@ -118,6 +118,14 @@ To make the extension available to the database add on `postgresql.conf`:
 shared_preload_libraries = 'pg_net'
 ```
 
+By default, pg_net is available on the `postgres` database. To use pg_net on a different database, you can add the following on `postgresql.conf`:
+
+```
+pg_net.database_name = '<dbname>';
+```
+
+Using pg_net on multiple databases in a cluster is not supported.
+
 ### Installing in PostgreSQL
 
 To activate the extension in PostgreSQL, run the create extension command. The extension creates its own schema named net to avoid naming conflicts.
