@@ -20,7 +20,7 @@ create unlogged table net.http_request_queue(
 
 create or replace function net.check_worker_is_up() returns void as $$
 begin
-  if not exists (select pid from pg_stat_activity where backend_type = 'pg_net worker') then
+  if not exists (select pid from pg_stat_activity where backend_type ~ 'pg_net \d+(\.\d+){0,2} worker') then
     raise exception using
       message = 'the pg_net background worker is not up'
     , detail  = 'the pg_net background worker is down due to an internal error and cannot process requests'
