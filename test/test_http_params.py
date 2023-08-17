@@ -2,16 +2,13 @@ from sqlalchemy import text
 
 
 def test_http_get_url_params_set(sess):
-    """Check that headers are being set
-
-    Test url is (use browser):
-    https://httpbin.org/anything?hello=world
+    """Check that params are being set on GET
     """
     # Create a request
     (request_id,) = sess.execute(
         """
         select net.http_get(
-            url:='https://httpbin.org/anything',
+            url:='http://localhost:8080/anything',
             params:='{"hello": "world"}'::jsonb
         );
     """
@@ -36,16 +33,13 @@ def test_http_get_url_params_set(sess):
 
 
 def test_http_post_url_params_set(sess):
-    """Check that headers are being set
-
-    Test url is (use browser):
-    https://httpbin.org/anything?hello=world
+    """Check that params are being set on POST
     """
     # Create a request
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/anything',
+            url:='http://localhost:8080/anything',
             params:='{"hello": "world"}'::jsonb
         );
     """

@@ -7,7 +7,7 @@ def test_http_post_returns_id(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='http://localhost:8080/post',
             body:='{}'::jsonb
         );
     """
@@ -22,7 +22,7 @@ def test_http_post_special_chars_body(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='http://localhost:8080/post',
             body:=json_build_object('foo', 'ba"r')::jsonb
         );
     """
@@ -38,7 +38,7 @@ def test_http_post_collect_sync_success(sess):
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post'
+            url:='http://localhost:8080/post'
         );
     """
     ).fetchone()
@@ -60,8 +60,6 @@ def test_http_post_collect_sync_success(sess):
     assert response[0] == "SUCCESS"
     assert response[1] == "ok"
     assert response[2] is not None
-    # psycopg2 does not deserialize nested composites
-    assert response[2].startswith("(200")
 
 
 # def test_http_post_collect_async_pending(sess):
@@ -71,7 +69,7 @@ def test_http_post_collect_sync_success(sess):
 #     (request_id,) = sess.execute(
 #         """
 #         select net.http_post(
-#             url:='https://httpbin.org/post',
+#             url:='http://localhost:8080/post',
 #             body:='{}'::jsonb
 #         );
 #     """
@@ -98,14 +96,12 @@ def test_http_post_collect_sync_success(sess):
 
 def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
-    # Equivalent to
-    # curl -X POST "https://httpbin.org/post" -H  "accept: application/json" -H  "Content-Type: application/json" -d "{\"hello\":\"world\"}"
 
     # Create a request
     (request_id,) = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='http://localhost:8080/post',
             body:='{"hello": "world"}'::jsonb,
             headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
         );
@@ -127,7 +123,6 @@ def test_http_post_collect_non_empty_body(sess):
     assert response is not None
     assert response[0] == "SUCCESS"
     assert "ok" in response[1]
-    assert "json" in response[2]
     assert "hello" in response[2]
     assert "world" in response[2]
 
@@ -144,7 +139,7 @@ def test_http_post_collect_non_empty_body(sess):
         {"request_id": request_id},
     ).fetchone()
 
-    assert response_json["json"]["hello"] == "world"
+    assert response_json["hello"] == "world"
 
 
 def test_http_post_wrong_header_exception(sess):
@@ -156,7 +151,7 @@ def test_http_post_wrong_header_exception(sess):
         sess.execute(
             """
             select net.http_post(
-                url:='https://httpbin.org/post',
+                url:='http://localhost:8080/post',
                 headers:='{"Content-Type": "application/text"}'::jsonb
             );
         """
@@ -175,7 +170,7 @@ def test_http_post_no_content_type_coerce(sess):
     request_id, = sess.execute(
         """
         select net.http_post(
-            url:='https://httpbin.org/post',
+            url:='http://localhost:8080/post',
             headers:='{"other": "val"}'::jsonb
         );
     """

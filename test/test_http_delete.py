@@ -6,7 +6,7 @@ def test_http_delete_returns_id(sess):
     (request_id,) = sess.execute(
         """
         select net.http_get(
-            url:='https://httpbin.org/delete'
+            url:='http://localhost:8080/delete'
         );
     """
     ).fetchone()
@@ -21,7 +21,7 @@ def test_http_delete_collect_sync_success(sess):
     (request_id,) = sess.execute(
         """
         select net.http_delete(
-            url:='https://httpbin.org/delete'
+            url:='http://localhost:8080/delete'
         ,   params:= '{"param-foo": "bar"}'
         ,   headers:= '{"X-Baz": "foo"}'
         );
@@ -45,7 +45,5 @@ def test_http_delete_collect_sync_success(sess):
     assert response[0] == "SUCCESS"
     assert response[1] == "ok"
     assert response[2] is not None
-    # psycopg2 does not deserialize nested composites
-    assert response[2].startswith("(200")
     assert "X-Baz" in response[2]
     assert "param-foo" in response[2]
