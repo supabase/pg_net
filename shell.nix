@@ -41,6 +41,7 @@ mkShell {
       format.do format.doCheck
       nginxScript
       pathodScript
+      oldOpenresty
     ];
   shellHook = ''
     export NIX_PATH="nixpkgs=${nixpkgs}:."
