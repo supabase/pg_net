@@ -9,7 +9,7 @@ def test_http_requests_deleted_after_ttl(sess):
     (request_id,) = sess.execute(
         """
         select net.http_get(
-            'https://httpbin.org/anything'
+            'http://localhost:8080/anything'
         );
     """
     ).fetchone()
