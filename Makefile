@@ -15,6 +15,9 @@ all: sql/$(EXTENSION)--$(EXTVERSION).sql
 sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
 	cp $< $@
 
+pg_net.control:
+	sed "s/@PG_NET_VERSION@/$(EXTVERSION)/g" pg_net.control.in > pg_net.control
+
 EXTRA_CLEAN = sql/$(EXTENSION)--$(EXTVERSION).sql
 
 PG_CONFIG = pg_config
