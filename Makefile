@@ -1,5 +1,5 @@
 EXTENSION = pg_net
-EXTVERSION = 0.7.1
+EXTVERSION = 0.7.3
 
 DATA = $(wildcard sql/*--*.sql)
 
