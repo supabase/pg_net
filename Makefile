@@ -1,5 +1,5 @@
 EXTENSION = pg_net
-EXTVERSION = 0.7
+EXTVERSION = 0.7.1
 
 DATA = $(wildcard sql/*--*.sql)
 
@@ -21,7 +21,7 @@ PG_CONFIG = pg_config
 SHLIB_LINK = -lcurl
 
 # Find <curl/curl.h> from system headers
-PG_CPPFLAGS := $(CPPFLAGS)
+PG_CPPFLAGS := $(CPPFLAGS) -DEXTVERSION=\"$(EXTVERSION)\"
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
