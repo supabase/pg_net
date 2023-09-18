@@ -5,6 +5,8 @@ let
   logMin = if builtins.stringLength LOGMIN == 0 then "WARNING" else LOGMIN; # warning is the default in pg
   ver = builtins.head (builtins.splitVersion postgresql.version);
   script = ''
+    set -euo pipefail
+
     export PATH=${postgresql}/bin:"$PATH"
 
     tmpdir="$(mktemp -d)"

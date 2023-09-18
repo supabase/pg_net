@@ -6,13 +6,13 @@ from sqlalchemy import text
 def test_http_requests_deleted_after_ttl(sess):
     """Check that http requests are deleted within a few seconds of their ttl"""
     # Create a request
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_get(
             'http://localhost:8080/anything'
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     # Commit so background worker can start
     sess.commit()
