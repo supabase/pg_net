@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pg-version: ['12', '13', '14', '15']
+        pg-version: ['12', '13', '14', '15', '16']
 
     steps:
       - uses: actions/checkout@v1

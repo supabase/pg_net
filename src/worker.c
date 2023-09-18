@@ -39,7 +39,7 @@ static int batch_size = 500;
 char* database_name = "postgres";
 
 void _PG_init(void);
-void worker_main(Datum main_arg) pg_attribute_noreturn();
+PGDLLEXPORT void worker_main(Datum main_arg) pg_attribute_noreturn();
 bool is_extension_loaded(void);
 
 typedef struct _CurlData

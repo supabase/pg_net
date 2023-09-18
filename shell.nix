@@ -12,15 +12,21 @@ let
     sha256 = "1h8c0mk6jlxdmjqch6ckj30pax3hqh6kwjlvp2021x3z4pdzrn9p";
   };
   newPkgs = (import (builtins.fetchTarball {
-    name = "2022-10-14";
-    url = "https://github.com/NixOS/nixpkgs/archive/cc090d2b942f76fad83faf6e9c5ed44b73ba7114.tar.gz";
-    sha256 = "0a1wwpbn2f38pcays6acq1gz19vw4jadl8yd3i3cd961f1x2vdq2";
+    name = "2023-09-16";
+    url = "https://github.com/NixOS/nixpkgs/archive/ae5b96f3ab6aabb60809ab78c2c99f8dd51ee678.tar.gz";
+    sha256 = "11fpdcj5xrmmngq0z8gsc3axambqzvyqkfk23jn3qkx9a5x56xxk";
   }){});
 in with import nixpkgs {};
 mkShell {
   buildInputs =
     let
-      supportedPgVersions = [ postgresql_12 postgresql_13 newPkgs.postgresql_14 newPkgs.postgresql_15 ];
+      supportedPgVersions = [
+        postgresql_12
+        postgresql_13
+        newPkgs.postgresql_14
+        newPkgs.postgresql_15
+        newPkgs.postgresql_16
+      ];
       pgWithExt = { pg }: pg.withPackages (p: [ (callPackage ./nix/pg_net.nix { postgresql = pg;}) ]);
       extAll = map (x: callPackage ./nix/pgScript.nix { postgresql = pgWithExt { pg = x;}; }) supportedPgVersions;
       valgrind-net-with-pg-12 = callPackage ./nix/pgValgrindScript.nix { postgresql = pgWithExt { pg = postgresql_12;}; };
