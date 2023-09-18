@@ -5,14 +5,14 @@ def test_http_get_url_params_set(sess):
     """Check that params are being set on GET
     """
     # Create a request
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_get(
             url:='http://localhost:8080/anything',
             params:='{"hello": "world"}'::jsonb
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     # Commit so background worker can start
     sess.commit()
@@ -36,14 +36,14 @@ def test_http_post_url_params_set(sess):
     """Check that params are being set on POST
     """
     # Create a request
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_post(
             url:='http://localhost:8080/anything',
             params:='{"hello": "world"}'::jsonb
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     # Commit so background worker can start
     sess.commit()

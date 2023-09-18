@@ -5,11 +5,11 @@ import time
 def test_http_get_returns_id(sess):
     """net.http_get returns a bigint id"""
 
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_get('https://news.ycombinator.com');
     """
-    ).fetchone()
+    )).fetchone()
 
     assert request_id == 1
 
@@ -18,18 +18,17 @@ def test_http_get_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
     # Create a request
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_get('https://news.ycombinator.com');
     """
-    ).fetchone()
+    )).fetchone()
 
     # Commit so background worker can start
     sess.commit()
 
     # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
+    response = sess.execute(text(
             """
         select * from net._http_collect_response(:request_id, async:=false);
     """
@@ -78,11 +77,11 @@ def test_http_collect_response_async_does_not_exist(sess):
     """Collect a non-existent response with async true"""
 
     # Collect the response, waiting as needed
-    response = sess.execute(
+    response = sess.execute(text(
         """
         select * from net._http_collect_response(1, async:=true);
     """
-    ).fetchone()
+    )).fetchone()
 
     assert response[0] == "ERROR"
     assert "not found" in response[1]
@@ -91,37 +90,37 @@ def test_http_collect_response_async_does_not_exist(sess):
 def test_http_get_responses_have_different_created_times(sess):
     """Ensure the rows in net._http_response have different created times"""
 
-    sess.execute(
+    sess.execute(text(
         """
         select net.http_get('http://localhost:8080/echo-method')
     """
-    )
+    ))
     sess.commit()
 
     time.sleep(1)
 
-    sess.execute(
+    sess.execute(text(
         """
         select net.http_get('http://localhost:8080/echo-method')
     """
-    )
+    ))
     sess.commit()
 
     time.sleep(1)
 
-    sess.execute(
+    sess.execute(text(
         """
         select net.http_get('http://localhost:8080/echo-method')
     """
-    )
+    ))
     sess.commit()
 
     time.sleep(1)
 
-    count = sess.execute(
+    count = sess.execute(text(
             """
         select count(distinct created) from net._http_response;
     """
-    ).scalar()
+    )).scalar()
 
     assert count == 3

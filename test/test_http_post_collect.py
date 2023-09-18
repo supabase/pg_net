@@ -4,14 +4,14 @@ from sqlalchemy import text
 def test_http_post_returns_id(sess):
     """net.http_post returns a bigint id"""
 
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:='{}'::jsonb
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     assert request_id == 1
 
@@ -19,14 +19,14 @@ def test_http_post_returns_id(sess):
 def test_http_post_special_chars_body(sess):
     """net.http_post returns a bigint id"""
 
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:=json_build_object('foo', 'ba"r')::jsonb
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     assert request_id == 1
 
@@ -35,13 +35,13 @@ def test_http_post_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
     # Create a request
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_post(
             url:='http://localhost:8080/post'
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     # Commit so background worker can start
     sess.commit()
@@ -98,7 +98,7 @@ def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
 
     # Create a request
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
@@ -106,7 +106,7 @@ def test_http_post_collect_non_empty_body(sess):
             headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     # Commit so background worker can start
     sess.commit()
@@ -148,14 +148,14 @@ def test_http_post_wrong_header_exception(sess):
     did_raise = False
 
     try:
-        sess.execute(
+        sess.execute(text(
             """
             select net.http_post(
                 url:='http://localhost:8080/post',
                 headers:='{"Content-Type": "application/text"}'::jsonb
             );
         """
-        ).fetchone()
+        )).fetchone()
     except:
         sess.rollback()
         did_raise = True
@@ -167,17 +167,17 @@ def test_http_post_no_content_type_coerce(sess):
     """Confirm that a missing content type coerces to application/json"""
 
     # Create a request
-    request_id, = sess.execute(
+    request_id, = sess.execute(text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
             headers:='{"other": "val"}'::jsonb
         );
     """
-    ).fetchone()
+    )).fetchone()
 
 
-    headers, = sess.execute(
+    headers, = sess.execute(text(
         """
         select
             headers
@@ -185,7 +185,7 @@ def test_http_post_no_content_type_coerce(sess):
             net.http_request_queue
         where
             id = :request_id
-    """, {"request_id": request_id}
+    """), {"request_id": request_id}
     ).fetchone()
 
     assert headers["Content-Type"] == "application/json"
@@ -195,14 +195,14 @@ def test_http_post_no_content_type_coerce(sess):
 def test_http_post_empty_body(sess):
     """net.http_post can post a null body"""
 
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_post(
             url:='http://localhost:8080/echo-method',
             body:=null
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     sess.commit()
 

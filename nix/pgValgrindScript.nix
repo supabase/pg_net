@@ -5,6 +5,8 @@ let
   ver = builtins.head (builtins.splitVersion postgresql.version);
   valgrindLogFile = "valgrindlog";
   script = ''
+    set -euo pipefail
+
     export PATH=${postgresql}/bin:"$PATH"
 
     tmpdir="$(mktemp -d)"

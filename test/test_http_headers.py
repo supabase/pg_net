@@ -4,14 +4,14 @@ from sqlalchemy import text
 def test_http_headers_set(sess):
     """Check that headers are being set"""
     # Create a request
-    (request_id,) = sess.execute(
+    (request_id,) = sess.execute(text(
         """
         select net.http_get(
             url:='http://localhost:8080/headers',
             headers:='{"pytest-header": "pytest-header", "accept": "application/json"}'
         );
     """
-    ).fetchone()
+    )).fetchone()
 
     # Commit so background worker can start
     sess.commit()
