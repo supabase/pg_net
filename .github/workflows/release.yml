@@ -34,7 +34,7 @@ jobs:
         # dpkg doesn't like `_` in package names
         package_name:
           - pg-net
-        postgres: [12, 13, 14, 15]
+        postgres: [12, 13, 14, 15, 16]
         box:
           - { runner: ubuntu-20.04, arch: amd64 }
           - { runner: arm-runner, arch: arm64 }
