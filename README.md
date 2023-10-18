@@ -150,14 +150,16 @@ All these variables can be viewed with the following command:
 select  * from pg_settings WHERE name LIKE 'pg_net%'
 ```
 
-The postgres.conf, file can be found with the following SQL command:
+The postgres.conf file can be found with the following SQL command:
 ```sql
 SHOW config_file;
 ```
 
-You can change the ttl variable by adding the following line to your postgres.conf file
+You can change the variables by adding any of the following line to your postgres.conf file
 ```
-pg_net.ttl =<"new ttl interval">
+pg_net.batch_size = <new integer>
+pg_net.ttl = '<new ttl interval>'
+pg_net.database_name = '<database name>'
 ```
 
 After saving the file, you can execute `SELECT pg_reload_conf()` to update _postgres.conf_ for your database. If the extension does not respond to the update, it may be necessary to restart your database.
