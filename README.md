@@ -13,6 +13,7 @@
 - [Introduction](#introduction)
 - [Technical Explanation](#technical-explanation)
 - [Installation](#installation)
+- [Configuration](#extension-configuration)
 - [Requests API](#requests-api)
     - Monitoring requests
     - GET requests
@@ -135,6 +136,31 @@ create extension pg_net;
 ```
 
 ---
+
+# Extension Configuration:
+
+the extension creates 3 configurable variables:
+
+1. **pg_net.batch_size** _(default: 200)_: An integer that limits the max number of rows that the extension will process from _`net.http_request_queue`_ during each read
+2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted
+3. **pg_net.database_name** _(default: 'postgres')_: A string that defines which database the extension is applied to
+
+All these variables can be viewed with the following command:
+```sql
+select  * from pg_settings WHERE name LIKE 'pg_net%'
+```
+
+The postgres.conf, file can be found with the following SQL command:
+```sql
+SHOW config_file;
+```
+
+You can change the ttl variable by adding the following line to your postgres.conf file
+```
+pg_net.ttl =<"new ttl interval">
+```
+
+After saving the file, you can execute `SELECT pg_reload_conf()` to update _postgres.conf_ for your database. If the extension does not respond to the update, it may be necessary to restart your database.
 
 # Requests API
 
