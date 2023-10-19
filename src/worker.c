@@ -183,10 +183,8 @@ worker_main(Datum main_arg)
 
 	while (!got_sigterm)
 	{
-		StringInfoData	select_query;
-		StringInfoData	query_insert_response_ok;
-		StringInfoData	query_insert_response_bad;
-		StringInfoData	delete_query;
+		int queue_query_rc;
+		int	ttl_query_rc;
 
 		WaitLatch(&MyProc->procLatch,
 					WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
@@ -197,7 +195,7 @@ worker_main(Datum main_arg)
 		CHECK_FOR_INTERRUPTS();
 
 		if(!is_extension_loaded()){
-      elog(DEBUG2, "worker_main: extension not yet loaded");
+      elog(DEBUG2, "pg_net worker: extension not yet loaded");
 			continue;
 		}
 
@@ -211,20 +209,6 @@ worker_main(Datum main_arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 		SPI_connect();
 
-		initStringInfo(&delete_query);
-
-		appendStringInfo(&delete_query, "\
-			WITH\
-			rows AS (\
-				SELECT ctid\
-				FROM net._http_response\
-				WHERE created < now() - $1\
-				ORDER BY created\
-				LIMIT $2\
-			)\
-			DELETE FROM net._http_response r\
-			USING rows WHERE r.ctid = rows.ctid");
-
 		{
 			int argCount = 2;
 			Oid argTypes[2];
@@ -236,26 +220,24 @@ worker_main(Datum main_arg)
 			argTypes[1] = INT4OID;
 			argValues[1] = Int32GetDatum(batch_size);
 
-			if (SPI_execute_with_args(delete_query.data, argCount, argTypes, argValues, NULL,
-							false, 0) != SPI_OK_DELETE)
+			ttl_query_rc = SPI_execute_with_args("\
+				WITH\
+				rows AS (\
+					SELECT ctid\
+					FROM net._http_response\
+					WHERE created < now() - $1\
+					ORDER BY created\
+					LIMIT $2\
+				)\
+				DELETE FROM net._http_response r\
+				USING rows WHERE r.ctid = rows.ctid",
+				argCount, argTypes, argValues, NULL, false, 0);
+
+			if (ttl_query_rc != SPI_OK_DELETE)
 			{
-				elog(ERROR, "SPI_exec failed: %s", delete_query.data);
+        ereport(ERROR, errmsg("Error expiring response table rows: %s", SPI_result_code_string(ttl_query_rc)));
 			}
 		}
-
-		initStringInfo(&select_query);
-
-		appendStringInfo(&select_query, "\
-			WITH\
-			rows AS (\
-				SELECT id\
-				FROM net.http_request_queue\
-				ORDER BY id\
-				LIMIT $1\
-			)\
-			DELETE FROM net.http_request_queue q\
-			USING rows WHERE q.id = rows.id\
-			RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body");
 
 		{
 			int argCount = 1;
@@ -265,7 +247,20 @@ worker_main(Datum main_arg)
 			argTypes[0] = INT4OID;
 			argValues[0] = Int32GetDatum(batch_size);
 
-			if (SPI_execute_with_args(select_query.data, argCount, argTypes, argValues, NULL, false, 0) == SPI_OK_DELETE_RETURNING)
+			queue_query_rc = SPI_execute_with_args("\
+				WITH\
+				rows AS (\
+					SELECT id\
+					FROM net.http_request_queue\
+					ORDER BY id\
+					LIMIT $1\
+				)\
+				DELETE FROM net.http_request_queue q\
+				USING rows WHERE q.id = rows.id\
+				RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
+				argCount, argTypes, argValues, NULL, false, 0);
+
+			if (queue_query_rc == SPI_OK_DELETE_RETURNING)
 			{
 				bool tupIsNull = false;
 
@@ -315,7 +310,7 @@ worker_main(Datum main_arg)
 			}
 			else
 			{
-				elog(ERROR, "SPI_exec failed: %s", select_query.data);
+        ereport(ERROR, errmsg("Error getting http request queue: %s", SPI_result_code_string(queue_query_rc)));
 			}
 		}
 
@@ -337,20 +332,13 @@ worker_main(Datum main_arg)
 				}
 		} while(still_running);
 
-		initStringInfo(&query_insert_response_ok);
-		appendStringInfo(&query_insert_response_ok, "\
-			insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)");
-
-		initStringInfo(&query_insert_response_bad);
-		appendStringInfo(&query_insert_response_bad, "\
-			insert into net._http_response(id, error_msg) values ($1, $2)");
-
 		while ((msg = curl_multi_info_read(cm, &msgs_left))) {
 				if (msg->msg == CURLMSG_DONE) {
 						CURLcode return_code = msg->data.result;
 						eh = msg->easy_handle;
 
 						if (return_code != CURLE_OK) {
+							int failed_query_rc;
 							int argCount = 2;
 							Oid argTypes[2];
 							Datum argValues[2];
@@ -365,12 +353,16 @@ worker_main(Datum main_arg)
 							argTypes[1] = CSTRINGOID;
 							argValues[1] = CStringGetDatum(error_msg);
 
-							if (SPI_execute_with_args(query_insert_response_bad.data, argCount, argTypes, argValues, NULL,
-											false, 1) != SPI_OK_INSERT)
+						  failed_query_rc = SPI_execute_with_args("\
+									insert into net._http_response(id, error_msg) values ($1, $2)",
+									argCount, argTypes, argValues, NULL, false, 1);
+
+							if (failed_query_rc != SPI_OK_INSERT)
 							{
-								elog(ERROR, "SPI_exec failed: %s", query_insert_response_bad.data);
+								ereport(ERROR, errmsg("Error when inserting failed response: %s", SPI_result_code_string(failed_query_rc)));
 							}
 						} else {
+							int succ_query_rc;
 							int argCount = 6;
 							Oid argTypes[6];
 							Datum argValues[6];
@@ -413,10 +405,13 @@ worker_main(Datum main_arg)
 							argValues[5] = BoolGetDatum(timedOut);
 							nulls[5] = ' ';
 
-							if (SPI_execute_with_args(query_insert_response_ok.data, argCount, argTypes, argValues, nulls,
-											false, 1) != SPI_OK_INSERT)
+							succ_query_rc = SPI_execute_with_args("\
+									insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)",
+									argCount, argTypes, argValues, nulls, false, 1);
+
+							if ( succ_query_rc != SPI_OK_INSERT)
 							{
-								elog(ERROR, "SPI_exec failed: %s", query_insert_response_ok.data);
+								ereport(ERROR, errmsg("Error when inserting successful response: %s", SPI_result_code_string(succ_query_rc)));
 							}
 
 							pfree(cdata->body->data);
