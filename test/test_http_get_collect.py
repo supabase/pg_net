@@ -124,3 +124,28 @@ def test_http_get_responses_have_different_created_times(sess):
     )).scalar()
 
     assert count == 3
+
+def test_http_get_collect_with_redirect(sess):
+    """Follows a redirect and collects a response"""
+
+    # Create a request
+    (request_id,) = sess.execute(text(
+        """
+        select net.http_get('http://localhost:8080/redirect_me');
+    """
+    )).fetchone()
+
+    # Commit so background worker can start
+    sess.commit()
+
+    # Collect the response, waiting as needed
+    response = sess.execute(text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+    ).fetchone()
+
+    assert response is not None
+    assert "I got redirected" in response[2]
