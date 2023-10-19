@@ -8,3 +8,7 @@ __pycache__/
 valgrindlog
 nix/nginx/logs/nginx.pid
 .history
+*.o
+*.bc
+*.control
+*.so
