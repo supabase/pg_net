@@ -10,15 +10,15 @@ REGRESS_OPTS = --use-existing --inputdir=test
 MODULE_big = $(EXTENSION)
 OBJS = src/worker.o src/util.o
 
-all: sql/$(EXTENSION)--$(EXTVERSION).sql
+all: sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
 
 sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
 	cp $< $@
 
-pg_net.control:
-	sed "s/@PG_NET_VERSION@/$(EXTVERSION)/g" pg_net.control.in > pg_net.control
+$(EXTENSION).control:
+	sed "s/@PG_NET_VERSION@/$(EXTVERSION)/g" $(EXTENSION).control.in > $(EXTENSION).control
 
-EXTRA_CLEAN = sql/$(EXTENSION)--$(EXTVERSION).sql
+EXTRA_CLEAN = sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
 
 PG_CONFIG = pg_config
 SHLIB_LINK = -lcurl
