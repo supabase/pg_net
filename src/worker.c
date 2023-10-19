@@ -147,6 +147,7 @@ static CURLMcode init(CURLM *cm, char *method, char *url, int timeout_millisecon
 	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, cdata->request_headers);
 	curl_easy_setopt(eh, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, cdata);
+	curl_easy_setopt(eh, CURLOPT_FOLLOWLOCATION, true);
 	if (log_min_messages <= DEBUG1)
 		curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
