@@ -18,6 +18,7 @@ create or replace function net.http_post(
     volatile
     parallel safe
     language plpgsql
+    security definer
 as $$
 declare
     request_id bigint;
