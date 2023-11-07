@@ -166,43 +166,6 @@ After saving the file, you can execute `SELECT pg_reload_conf()` to update _post
 
 # Requests API
 
-## Monitoring Requests
-
-When you call a request function (http_get, http_post, http_delete), the function will return a request_id immediately. You can use this request_id with the net.\_http_collect_response function to check the results of your request. This function returns a custom type \_net.http_response_result\* that has three columns:
-
-1. **response**: This is an aggregate of the response's status_code (integer), headers (JSONB), and body (text).
-2. **status**: This value indicates the execution status of the request itself, which can be either 'PENDING', 'SUCCESS', or 'ERROR'. It's important not to confuse this status with the HTTP status code of the response (like 200 for 'OK', 404 for 'Not Found', etc.) that is found in the response column
-3. **message**: This contains the response's message as text.
-
-#### Observing a Request's Response
-
-```sql
-SELECT
-    message,
-    response,
-    status
-FROM
-    net._http_collect_response(<response_id>);
-```
-
-> WARNING: Although the status column can be 'PENDING', 'SUCCESS', or 'ERROR', there is a bug that makes all 'PENDING' requests displayed as 'ERROR'.
-
-The individual values within the response column can be extracted as shown in the following SQL query:
-
-#### Extracting response values
-
-```sql
-SELECT
-    *,
-    (response).status_code,
-    (response).headers,
-    (response).body
-    -- Individual headers and values from the body can be extracted
-    (((response).body::JSON)->'key-from-json-body') AS some_value
-FROM
-    net._http_collect_response(<request_id>);
-```
-
 ## GET requests
 
 ### net.http_get function signature
@@ -241,11 +204,8 @@ SELECT net.http_get (
 > NOTE: You can view the response with the following query:
 >
 > ```sql
-> SELECT
->     *,
->     ((response).body::JSON)->'args' AS args
-> FROM
->     net._http_collect_response(<response_id>);
+> SELECT *
+> FROM net._http_response;
 > ```
 
 #### Calling an API with URL encoded params
