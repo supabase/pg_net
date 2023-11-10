@@ -1,4 +1,4 @@
-PG_CFLAGS = -Wno-declaration-after-statement
+PG_CFLAGS = -Werror -Wno-declaration-after-statement
 EXTENSION = pg_net
 EXTVERSION = 0.7.3
 
