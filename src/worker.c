@@ -171,7 +171,6 @@ worker_main(Datum main_arg)
 	CURL *eh=NULL;
 	CURLMsg *msg=NULL;
 	int still_running=0, msgs_left=0;
-	int http_status_code;
 	int res;
 
 	pqsignal(SIGTERM, handle_sigterm);
@@ -184,9 +183,6 @@ worker_main(Datum main_arg)
 
 	while (!got_sigterm)
 	{
-		int queue_query_rc;
-		int	ttl_query_rc;
-
 		WaitLatch(&MyProc->procLatch,
 					WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 					1000L,
@@ -221,7 +217,7 @@ worker_main(Datum main_arg)
 			argTypes[1] = INT4OID;
 			argValues[1] = Int32GetDatum(batch_size);
 
-			ttl_query_rc = SPI_execute_with_args("\
+			int ttl_query_rc = SPI_execute_with_args("\
 				WITH\
 				rows AS (\
 					SELECT ctid\
@@ -248,7 +244,7 @@ worker_main(Datum main_arg)
 			argTypes[0] = INT4OID;
 			argValues[0] = Int32GetDatum(batch_size);
 
-			queue_query_rc = SPI_execute_with_args("\
+			int queue_query_rc = SPI_execute_with_args("\
 				WITH\
 				rows AS (\
 					SELECT id\
@@ -339,7 +335,6 @@ worker_main(Datum main_arg)
 						eh = msg->easy_handle;
 
 						if (return_code != CURLE_OK) {
-							int failed_query_rc;
 							int argCount = 2;
 							Oid argTypes[2];
 							Datum argValues[2];
@@ -354,7 +349,7 @@ worker_main(Datum main_arg)
 							argTypes[1] = CSTRINGOID;
 							argValues[1] = CStringGetDatum(error_msg);
 
-						  failed_query_rc = SPI_execute_with_args("\
+						  int failed_query_rc = SPI_execute_with_args("\
 									insert into net._http_response(id, error_msg) values ($1, $2)",
 									argCount, argTypes, argValues, NULL, false, 1);
 
@@ -363,7 +358,6 @@ worker_main(Datum main_arg)
 								ereport(ERROR, errmsg("Error when inserting failed response: %s", SPI_result_code_string(failed_query_rc)));
 							}
 						} else {
-							int succ_query_rc;
 							int argCount = 6;
 							Oid argTypes[6];
 							Datum argValues[6];
@@ -371,6 +365,7 @@ worker_main(Datum main_arg)
 							CurlData *cdata = NULL;
 							char *contentType = NULL;
 							bool timedOut = false;
+							int http_status_code;
 
 							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
@@ -406,7 +401,7 @@ worker_main(Datum main_arg)
 							argValues[5] = BoolGetDatum(timedOut);
 							nulls[5] = ' ';
 
-							succ_query_rc = SPI_execute_with_args("\
+							int succ_query_rc = SPI_execute_with_args("\
 									insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)",
 									argCount, argTypes, argValues, nulls, false, 1);
 
