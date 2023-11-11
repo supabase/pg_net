@@ -5,6 +5,15 @@ from sqlalchemy import text
 
 def test_http_requests_deleted_after_ttl(sess):
     """Check that http requests are deleted within a few seconds of their ttl"""
+
+    # commit to avoid "cannot run inside a transaction block" error, see https://stackoverflow.com/a/75757326/4692662
+    sess.execute(text("COMMIT"))
+    sess.execute(text("alter system set pg_net.ttl to '4 seconds'"))
+    sess.execute(text("select net.worker_restart()"))
+
+    # bg worker restarts after 1 second
+    time.sleep(1)
+
     # Create a request
     (request_id,) = sess.execute(text(
         """
@@ -42,3 +51,10 @@ def test_http_requests_deleted_after_ttl(sess):
     ).fetchone()
     # TODO an ERROR status doesn't seem correct here
     assert response[0] == "ERROR"
+
+    sess.execute(text("COMMIT"))
+    sess.execute(text("alter system reset pg_net.ttl"))
+    sess.execute(text("select net.worker_restart()"))
+
+    # wait until the worker has restarted to not affect other tests
+    time.sleep(1)

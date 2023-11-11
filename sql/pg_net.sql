@@ -353,5 +353,14 @@ begin
 end;
 $$;
 
+create or replace function net.worker_restart() returns bool as $$
+  select pg_reload_conf();
+  select pg_terminate_backend(pid)
+  from pg_stat_activity
+  where backend_type ilike '%pg_net%';
+$$
+security definer
+language sql;
+
 grant all on schema net to postgres;
 grant all on all tables in schema net to postgres;
