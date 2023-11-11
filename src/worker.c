@@ -36,7 +36,7 @@ PG_MODULE_MAGIC;
 
 static char *ttl = "6 hours";
 static int batch_size = 500;
-char* database_name = "postgres";
+static char* database_name = "postgres";
 
 void _PG_init(void);
 PGDLLEXPORT void worker_main(Datum main_arg) pg_attribute_noreturn();
@@ -180,6 +180,8 @@ worker_main(Datum main_arg)
 	BackgroundWorkerUnblockSignals();
 
 	BackgroundWorkerInitializeConnection(database_name, NULL, 0);
+
+	elog(INFO, "pg_net worker started with a config of: pg_net.ttl=%s, pg_net.batch_size=%d, pg_net.database_name=%s", ttl, batch_size, database_name);
 
 	while (!got_sigterm)
 	{
@@ -430,7 +432,8 @@ worker_main(Datum main_arg)
 		CommitTransactionCommand();
 	}
 
-	proc_exit(0);
+	// causing a failure on exit will make the postmaster process restart the bg worker
+	proc_exit(EXIT_FAILURE);
 }
 
 void
@@ -454,7 +457,7 @@ _PG_init(void)
 	snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_net");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "worker_main");
 	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_net " EXTVERSION " worker");
-	worker.bgw_restart_time = 32;
+	worker.bgw_restart_time = 1;
 	worker.bgw_main_arg = (Datum) 0;
 	worker.bgw_notify_pid = 0;
 	RegisterBackgroundWorker(&worker);
@@ -477,7 +480,7 @@ _PG_init(void)
 								 NULL, NULL, NULL);
 
 	DefineCustomStringVariable("pg_net.database_name",
-								"database where the pg_net worker is connected",
+								"Database where pg_net tables are located",
 								NULL,
 								&database_name,
 								"postgres",

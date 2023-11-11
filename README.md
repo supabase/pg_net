@@ -137,7 +137,7 @@ create extension pg_net;
 
 ---
 
-# Extension Configuration:
+# Extension Configuration
 
 the extension creates 3 configurable variables:
 
@@ -145,24 +145,34 @@ the extension creates 3 configurable variables:
 2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted
 3. **pg_net.database_name** _(default: 'postgres')_: A string that defines which database the extension is applied to
 
-All these variables can be viewed with the following command:
+All these variables can be viewed with the following commands:
 ```sql
-select  * from pg_settings WHERE name LIKE 'pg_net%'
+show pg_net.batch_size;
+show pg_net.ttl;
+show pg_net.database_name;
 ```
 
-The postgres.conf file can be found with the following SQL command:
-```sql
-SHOW config_file;
+You can change these by editing the `postgresql.conf` file (find it with `SHOW config_file;`) or with `ALTER SYSTEM`:
+
+```
+alter system set pg_net.ttl to '1 hour'
+alter system set pg_net.batch_size to 500;
 ```
 
-You can change the variables by adding any of the following line to your postgres.conf file
+Then, reload the settings and restart the `pg_net` background worker with:
+
 ```
-pg_net.batch_size = <new integer>
-pg_net.ttl = '<new ttl interval>'
-pg_net.database_name = '<database name>'
+select net.worker_restart();
 ```
 
-After saving the file, you can execute `SELECT pg_reload_conf()` to update _postgres.conf_ for your database. If the extension does not respond to the update, it may be necessary to restart your database.
+Note that doing `ALTER SYSTEM` requires SUPERUSER but on PostgreSQL >= 15, you can do:
+
+```
+grant alter system on parameter pg_net.ttl to <role>;
+grant alter system on parameter pg_net.batch_size to <role>;
+```
+
+To allow regular users to update `pg_net` settings.
 
 # Requests API
 
