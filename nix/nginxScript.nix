@@ -6,7 +6,7 @@ let
 
     export PATH=${openresty}/bin:"$PATH"
 
-    trap 'jobs -p | xargs kill -9' sigint sigterm exit
+    trap 'killall openresty' sigint sigterm exit
 
     openresty -p nix/nginx &
 
