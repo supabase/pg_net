@@ -209,16 +209,6 @@ worker_main(Datum main_arg)
 		SPI_connect();
 
 		{
-			int argCount = 2;
-			Oid argTypes[2];
-			Datum argValues[2];
-
-			argTypes[0] = INTERVALOID;
-			argValues[0] = DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
-
-			argTypes[1] = INT4OID;
-			argValues[1] = Int32GetDatum(batch_size);
-
 			int ttl_query_rc = SPI_execute_with_args("\
 				WITH\
 				rows AS (\
@@ -230,7 +220,12 @@ worker_main(Datum main_arg)
 				)\
 				DELETE FROM net._http_response r\
 				USING rows WHERE r.ctid = rows.ctid",
-				argCount, argTypes, argValues, NULL, false, 0);
+				2,
+				(Oid[]){INTERVALOID, INT4OID},
+				(Datum[]){
+				  DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1))
+				, Int32GetDatum(batch_size)
+				}, NULL, false, 0);
 
 			if (ttl_query_rc != SPI_OK_DELETE)
 			{
@@ -239,13 +234,6 @@ worker_main(Datum main_arg)
 		}
 
 		{
-			int argCount = 1;
-			Oid argTypes[1];
-			Datum argValues[1];
-
-			argTypes[0] = INT4OID;
-			argValues[0] = Int32GetDatum(batch_size);
-
 			int queue_query_rc = SPI_execute_with_args("\
 				WITH\
 				rows AS (\
@@ -257,7 +245,10 @@ worker_main(Datum main_arg)
 				DELETE FROM net.http_request_queue q\
 				USING rows WHERE q.id = rows.id\
 				RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
-				argCount, argTypes, argValues, NULL, false, 0);
+				1,
+				(Oid[]){INT4OID},
+				(Datum[]){Int32GetDatum(batch_size)},
+				NULL, false, 0);
 
 			if (queue_query_rc == SPI_OK_DELETE_RETURNING)
 			{
@@ -337,75 +328,49 @@ worker_main(Datum main_arg)
 						eh = msg->easy_handle;
 
 						if (return_code != CURLE_OK) {
-							int argCount = 2;
-							Oid argTypes[2];
-							Datum argValues[2];
-							const char *error_msg = curl_easy_strerror(return_code);
 							CurlData *cdata = NULL;
 
 							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &cdata);
 
-							argTypes[0] = INT8OID;
-							argValues[0] = Int64GetDatum(cdata->id);
-
-							argTypes[1] = CSTRINGOID;
-							argValues[1] = CStringGetDatum(error_msg);
-
-						  int failed_query_rc = SPI_execute_with_args("\
+							int failed_query_rc = SPI_execute_with_args("\
 									insert into net._http_response(id, error_msg) values ($1, $2)",
-									argCount, argTypes, argValues, NULL, false, 1);
+									2,
+									(Oid[]){INT8OID, CSTRINGOID},
+									(Datum[]){Int64GetDatum(cdata->id), CStringGetDatum(curl_easy_strerror(return_code))},
+									NULL, false, 1);
 
 							if (failed_query_rc != SPI_OK_INSERT)
 							{
 								ereport(ERROR, errmsg("Error when inserting failed response: %s", SPI_result_code_string(failed_query_rc)));
 							}
 						} else {
-							int argCount = 6;
-							Oid argTypes[6];
-							Datum argValues[6];
-							char nulls[6];
 							CurlData *cdata = NULL;
 							char *contentType = NULL;
-							bool timedOut = false;
 							int http_status_code;
 
 							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
 							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &cdata);
 
-							argTypes[0] = INT8OID;
-							argValues[0] = Int64GetDatum(cdata->id);
-							nulls[0] = ' ';
-
-							argTypes[1] = INT4OID;
-							argValues[1] = Int32GetDatum(http_status_code);
-							nulls[1] = ' ';
-
-							argTypes[2] = CSTRINGOID;
-							argValues[2] = CStringGetDatum(cdata->body->data);
-							if(cdata->body->data[0] == '\0')
-								nulls[2] = 'n';
-							else
-								nulls[2] = ' ';
-
-							argTypes[3] = JSONBOID;
-							argValues[3] = JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->response_headers, WJB_END_OBJECT, NULL)));
-							nulls[3] = ' ';
-
-							argTypes[4] = CSTRINGOID;
-							argValues[4] = CStringGetDatum(contentType);
-							if(!contentType)
-								nulls[4] = 'n';
-							else
-								nulls[4] = ' ';
-
-							argTypes[5] = BOOLOID;
-							argValues[5] = BoolGetDatum(timedOut);
-							nulls[5] = ' ';
-
 							int succ_query_rc = SPI_execute_with_args("\
 									insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)",
-									argCount, argTypes, argValues, nulls, false, 1);
+									6,
+									(Oid[]){INT8OID, INT4OID, CSTRINGOID, JSONBOID, CSTRINGOID, BOOLOID},
+									(Datum[]){
+										Int64GetDatum(cdata->id)
+									, Int32GetDatum(http_status_code)
+									, CStringGetDatum(cdata->body->data)
+									, JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->response_headers, WJB_END_OBJECT, NULL)))
+									, CStringGetDatum(contentType)
+									// TODO Why is this hardcoded?
+									, BoolGetDatum(false)
+									},
+									(char[6]){
+										' '
+									, [2] = cdata->body->data[0] == '\0'? 'n' : ' '
+									, [4] = !contentType? 'n' :' '
+									},
+									false, 1);
 
 							if ( succ_query_rc != SPI_OK_INSERT)
 							{
