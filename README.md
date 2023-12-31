@@ -152,6 +152,8 @@ show pg_net.ttl;
 show pg_net.database_name;
 ```
 
+> NOTE: PG_NET variables cannot be modified on Supabase managed instances
+
 You can change these by editing the `postgresql.conf` file (find it with `SHOW config_file;`) or with `ALTER SYSTEM`:
 
 ```
