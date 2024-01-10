@@ -115,7 +115,6 @@ create or replace function net.http_get(
     volatile
     parallel safe
     language plpgsql
-    security definer
 as $$
 declare
     request_id bigint;
@@ -159,7 +158,6 @@ create or replace function net.http_post(
     volatile
     parallel safe
     language plpgsql
-    security definer
 as $$
 declare
     request_id bigint;
@@ -229,7 +227,6 @@ create or replace function net.http_delete(
     volatile
     parallel safe
     language plpgsql
-    security definer
 as $$
 declare
     request_id bigint;
@@ -290,7 +287,6 @@ create or replace function net._http_collect_response(
     volatile
     parallel safe
     language plpgsql
-    security definer
 as $$
 declare
     rec net._http_response;
@@ -345,7 +341,6 @@ create or replace function net.http_collect_response(
     volatile
     parallel safe
     language plpgsql
-    security definer
 as $$
 begin
   raise notice 'The net.http_collect_response function is deprecated.';
@@ -359,8 +354,8 @@ create or replace function net.worker_restart() returns bool as $$
   from pg_stat_activity
   where backend_type ilike '%pg_net%';
 $$
-security definer
+security definer -- needs SDF because of pg_terminate_backend
 language sql;
 
-grant all on schema net to postgres;
-grant all on all tables in schema net to postgres;
+grant usage on schema net to PUBLIC;
+grant all on all tables in schema net to PUBLIC;
