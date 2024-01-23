@@ -7,7 +7,7 @@ def test_http_get_returns_id(sess):
 
     (request_id,) = sess.execute(text(
         """
-        select net.http_get('https://news.ycombinator.com');
+        select net.http_get('http://localhost:8080');
     """
     )).fetchone()
 
@@ -20,7 +20,7 @@ def test_http_get_collect_sync_success(sess):
     # Create a request
     (request_id,) = sess.execute(text(
         """
-        select net.http_get('https://news.ycombinator.com');
+        select net.http_get('http://localhost:8080');
     """
     )).fetchone()
 
