@@ -8,13 +8,14 @@ def test_http_get_timeout_reached(sess):
 
     (request_id,) = sess.execute(text(
         """
-        select net.http_get(url := 'http://localhost:9999/p/200:b"wait%20for%20three%20seconds"pr,3');
+        select net.http_get(url := 'http://localhost:9999/p/200:b"wait%20for%20six%20seconds"pr,6');
     """
     )).fetchone()
 
     sess.commit()
 
-    time.sleep(3.5)
+    # wait for timeout
+    time.sleep(6)
 
     (response,) = sess.execute(
         text(
@@ -67,7 +68,8 @@ def test_many_slow_mixed_with_fast(sess):
 
     sess.commit()
 
-    time.sleep(3)
+    # wait for timeout
+    time.sleep(6)
 
     (status_code,count) = sess.execute(text(
     """
