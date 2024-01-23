@@ -107,7 +107,7 @@ create or replace function net.http_get(
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 2000
+    timeout_milliseconds int default 5000
 )
     -- request_id reference
     returns bigint
@@ -152,7 +152,7 @@ create or replace function net.http_post(
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 2000
+    timeout_milliseconds int DEFAULT 5000
 )
     -- request_id reference
     returns bigint
@@ -221,7 +221,7 @@ create or replace function net.http_delete(
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 2000
+    timeout_milliseconds int default 5000
 )
     -- request_id reference
     returns bigint
