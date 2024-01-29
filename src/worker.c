@@ -421,7 +421,7 @@ _PG_init(void)
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
 	snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_net");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "worker_main");
-	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_net " EXTVERSION " worker using %s", curl_version());
+	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_net " EXTVERSION " worker");
 	worker.bgw_restart_time = 1;
 	worker.bgw_main_arg = (Datum) 0;
 	worker.bgw_notify_pid = 0;
