@@ -149,3 +149,28 @@ def test_http_get_collect_with_redirect(sess):
 
     assert response is not None
     assert "I got redirected" in response[2]
+
+def test_http_get_ipv6(sess):
+    """Can resolve an ipv6 only server"""
+
+    # Create a request
+    (request_id,) = sess.execute(text(
+        """
+        select net.http_get('http://localhost:8888/');
+    """
+    )).fetchone()
+
+    # Commit so background worker can start
+    sess.commit()
+
+    # Collect the response, waiting as needed
+    response = sess.execute(text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+    ).fetchone()
+
+    assert response is not None
+    assert "Hello ipv6 only" in response[2]
