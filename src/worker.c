@@ -150,7 +150,11 @@ static CURLMcode init(CURLM *cm, char *method, char *url, int timeout_millisecon
 	curl_easy_setopt(eh, CURLOPT_FOLLOWLOCATION, true);
 	if (log_min_messages <= DEBUG1)
 		curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
+#if LIBCURL_VERSION_NUM >= 0x075500 /* libcurl 7.85.0 */
+	curl_easy_setopt(eh, CURLOPT_PROTOCOLS_STR, "http,https");
+#else
 	curl_easy_setopt(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+#endif
 	return curl_multi_add_handle(cm, eh);
 }
 
