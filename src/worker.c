@@ -350,7 +350,7 @@ worker_main(Datum main_arg)
 						} else {
 							CurlData *cdata = NULL;
 							char *contentType = NULL;
-							int http_status_code;
+							long http_status_code;
 
 							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
 							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
