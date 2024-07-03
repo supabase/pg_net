@@ -32,6 +32,25 @@
 
 #include "util.h"
 
+#define CURL_EZ_SETOPT(hdl, opt, prm) \
+  do { \
+			if (curl_easy_setopt(hdl, opt, prm) != CURLE_OK) \
+				ereport(ERROR, errmsg("Could not curl_easy_setopt(%s)", #opt)); \
+  } while (0)
+
+#define CURL_EZ_GETINFO(hdl, opt, prm) \
+  do { \
+			if (curl_easy_getinfo(hdl, opt, prm) != CURLE_OK) \
+				ereport(ERROR, errmsg("Could not curl_easy_getinfo(%s)", #opt)); \
+  } while (0)
+
+#define EREPORT_NULL_ATTR(tupIsNull, attr) \
+  do { \
+		if (tupIsNull) \
+			ereport(ERROR, errmsg("%s cannot be null", #attr)); \
+  } while (0)
+
+
 PG_MODULE_MAGIC;
 
 static char *ttl = "6 hours";
@@ -119,41 +138,41 @@ static CURLMcode init(CURLM *cm, char *method, char *url, int timeout_millisecon
 
 	if (strcasecmp(method, "GET") == 0) {
 		if (reqBody) {
-			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
-			curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "GET");
+			CURL_EZ_SETOPT(eh, CURLOPT_POSTFIELDS, reqBody);
+			CURL_EZ_SETOPT(eh, CURLOPT_CUSTOMREQUEST, "GET");
 		}
 	}
 
 	if (strcasecmp(method, "POST") == 0) {
 		if (reqBody) {
-			curl_easy_setopt(eh, CURLOPT_POSTFIELDS, reqBody);
+			CURL_EZ_SETOPT(eh, CURLOPT_POSTFIELDS, reqBody);
 		}
 		else {
-			curl_easy_setopt(eh, CURLOPT_POST, 1);
-			curl_easy_setopt(eh, CURLOPT_POSTFIELDSIZE, 0);
+			CURL_EZ_SETOPT(eh, CURLOPT_POST, 1);
+			CURL_EZ_SETOPT(eh, CURLOPT_POSTFIELDSIZE, 0);
 		}
 	}
 
 	if (strcasecmp(method, "DELETE") == 0) {
-		curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "DELETE");
+		CURL_EZ_SETOPT(eh, CURLOPT_CUSTOMREQUEST, "DELETE");
 	}
 
-	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, body_cb);
-	curl_easy_setopt(eh, CURLOPT_WRITEDATA, cdata->body);
-	curl_easy_setopt(eh, CURLOPT_HEADERFUNCTION, header_cb);
-	curl_easy_setopt(eh, CURLOPT_HEADERDATA, cdata->response_headers);
-	curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
-	curl_easy_setopt(eh, CURLOPT_URL, url);
-	curl_easy_setopt(eh, CURLOPT_HTTPHEADER, cdata->request_headers);
-	curl_easy_setopt(eh, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
-	curl_easy_setopt(eh, CURLOPT_PRIVATE, cdata);
-	curl_easy_setopt(eh, CURLOPT_FOLLOWLOCATION, true);
+	CURL_EZ_SETOPT(eh, CURLOPT_WRITEFUNCTION, body_cb);
+	CURL_EZ_SETOPT(eh, CURLOPT_WRITEDATA, cdata->body);
+	CURL_EZ_SETOPT(eh, CURLOPT_HEADERFUNCTION, header_cb);
+	CURL_EZ_SETOPT(eh, CURLOPT_HEADERDATA, cdata->response_headers);
+	CURL_EZ_SETOPT(eh, CURLOPT_HEADER, 0L);
+	CURL_EZ_SETOPT(eh, CURLOPT_URL, url);
+	CURL_EZ_SETOPT(eh, CURLOPT_HTTPHEADER, cdata->request_headers);
+	CURL_EZ_SETOPT(eh, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
+	CURL_EZ_SETOPT(eh, CURLOPT_PRIVATE, cdata);
+	CURL_EZ_SETOPT(eh, CURLOPT_FOLLOWLOCATION, true);
 	if (log_min_messages <= DEBUG1)
-		curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
+		CURL_EZ_SETOPT(eh, CURLOPT_VERBOSE, 1L);
 #if LIBCURL_VERSION_NUM >= 0x075500 /* libcurl 7.85.0 */
-	curl_easy_setopt(eh, CURLOPT_PROTOCOLS_STR, "http,https");
+	CURL_EZ_SETOPT(eh, CURLOPT_PROTOCOLS_STR, "http,https");
 #else
-	curl_easy_setopt(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+	CURL_EZ_SETOPT(eh, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 #endif
 	return curl_multi_add_handle(cm, eh);
 }
@@ -271,9 +290,16 @@ worker_main(Datum main_arg)
 						struct curl_slist *request_headers = NULL;
 
 						int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
+						EREPORT_NULL_ATTR(tupIsNull, id);
+
 						char *method = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 2, &tupIsNull));
+						EREPORT_NULL_ATTR(tupIsNull, method);
+
 						char *url = TextDatumGetCString(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 3, &tupIsNull));
+						EREPORT_NULL_ATTR(tupIsNull, url);
+
 						int32 timeout_milliseconds = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 4, &tupIsNull));
+						EREPORT_NULL_ATTR(tupIsNull, timeout_milliseconds);
 
 						Datum headersBin;
 						Datum bodyBin;
@@ -334,7 +360,7 @@ worker_main(Datum main_arg)
 						if (return_code != CURLE_OK) {
 							CurlData *cdata = NULL;
 
-							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &cdata);
+							CURL_EZ_GETINFO(eh, CURLINFO_PRIVATE, &cdata);
 
 							int failed_query_rc = SPI_execute_with_args("\
 									insert into net._http_response(id, error_msg) values ($1, $2)",
@@ -352,9 +378,9 @@ worker_main(Datum main_arg)
 							char *contentType = NULL;
 							int http_status_code;
 
-							curl_easy_getinfo(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
-							curl_easy_getinfo(eh, CURLINFO_CONTENT_TYPE, &contentType);
-							curl_easy_getinfo(eh, CURLINFO_PRIVATE, &cdata);
+							CURL_EZ_GETINFO(eh, CURLINFO_RESPONSE_CODE, &http_status_code);
+							CURL_EZ_GETINFO(eh, CURLINFO_CONTENT_TYPE, &contentType);
+							CURL_EZ_GETINFO(eh, CURLINFO_PRIVATE, &cdata);
 
 							int succ_query_rc = SPI_execute_with_args("\
 									insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)",
@@ -383,7 +409,8 @@ worker_main(Datum main_arg)
 
 							pfree(cdata->body->data);
 							pfree(cdata->body);
-							curl_slist_free_all(cdata->request_headers);
+							if(cdata->request_headers) //curl_slist_free_all already handles the NULL case, but be explicit about it
+								curl_slist_free_all(cdata->request_headers);
 							pfree(cdata);
 						}
 
