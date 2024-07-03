@@ -70,7 +70,7 @@ struct curl_slist *pg_text_array_to_slist(ArrayType *array,
     ArrayIterator iterator;
     Datum value;
     bool isnull;
-    char *header;
+    char *hdr;
 
     iterator = array_create_iterator(array, 0, NULL);
 
@@ -79,9 +79,9 @@ struct curl_slist *pg_text_array_to_slist(ArrayType *array,
             continue;
         }
 
-        header = TextDatumGetCString(value);
-        headers = curl_slist_append(headers, header);
-        pfree(header);
+        hdr = TextDatumGetCString(value);
+        headers = curl_slist_append(headers, hdr);
+        pfree(hdr);
     }
     array_free_iterator(iterator);
 
