@@ -418,8 +418,6 @@ void pg_net_worker(Datum main_arg) {
 void
 _PG_init(void)
 {
-  BackgroundWorker worker;
-
   if (IsBinaryUpgrade) {
       return;
   }
@@ -430,16 +428,14 @@ _PG_init(void)
                       "configuration variable in postgresql.conf."));
   }
 
-  MemSet(&worker, 0, sizeof(BackgroundWorker));
-  worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-  worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
-  snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_net");
-  snprintf(worker.bgw_function_name, BGW_MAXLEN, "pg_net_worker");
-  snprintf(worker.bgw_name, BGW_MAXLEN, "pg_net " EXTVERSION " worker");
-  worker.bgw_restart_time = 1;
-  worker.bgw_main_arg = (Datum) 0;
-  worker.bgw_notify_pid = 0;
-  RegisterBackgroundWorker(&worker);
+  RegisterBackgroundWorker(&(BackgroundWorker){
+    .bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION,
+    .bgw_start_time = BgWorkerStart_RecoveryFinished,
+    .bgw_library_name = "pg_net",
+    .bgw_function_name = "pg_net_worker",
+    .bgw_name = "pg_net " EXTVERSION " worker",
+    .bgw_restart_time = 1,
+  });
 
   DefineCustomStringVariable("pg_net.ttl",
                  "time to live for request/response rows",
