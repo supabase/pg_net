@@ -37,7 +37,6 @@ PGDLLEXPORT void pg_net_worker(Datum main_arg) pg_attribute_noreturn();
 typedef struct {
   int64 id;
   StringInfo body;
-  JsonbParseState* response_headers;
   struct curl_slist* request_headers;
 } CurlData;
 
@@ -70,26 +69,6 @@ body_cb(void *contents, size_t size, size_t nmemb, void *userp)
   size_t realsize = size * nmemb;
   StringInfo si = (StringInfo)userp;
   appendBinaryStringInfo(si, (const char*)contents, (int)realsize);
-  return realsize;
-}
-
-static size_t
-header_cb(void *contents, size_t size, size_t nmemb, void *userp)
-{
-  size_t realsize = size * nmemb;
-  JsonbParseState *headers = (JsonbParseState *)userp;
-
-  /* per curl docs, the status code is included in the header data
-   * (it starts with: HTTP/1.1 200 OK or HTTP/2 200 OK)*/
-  bool firstLine = strncmp(contents, "HTTP/", 5) == 0;
-  /* the final(end of headers) last line is empty - just a CRLF */
-  bool lastLine = strncmp(contents, "\r\n", 2) == 0;
-
-  /*Ignore non-header data in the first header line and last header line*/
-  if (!firstLine && !lastLine) {
-      parseHeaders(contents, headers);
-  }
-
   return realsize;
 }
 
@@ -142,7 +121,7 @@ static void insert_failure_response(CURLcode return_code, int64 id){
   }
 }
 
-static void insert_success_response(CurlData *cdata, long http_status_code, char *contentType){
+static void insert_success_response(CurlData *cdata, long http_status_code, char *contentType, Jsonb *jsonb_headers){
   int ret_code = SPI_execute_with_args("\
       insert into net._http_response(id, status_code, content, headers, content_type, timed_out) values ($1, $2, $3, $4, $5, $6)",
       6,
@@ -151,7 +130,7 @@ static void insert_success_response(CurlData *cdata, long http_status_code, char
         Int64GetDatum(cdata->id)
       , Int32GetDatum(http_status_code)
       , CStringGetDatum(cdata->body->data)
-      , JsonbPGetDatum(JsonbValueToJsonb(pushJsonbValue(&cdata->response_headers, WJB_END_OBJECT, NULL)))
+      , JsonbPGetDatum(jsonb_headers)
       , CStringGetDatum(contentType)
       // TODO Why is this hardcoded?
       , BoolGetDatum(false)
@@ -205,8 +184,6 @@ static void init_curl_handle(CURLM *curl_mhandle, CurlData *cdata, char *url, ch
 
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_WRITEDATA, cdata->body);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_HEADERFUNCTION, header_cb);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_HEADERDATA, cdata->response_headers);
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_HEADER, 0L);
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_URL, url);
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_HTTPHEADER, cdata->request_headers);
@@ -280,11 +257,8 @@ static void consume_request_queue(CURLM *curl_mhandle){
     Datum bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 6, &tupIsNull);
     if (!tupIsNull) reqBody = TextDatumGetCString(bodyBin);
 
-    JsonbParseState *response_headers = NULL;
 
     cdata->body = makeStringInfo();
-    (void)pushJsonbValue(&response_headers, WJB_BEGIN_OBJECT, NULL);
-    cdata->response_headers = response_headers;
     cdata->id = id;
 
     struct curl_slist *new_headers = curl_slist_append(request_headers, "User-Agent: pg_net/" EXTVERSION);
@@ -295,6 +269,25 @@ static void consume_request_queue(CURLM *curl_mhandle){
 
     init_curl_handle(curl_mhandle, cdata, url, reqBody, method, timeout_milliseconds);
   }
+}
+
+static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle){
+  struct curl_header *header, *prev = NULL;
+
+  JsonbParseState *headers = NULL;
+  (void)pushJsonbValue(&headers, WJB_BEGIN_OBJECT, NULL);
+
+  while((header = curl_easy_nextheader(ez_handle, CURLH_HEADER, 0, prev))) {
+    JsonbValue key   = {.type = jbvString, .val = {.string = {.val = header->name,  .len = strlen(header->name)}}};
+    JsonbValue value = {.type = jbvString, .val = {.string = {.val = header->value, .len = strlen(header->value)}}};
+    (void)pushJsonbValue(&headers, WJB_KEY,   &key);
+    (void)pushJsonbValue(&headers, WJB_VALUE, &value);
+    prev = header;
+  }
+
+  Jsonb *jsonb_headers = JsonbValueToJsonb(pushJsonbValue(&headers, WJB_END_OBJECT, NULL));
+
+  return jsonb_headers;
 }
 
 static void insert_curl_responses(CURLM *curl_mhandle){
@@ -331,13 +324,15 @@ static void insert_curl_responses(CURLM *curl_mhandle){
       if (return_code != CURLE_OK) {
         insert_failure_response(return_code, cdata->id);
       } else {
-        char *contentType = NULL;
-        long http_status_code;
-
-        CURL_EZ_GETINFO(ez_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
+        char *contentType;
         CURL_EZ_GETINFO(ez_handle, CURLINFO_CONTENT_TYPE, &contentType);
 
-        insert_success_response(cdata, http_status_code, contentType);
+        long http_status_code;
+        CURL_EZ_GETINFO(ez_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
+
+        Jsonb *jsonb_headers = jsonb_headers_from_curl_handle(ez_handle);
+
+        insert_success_response(cdata, http_status_code, contentType, jsonb_headers);
 
         pfree_curl_data(cdata);
       }
