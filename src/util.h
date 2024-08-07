@@ -1,8 +1,6 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <utils/jsonb.h>
-
 #define CURL_EZ_SETOPT(hdl, opt, prm) \
   do { \
       if (curl_easy_setopt(hdl, opt, prm) != CURLE_OK) \
@@ -24,6 +22,5 @@
 
 extern struct curl_slist *pg_text_array_to_slist(ArrayType *array,
                                                  struct curl_slist *headers);
-extern void parseHeaders(char *contents, JsonbParseState *headers);
 
 #endif

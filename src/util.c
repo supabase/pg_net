@@ -87,36 +87,3 @@ struct curl_slist *pg_text_array_to_slist(ArrayType *array,
 
     return headers;
 }
-
-/*TODO: make the parsing more robust, test with invalid headers*/
-void parseHeaders(char *contents, JsonbParseState *headers) {
-    /* per curl docs, the status code is included in the header data
-     * (it starts with: HTTP/1.1 200 OK or HTTP/2 200 OK)*/
-    bool firstLine = strncmp(contents, "HTTP/", 5) == 0;
-    /* the final(end of headers) last line is empty - just a CRLF */
-    bool lastLine = strncmp(contents, "\r\n", 2) == 0;
-    char *token;
-    char *tmp = pstrdup(contents);
-    JsonbValue key, val;
-
-    if (!firstLine && !lastLine) {
-        /*The header comes as "Header-Key: val", split by whitespace and
-        ditch
-         * the colon later*/
-        token = strtok(tmp, " ");
-
-        key.type = jbvString;
-        key.val.string.val = token;
-        /*strlen - 1 because we ditch the last char - the colon*/
-        key.val.string.len = strlen(token) - 1;
-        (void)pushJsonbValue(&headers, WJB_KEY, &key);
-
-        /*Every header line ends with CRLF, split and remove it*/
-        token = strtok(NULL, "\r\n");
-
-        val.type = jbvString;
-        val.val.string.val = token;
-        val.val.string.len = strlen(token);
-        (void)pushJsonbValue(&headers, WJB_VALUE, &val);
-    }
-}
