@@ -114,28 +114,6 @@ nixops destroy -d pg_net --confirm
 nixops delete -d pg_net
 ```
 
-### Run Valgrind to check memory leaks
-
-Start a postgres instance under valgrind.
-
-```
-valgrind-net-with-pg-12
-
-# it should show this output:
-# Connect to this db from another shell using the following command:
-#
-#        psql -h <path> -U postgres
-
-# connect to the db in another shell
-psql -h <path> -U postgres
-
-create extension pg_net;
-select net.http_get('https://supabase.io');
-
-# stop the db instance
-# then see the valgrind results in "valgrindlog"
-```
-
 ## Documentation
 
 All public API must be documented. Building documentation requires python 3.6+

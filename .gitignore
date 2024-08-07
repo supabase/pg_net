@@ -12,3 +12,4 @@ nix/nginx/logs/nginx.pid
 *.bc
 *.control
 *.so
+nginx.pid
