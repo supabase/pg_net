@@ -1,14 +1,19 @@
-{ openresty, writeShellScriptBin } :
+{ nginx, nginxModules, writeShellScriptBin } :
 
 let
+  customNginx = nginx.override {
+    modules = [
+      nginxModules.echo
+    ];
+  };
   script = ''
     set -euo pipefail
 
-    export PATH=${openresty}/bin:"$PATH"
+    export PATH=${customNginx}/bin:"$PATH"
 
-    trap 'killall openresty' sigint sigterm exit
+    trap 'killall nginx' sigint sigterm exit
 
-    openresty -p nix/nginx &
+    nginx -p nix/nginx -e stderr &
 
     "$@"
   '';
