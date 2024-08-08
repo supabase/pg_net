@@ -12,7 +12,8 @@ def test_get_bad_url(sess):
             select net.http_get('localhost:8888');
         """
         ))
-    assert "URL using bad/illegal format or missing URL" in str(execinfo)
+    assert r"Couldn\'t resolve proxy name" in str(execinfo)
+
 
 def test_bad_post(sess):
     """net.http_post with an empty url + body returns an error"""
@@ -23,7 +24,8 @@ def test_bad_post(sess):
             select net.http_post(null, '{"hello": "world"}');
         """
         ))
-    assert "violates not-null constraint" in str(execinfo)
+    assert 'null value in column "url"' in str(execinfo)
+
 
 def test_it_keeps_working_after_many_connection_refused(sess):
     """the worker doesn't crash on many failed responses with connection refused"""

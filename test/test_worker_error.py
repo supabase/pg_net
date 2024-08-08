@@ -5,11 +5,9 @@ import time
 def test_success_when_worker_is_up(sess):
     """net.check_worker_is_up should not return anything when the worker is running"""
 
-    (result,) = sess.execute(
-        """
+    (result,) = sess.execute(text("""
         select net.check_worker_is_up();
-        """
-    ).fetchone()
+    """)).fetchone()
     assert result is not None
     assert result == ''
 
