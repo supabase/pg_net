@@ -9,7 +9,7 @@ REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 REGRESS_OPTS = --use-existing --inputdir=test
 
 MODULE_big = $(EXTENSION)
-OBJS = src/worker.o src/util.o
+OBJS = src/worker.o src/util.o src/core.o
 
 all: sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
 

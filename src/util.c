@@ -2,6 +2,7 @@
 
 #include <tcop/utility.h>
 #include <utils/builtins.h>
+#include <utils/jsonb.h>
 
 #include <curl/curl.h>
 
