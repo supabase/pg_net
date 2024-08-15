@@ -7,6 +7,9 @@ stdenv.mkDerivation {
 
   src = ../.;
 
+  # this is enough for enabling debug info
+  dontStrip = true;
+
   installPhase = ''
     mkdir -p $out/bin
     install -D pg_net.so -t $out/lib

@@ -24,6 +24,7 @@ mkShell {
       extAll = map (x: callPackage ./nix/pgScript.nix { postgresql = pgWithExt { pg = x;}; }) supportedPgVersions;
       nginxScript = callPackage ./nix/nginxScript.nix {};
       pathodScript = callPackage ./nix/pathodScript.nix { mitmproxy = oldNixpkgs.mitmproxy; };
+      gdbScript = callPackage ./nix/gdbScript.nix {};
       pythonDeps = with python3Packages; [
         pytest
         psycopg2
@@ -37,6 +38,7 @@ mkShell {
       format.do format.doCheck
       nginxScript
       pathodScript
+      gdbScript
     ];
   shellHook = ''
     export HISTFILE=.history

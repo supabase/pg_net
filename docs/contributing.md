@@ -56,6 +56,24 @@ select net.http_get('http://localhost:3000/projects');
 -- * Connection #0 to host localhost left intact
 ```
 
+### GDB
+
+To debug the background worker, grab its PID from the logs:
+
+```
+$ nix-shell
+$ net-with-pg-16 psql
+
+2024-09-02 20:16:26.905 -05 [1145879] INFO:  pg_net_worker started with a config of: pg_net.ttl=6 hours, pg_net.batch_size=200, pg_net.database_name=postgres
+```
+
+And use it like:
+
+```
+$ nix-shell
+$ sudo with-gdb -p 1145879
+```
+
 ## Documentation
 
 All public API must be documented. Building documentation requires python 3.6+
