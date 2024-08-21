@@ -13,6 +13,14 @@
         ereport(ERROR, errmsg("Could not curl_easy_getinfo(%s)", #opt)); \
   } while (0)
 
+#define CURL_SLIST_APPEND(list, str) \
+  do { \
+    struct curl_slist *new_list = curl_slist_append(list, str); \
+    if (new_list == NULL) \
+      ereport(ERROR, errmsg("curl_slist_append returned NULL")); \
+    list = new_list; \
+  } while (0)
+
 #define EREPORT_NULL_ATTR(tupIsNull, attr) \
   do { \
     if (tupIsNull) \

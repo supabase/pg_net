@@ -203,7 +203,6 @@ static void init_curl_handle(CURLM *curl_mhandle, CurlData *cdata, char *url, ch
     ereport(ERROR, errmsg("curl_multi_add_handle returned %s", curl_multi_strerror(code)));
 }
 
-
 static void consume_request_queue(CURLM *curl_mhandle){
   int ret_code = SPI_execute_with_args("\
     WITH\
@@ -245,27 +244,25 @@ static void consume_request_queue(CURLM *curl_mhandle){
 
     CurlData *cdata = palloc(sizeof(CurlData));
 
-    struct curl_slist *request_headers = NULL;
     Datum headersBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 5, &tupIsNull);
 
     if (!tupIsNull) {
       ArrayType *pgHeaders = DatumGetArrayTypeP(headersBin);
+      struct curl_slist *request_headers = NULL;
+
       request_headers = pg_text_array_to_slist(pgHeaders, request_headers);
+
+      CURL_SLIST_APPEND(request_headers, "User-Agent: pg_net/" EXTVERSION);
+
+      cdata->request_headers = request_headers;
     }
 
     char *reqBody = NULL;
     Datum bodyBin = SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 6, &tupIsNull);
     if (!tupIsNull) reqBody = TextDatumGetCString(bodyBin);
 
-
     cdata->body = makeStringInfo();
     cdata->id = id;
-
-    struct curl_slist *new_headers = curl_slist_append(request_headers, "User-Agent: pg_net/" EXTVERSION);
-    if(new_headers == NULL)
-      ereport(ERROR, errmsg("curl_slist_append returned NULL"));
-
-    cdata->request_headers = new_headers;
 
     init_curl_handle(curl_mhandle, cdata, url, reqBody, method, timeout_milliseconds);
   }
