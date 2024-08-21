@@ -80,7 +80,7 @@ struct curl_slist *pg_text_array_to_slist(ArrayType *array,
         }
 
         hdr = TextDatumGetCString(value);
-        headers = curl_slist_append(headers, hdr);
+        CURL_SLIST_APPEND(headers, hdr);
         pfree(hdr);
     }
     array_free_iterator(iterator);
