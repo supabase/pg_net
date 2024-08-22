@@ -434,7 +434,7 @@ _PG_init(void)
                  "should be a valid interval type",
                  &guc_ttl,
                  "6 hours",
-                 PGC_SIGHUP, 0,
+                 PGC_SUSET, 0,
                  NULL, NULL, NULL);
 
   DefineCustomIntVariable("pg_net.batch_size",
@@ -443,7 +443,7 @@ _PG_init(void)
                  &guc_batch_size,
                  200,
                  0, PG_INT16_MAX,
-                 PGC_SIGHUP, 0,
+                 PGC_SUSET, 0,
                  NULL, NULL, NULL);
 
   DefineCustomStringVariable("pg_net.database_name",
