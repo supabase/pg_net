@@ -25,6 +25,10 @@
 
 #include "util.h"
 
+#define MIN_LIBCURL_VERSION_NUM 0x075300 // This is the 7.83.0 version in hex as defined in curl/curlver.h
+_Static_assert(LIBCURL_VERSION_NUM, "libcurl >= 7.83.0 is required"); // test for older libcurl versions that don't even have LIBCURL_VERSION_NUM defined (e.g. libcurl 6.5).
+_Static_assert(LIBCURL_VERSION_NUM >= MIN_LIBCURL_VERSION_NUM, "libcurl >= 7.83.0 is required");
+
 PG_MODULE_MAGIC;
 
 static char *guc_ttl = "6 hours";
