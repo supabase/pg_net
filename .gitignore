@@ -13,3 +13,4 @@ nix/nginx/logs/nginx.pid
 *.control
 *.so
 nginx.pid
+tags

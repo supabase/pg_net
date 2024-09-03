@@ -2,7 +2,7 @@
 
 let
   LOGMIN = builtins.getEnv "LOGMIN";
-  logMin = if builtins.stringLength LOGMIN == 0 then "WARNING" else LOGMIN; # warning is the default in pg
+  logMin = if builtins.stringLength LOGMIN == 0 then "INFO" else LOGMIN;
   ver = builtins.head (builtins.splitVersion postgresql.version);
   script = ''
     set -euo pipefail
