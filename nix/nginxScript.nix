@@ -7,8 +7,8 @@ let
     src = fetchFromGitHub {
       owner  = "steve-chavez";
       repo   = name;
-      rev    = "46a6d48910b482cf82ecd8a3fce448498cc9f886";
-      sha256 = "sha256-unPSFxbuvv5chyPKDRaKvxuekz3tPmhHiVzZzX1D4lk=";
+      rev    = "5eae52b15b0785765c5de17ede774f04cd60729d";
+      sha256 = "sha256-oDvEZ2OVnM8lePYBUkQa294FLcLnxYMpE40S4XmqdBY=";
     };
     meta = with lib; {
       license = with licenses; [ mit ];

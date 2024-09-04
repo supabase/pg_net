@@ -3,13 +3,15 @@ import time
 import pytest
 from sqlalchemy import text
 
+wrong_port = 6666
+
 def test_get_bad_url(sess):
     """net.http_get returns a descriptive errors for bad urls"""
 
     with pytest.raises(Exception) as execinfo:
         res = sess.execute(text(
-            """
-            select net.http_get('localhost:8888');
+            f"""
+            select net.http_get('localhost:{wrong_port}');
         """
         ))
     assert r"Couldn\'t resolve proxy name" in str(execinfo)
@@ -31,15 +33,26 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     """the worker doesn't crash on many failed responses with connection refused"""
 
     res = sess.execute(text(
-        """
-        select net.http_get('http://localhost:8888') from generate_series(1,10);
+        f"""
+        select net.http_get('http://localhost:{wrong_port}') from generate_series(1,10);
     """
     ))
     sess.commit()
 
+    time.sleep(1.5)
+
+    (error_msg,count) = sess.execute(text(
+    """
+        select error_msg, count(*) from net._http_response where status_code is null group by error_msg;
+    """
+    )).fetchone()
+
+    assert error_msg == "Couldn't connect to server"
+    assert count == 10
+
     (request_id,) = sess.execute(text(
         """
-        select net.http_get('http://localhost:9999/p/200');
+        select net.http_get('http://localhost:8080/pathological?status=200');
     """
     )).fetchone()
 
@@ -63,7 +76,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
 
     sess.execute(text(
         """
-        select net.http_get('http://localhost:9999/p/200:d1') from generate_series(1,10);
+        select net.http_get('http://localhost:8080/pathological?disconnect=true') from generate_series(1,10);
     """
     ))
     sess.commit()
@@ -81,7 +94,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
 
     sess.execute(text(
         """
-        select net.http_get('http://localhost:9999/p/200:b"still_working"') from generate_series(1,10);
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     )).fetchone()
 
