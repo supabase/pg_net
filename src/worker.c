@@ -136,8 +136,7 @@ static void insert_success_response(CurlData *cdata, long http_status_code, char
       , CStringGetDatum(cdata->body->data)
       , JsonbPGetDatum(jsonb_headers)
       , CStringGetDatum(contentType)
-      // TODO Why is this hardcoded?
-      , BoolGetDatum(false)
+      , BoolGetDatum(false) // timed_out is false here as it's a success
       },
       (char[6]){
         ' '

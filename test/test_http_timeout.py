@@ -8,7 +8,7 @@ def test_http_get_timeout_reached(sess):
 
     (request_id,) = sess.execute(text(
         """
-        select net.http_get(url := 'http://localhost:9999/p/200:b"wait%20for%20six%20seconds"pr,6');
+        select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=6');
     """
     )).fetchone()
 
@@ -33,7 +33,7 @@ def test_http_get_succeed_with_gt_timeout(sess):
 
     (request_id,) = sess.execute(text(
         """
-        select net.http_get(url := 'http://localhost:9999/p/200:b"wait%20for%20three%20seconds"pr,3', timeout_milliseconds := 3500);
+        select net.http_get(url := 'http://localhost:8080?status=200&delay=3', timeout_milliseconds := 3500);
     """
     )).fetchone()
 
@@ -41,16 +41,16 @@ def test_http_get_succeed_with_gt_timeout(sess):
 
     time.sleep(4)
 
-    (response,) = sess.execute(
+    (status_code,) = sess.execute(
         text(
             """
-        select content from net._http_response where id = :request_id;
+        select status_code from net._http_response where id = :request_id;
     """
         ),
         {"request_id": request_id},
     ).fetchone()
 
-    assert 'wait for three seconds' in str(response)
+    assert status_code == 200
 
 def test_many_slow_mixed_with_fast(sess):
     """many fast responses finish despite being mixed with slow responses, the fast responses will wait the timeout duration"""
@@ -58,10 +58,10 @@ def test_many_slow_mixed_with_fast(sess):
     sess.execute(text(
         """
         select
-          net.http_get(url := 'http://localhost:9999/p/200')
-        , net.http_get(url := 'http://localhost:9999/p/200:pr,f')
-        , net.http_get(url := 'http://localhost:9999/p/200')
-        , net.http_get(url := 'http://localhost:9999/p/200:pr,f')
+          net.http_get(url := 'http://localhost:8080/pathological?status=200')
+        , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=10')
+        , net.http_get(url := 'http://localhost:8080/pathological?status=200')
+        , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=10')
         from generate_series(1,25) _;
     """
     ))
@@ -79,3 +79,10 @@ def test_many_slow_mixed_with_fast(sess):
 
     assert status_code == 200
     assert count == 50
+
+    (timed_out_count,) = sess.execute(text(
+    """
+        select count(*) from net._http_response where error_msg ilike '%Timeout%';
+    """
+    )).fetchone()
+    assert timed_out_count == 50
