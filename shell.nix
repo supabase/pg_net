@@ -15,7 +15,7 @@ mkShell {
       ];
       pgWithExt = { pg }: pg.withPackages (p: [ (callPackage ./nix/pg_net.nix { postgresql = pg;}) ]);
       extAll = map (x: callPackage ./nix/pgScript.nix { postgresql = pgWithExt { pg = x;}; }) supportedPgVersions;
-      nginxScript = callPackage ./nix/nginxScript.nix {};
+      nginxCustom = callPackage ./nix/nginxCustom.nix {};
       gdbScript = callPackage ./nix/gdbScript.nix {};
       pythonDeps = with python3Packages; [
         pytest
@@ -28,8 +28,9 @@ mkShell {
       extAll
       pythonDeps
       format.do format.doCheck
-      nginxScript
+      nginxCustom.nginxScript
       gdbScript
+      (pkgs.nixops_unstable_minimal.withPlugins (ps: [ ps.nixops-aws ]))
     ];
   shellHook = ''
     export HISTFILE=.history
