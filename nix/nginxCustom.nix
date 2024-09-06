@@ -7,14 +7,15 @@ let
     src = fetchFromGitHub {
       owner  = "steve-chavez";
       repo   = name;
-      rev    = "5eae52b15b0785765c5de17ede774f04cd60729d";
-      sha256 = "sha256-oDvEZ2OVnM8lePYBUkQa294FLcLnxYMpE40S4XmqdBY=";
+      rev    = "668126a815daaf741433409a5afff5932e2fb2af";
+      sha256 = "sha256-tl7NoPlQCN9DDYQLRrHA3bP5csqbXUW9ozLKPbH2dfI=";
     };
     meta = with lib; {
       license = with licenses; [ mit ];
     };
   };
   customNginx = nginx.override {
+    configureFlags = ["--with-cc='c99'"];
     modules = [
       nginxModules.echo
       ngx_pathological
@@ -32,4 +33,7 @@ let
     "$@"
   '';
 in
-writeShellScriptBin "net-with-nginx" script
+{
+  customNginx = customNginx;
+  nginxScript = writeShellScriptBin "net-with-nginx" script;
+}
