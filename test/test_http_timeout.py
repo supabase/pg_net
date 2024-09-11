@@ -56,33 +56,29 @@ def test_many_slow_mixed_with_fast(sess):
     """many fast responses finish despite being mixed with slow responses, the fast responses will wait the timeout duration"""
 
     sess.execute(text(
-        """
-        select
-          net.http_get(url := 'http://localhost:8080/pathological?status=200')
-        , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=10')
-        , net.http_get(url := 'http://localhost:8080/pathological?status=200')
-        , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=10')
-        from generate_series(1,25) _;
+    """
+      select
+        net.http_get(url := 'http://localhost:8080/pathological?status=200')
+      , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2', timeout_milliseconds := 1000)
+      , net.http_get(url := 'http://localhost:8080/pathological?status=200')
+      , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2', timeout_milliseconds := 1000)
+      from generate_series(1,25) _;
     """
     ))
 
     sess.commit()
 
-    # wait for timeout
-    time.sleep(6)
+    # wait for timeouts
+    time.sleep(3)
 
-    (status_code,count) = sess.execute(text(
+    (request_successes, request_timeouts) = sess.execute(text(
     """
-        select status_code, count(*) from net._http_response where status_code = 200 group by status_code;
+      select
+        count(*) filter (where error_msg is null and status_code = 200) as request_successes,
+        count(*) filter (where error_msg is not null and error_msg like 'Timeout was reached') as request_timeouts
+      from net._http_response;
     """
     )).fetchone()
 
-    assert status_code == 200
-    assert count == 50
-
-    (timed_out_count,) = sess.execute(text(
-    """
-        select count(*) from net._http_response where error_msg ilike '%Timeout%';
-    """
-    )).fetchone()
-    assert timed_out_count == 50
+    assert request_successes == 50
+    assert request_timeouts == 50
