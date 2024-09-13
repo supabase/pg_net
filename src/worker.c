@@ -193,7 +193,7 @@ static void init_curl_handle(CURLM *curl_mhandle, CurlData *cdata, char *url, ch
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_PRIVATE, cdata);
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_FOLLOWLOCATION, true);
-  if (log_min_messages <= DEBUG1)
+  if (log_min_messages <= DEBUG2)
     CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_VERBOSE, 1L);
 #if LIBCURL_VERSION_NUM >= 0x075500 /* libcurl 7.85.0 */
   CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_PROTOCOLS_STR, "http,https");
