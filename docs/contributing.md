@@ -25,11 +25,7 @@ $ net-with-pg-13 python -m pytest -vv"
 You can turn on logging level to see curl traces with
 
 ```
-$ export LOGMIN=DEBUG1 # must be done outside nix-shell, then go in nix-shell as usual
-
-$ nix-shell
-
-$ net-with-pg-12 psql
+$ LOG_MIN_MESSAGES=debug2 net-with-pg-12 psql
 ```
 
 ```sql
