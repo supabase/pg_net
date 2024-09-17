@@ -115,16 +115,44 @@ in {
       initialScript = pkgs.writeText "init-sql-script" ''
         create extension pg_net;
 
-        alter system set pg_net.batch_size to 32000;
-
-        select net.worker_restart();
-
         create view pg_net_stats as
         select
           count(*) filter (where error_msg is null) as request_successes,
           count(*) filter (where error_msg is not null) as request_failures,
           (select error_msg from net._http_response where error_msg is not null order by id desc limit 1) as last_failure_error
         from net._http_response;
+
+        create or replace procedure repro_timeouts(number_of_requests int default 10000, url text default 'http://server/post') as ''$''$
+        declare
+          last_id bigint;
+          first_time timestamptz;
+          second_time timestamptz;
+          time_taken interval;
+        begin
+          delete from net._http_response;
+
+          with do_requests as (
+            select
+              net.http_post(url, jsonb_build_object('id', x, 'message', 'payload ' || x), headers:=jsonb_build_object('Content-Type', 'application/json')) as id
+            from generate_series (1, number_of_requests) x
+          )
+          select id, clock_timestamp() into last_id, first_time from do_requests offset number_of_requests - 1;
+
+          commit;
+
+          raise notice 'Waiting until % requests complete', number_of_requests;
+
+          perform net._await_response(last_id);
+
+          select clock_timestamp() into second_time;
+
+          select age(second_time, first_time) into time_taken;
+
+          raise notice 'Stats: %', (select to_json(x) from pg_net_stats x limit 1);
+
+          raise notice 'Time taken: %', time_taken;
+        end;
+        ''$''$ language plpgsql;
       '';
     };
 
@@ -136,22 +164,40 @@ in {
       pkgs.vegeta
       (
         pkgs.writeShellScriptBin "vegeta-bench" ''
+          set -euo pipefail
+
           # rate=0 means maximum rate subject to max-workers
           echo "GET http://server/pathological?status=200" | vegeta attack -rate=0 -duration=1s -max-workers=1 | tee results.bin | vegeta report
         ''
       )
       (
         pkgs.writeShellScriptBin "vegeta-bench-max-requests" ''
+          set -euo pipefail
+
           # rate=0 means maximum rate subject to max-workers
           echo "GET http://server/pathological?status=200" | vegeta attack -rate=0 -duration=10s -max-workers=50 | tee results.bin | vegeta report
         ''
       )
       (
-        pkgs.writeShellScriptBin "net-bench" ''
+        pkgs.writeShellScriptBin "psql-net-bench" ''
+          set -euo pipefail
+
+          psql -U postgres -c "TRUNCATE net._http_response; TRUNCATE net.http_request_queue;"
+          psql -U postgres -c "alter system set pg_net.batch_size to 32000;" # this just a high number
+          psql -U postgres -c "select net.worker_restart();"
           psql -U postgres -c "truncate net._http_response;"
           psql -U postgres -c "select net.http_get('http://server/pathological?status=200') from generate_series(1, 400);" > /dev/null
           sleep 2
           psql -U postgres -c "select * from pg_net_stats;"
+          psql -U postgres -c "alter system reset pg_net.batch_size;"
+          psql -U postgres -c "select net.worker_restart();"
+        ''
+      )
+      (
+        pkgs.writeShellScriptBin "psql-reproduce-timeouts" ''
+          set -euo pipefail
+
+          psql -U postgres -c "call repro_timeouts();"
         ''
       )
     ];
