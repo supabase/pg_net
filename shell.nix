@@ -17,6 +17,7 @@ mkShell {
       extAll = map (x: callPackage ./nix/pgScript.nix { postgresql = pgWithExt { pg = x;}; }) supportedPgVersions;
       nginxCustom = callPackage ./nix/nginxCustom.nix {};
       gdbScript = callPackage ./nix/gdbScript.nix {};
+      nixopsScripts = callPackage ./nix/nixopsScripts.nix {};
       pythonDeps = with python3Packages; [
         pytest
         psycopg2
@@ -30,8 +31,7 @@ mkShell {
       format.do format.doCheck
       nginxCustom.nginxScript
       gdbScript
-      (pkgs.nixops_unstable_minimal.withPlugins (ps: [ ps.nixops-aws ]))
-    ];
+    ] ++ nixopsScripts;
   shellHook = ''
     export HISTFILE=.history
   '';

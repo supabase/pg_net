@@ -72,27 +72,18 @@ $ sudo with-gdb -p 1145879
 
 ## Load Testing
 
-This will deploy a client and server on t3a.nano. You must have `default` setup in `.aws/credentials`.
+These are scripts that wrap NixOps to deploy an AWS cloud setup. You must have `default` setup in `.aws/credentials`.
 
 ```bash
-cd nix
-
-nixops create -d pg_net
-
-# will take a while
-nixops deploy -k -d pg_net --allow-reboot --confirm
+net-cloud-deploy
 ```
 
 Then you can connect on the client instance and do requests to the server instance through `pg_net`.
 
 ```bash
-cd nix
-
-nixops ssh -d pg_net client
+net-cloud-ssh
 
 psql -U postgres
-
-create extension pg_net;
 
 select net.http_get('http://server');
 # this the default welcome page of nginx on the server instance
@@ -103,13 +94,10 @@ select net.http_get('http://server') from generate_series(1,1000);
 # run `top` on another shell(another `nixops ssh -d pg_net client`) to check the worker behavior
 ```
 
-To destroy the instances:
+To destroy the cloud setup:
 
 ```bash
-cd nix
-
-nixops destroy -d pg_net --confirm
-nixops delete -d pg_net
+net-cloud-destroy
 ```
 
 ## Documentation
