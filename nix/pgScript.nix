@@ -1,4 +1,4 @@
-{ postgresql, writeShellScriptBin } :
+{ postgresql, writeShellScriptBin, gnused, pidFileName } :
 
 let
   ver = builtins.head (builtins.splitVersion postgresql.version);
@@ -14,7 +14,7 @@ let
     export PGUSER=postgres
     export PGDATABASE=postgres
 
-    trap 'pg_ctl stop -m i && rm -rf "$tmpdir"' sigint sigterm exit
+    trap 'pg_ctl stop -m i && rm -rf "$tmpdir" && rm ${pidFileName}' sigint sigterm exit
 
     PGTZ=UTC initdb --no-locale --encoding=UTF8 --nosync -U "$PGUSER"
 
@@ -25,6 +25,12 @@ let
     pg_ctl start -o "$options" -o "$ext_options"
 
     psql -v ON_ERROR_STOP=1 -c "create extension pg_net" -d postgres
+
+    psql -t -c "\o ${pidFileName}" -c "select pid from pg_stat_activity where backend_type ilike '%pg_net%'"
+
+    ${gnused}/bin/sed '/^''$/d;s/[[:blank:]]//g' -i ${pidFileName}
+
+    psql -f ${./bench.sql}
 
     "$@"
   '';
