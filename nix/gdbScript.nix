@@ -1,4 +1,4 @@
-{ gdb, writeText, writeShellScriptBin } :
+{ gdb, writeText, writeShellScriptBin, pidFileName } :
 
 let
   file = writeText "gdbconf" ''
@@ -6,7 +6,15 @@ let
     handle SIGSEGV stop nopass
   '';
   script = ''
-    ${gdb}/bin/gdb -x ${file} "$@"
+    set -euo pipefail
+
+    if [ ! -e ${pidFileName} ]
+    then
+      echo "The pg_net worker is not started. Exiting."
+      exit 1
+    fi
+    pid=$(cat ${pidFileName})
+    ${gdb}/bin/gdb -x ${file} -p ''$pid "$@"
   '';
 in
-writeShellScriptBin "with-gdb" script
+writeShellScriptBin "net-with-gdb" script

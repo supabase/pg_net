@@ -14,3 +14,4 @@ nix/nginx/logs/nginx.pid
 *.so
 nginx.pid
 tags
+net_worker.pid
