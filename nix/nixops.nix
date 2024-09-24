@@ -118,6 +118,9 @@ in {
       '';
     };
 
+    services.journald.rateLimitBurst = 0;
+    services.journald.rateLimitInterval = "0";
+
     networking.hosts = {
       "${nodes.server.config.networking.privateIPv4}" = [ "server" ];
     };
