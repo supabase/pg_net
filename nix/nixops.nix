@@ -126,6 +126,10 @@ in {
     };
 
     environment.systemPackages = [
+      pkgs.bcc
+      pkgs.pgmetrics
+      pkgs.pg_activity
+      pkgs.htop
       pkgs.vegeta
       (
         pkgs.writeShellScriptBin "vegeta-bench" ''

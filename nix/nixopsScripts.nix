@@ -30,6 +30,15 @@ let
 
         ${nixopsBin} ssh -d pg_net client
       '';
+  nixopsSSHServer =
+    writeShellScriptBin ("net-cloud-ssh-server")
+      ''
+        set -euo pipefail
+
+        cd nix
+
+        ${nixopsBin} ssh -d pg_net server
+      '';
   nixopsReproTimeouts =
     writeShellScriptBin ("net-cloud-reproduce-timeouts")
       ''
@@ -50,10 +59,21 @@ let
 
         ${nixopsBin} delete -d pg_net
       '';
+  nixopsInfo =
+    writeShellScriptBin ("net-cloud-info")
+      ''
+        set -euo pipefail
+
+        cd nix
+
+        ${nixopsBin} info
+      '';
 in
 [
   nixopsDeploy
   nixopsSSH
+  nixopsSSHServer
   nixopsReproTimeouts
   nixopsDestroy
+  nixopsInfo
 ]
