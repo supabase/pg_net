@@ -24,7 +24,6 @@
 #include <curl/multi.h>
 
 #include <sys/epoll.h>
-#include <sys/timerfd.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -46,35 +45,6 @@ body_cb(void *contents, size_t size, size_t nmemb, void *userp)
   size_t realsize = size * nmemb;
   appendBinaryStringInfo(cdata->body, (const char*)contents, (int)realsize);
   return realsize;
-}
-
-static int multi_timer_cb(CURLM *multi, long timeout_ms, LoopState *lstate) {
-  elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
-
-  itimerspec its =
-    timeout_ms > 0 ?
-    // assign the timeout normally
-    (itimerspec){
-      .it_value.tv_sec = timeout_ms / 1000,
-      .it_value.tv_nsec = (timeout_ms % 1000) * 1000 * 1000,
-    }:
-    timeout_ms == 0 ?
-    /* libcurl wants us to timeout now, however setting both fields of
-     * new_value.it_value to zero disarms the timer. The closest we can
-     * do is to schedule the timer to fire in 1 ns. */
-    (itimerspec){
-      .it_value.tv_sec = 0,
-      .it_value.tv_nsec = 1,
-    }:
-     // libcurl passes a -1 to indicate the timer should be deleted
-    (itimerspec){};
-
-  int no_flags = 0;
-  if (timerfd_settime(lstate->timerfd, no_flags, &its, NULL) < 0) {
-    ereport(ERROR, errmsg("timerfd_settime failed"));
-  }
-
-  return 0;
 }
 
 static int multi_socket_cb(CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp) {
@@ -194,8 +164,6 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
 void set_curl_mhandle(CURLM *curl_mhandle, LoopState *lstate){
   CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
   CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETDATA, lstate);
-  CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
-  CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERDATA, lstate);
 }
 
 void delete_expired_responses(char *ttl, int batch_size){

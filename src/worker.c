@@ -24,7 +24,6 @@
 #include <curl/multi.h>
 
 #include <sys/epoll.h>
-#include <sys/timerfd.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -101,7 +100,6 @@ void pg_net_worker(Datum main_arg) {
 
   LoopState lstate = {
     .epfd = epoll_create1(0),
-    .timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC),
     .curl_mhandle = curl_multi_init(),
   };
 
@@ -109,18 +107,10 @@ void pg_net_worker(Datum main_arg) {
     ereport(ERROR, errmsg("Failed to create epoll file descriptor"));
   }
 
-  if (lstate.timerfd < 0) {
-    ereport(ERROR, errmsg("Failed to create timerfd"));
-  }
-
   if(!lstate.curl_mhandle)
     ereport(ERROR, errmsg("curl_multi_init()"));
 
   set_curl_mhandle(lstate.curl_mhandle, &lstate);
-
-  timerfd_settime(lstate.timerfd, 0, &(itimerspec){}, NULL);
-
-  epoll_ctl(lstate.epfd, EPOLL_CTL_ADD, lstate.timerfd, &(epoll_event){.events = EPOLLIN, .data.fd = lstate.timerfd});
 
   while (!got_sigterm) {
     WaitLatch(&MyProc->procLatch,
@@ -146,11 +136,14 @@ void pg_net_worker(Datum main_arg) {
     consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
 
     int running_handles = 0;
-    int maxevents = guc_batch_size + 1; // 1 extra for the timer
-    epoll_event *events = palloc0(sizeof(epoll_event) * maxevents);
+    epoll_event *events = palloc0(sizeof(epoll_event) * guc_batch_size);
+
+    EREPORT_MULTI(
+      curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
+    );
 
     do {
-      int nfds = epoll_wait(lstate.epfd, events, maxevents, /*timeout=*/1000);
+      int nfds = epoll_wait(lstate.epfd, events, guc_batch_size, /*timeout=*/0);
       if (nfds < 0) {
         int save_errno = errno;
         if(save_errno == EINTR) { // can happen when the epoll is interrupted, for example when running under GDB. Just continue in this case.
@@ -163,28 +156,17 @@ void pg_net_worker(Datum main_arg) {
       }
 
       for (int i = 0; i < nfds; i++) {
-        if (events[i].data.fd == lstate.timerfd) {
-          EREPORT_MULTI(
-            curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
-          );
-        } else {
-          int ev_bitmask =
-            events[i].events & EPOLLIN ? CURL_CSELECT_IN:
-            events[i].events & EPOLLOUT ? CURL_CSELECT_OUT:
-            CURL_CSELECT_ERR;
+        int ev_bitmask =
+          events[i].events & EPOLLIN ? CURL_CSELECT_IN:
+          events[i].events & EPOLLOUT ? CURL_CSELECT_OUT:
+          CURL_CSELECT_ERR;
 
-          EREPORT_MULTI(
-            curl_multi_socket_action(
-              lstate.curl_mhandle, events[i].data.fd,
-              ev_bitmask,
-              &running_handles)
-          );
-
-          if(running_handles <= 0) {
-            elog(DEBUG2, "last transfer done, kill timeout");
-            timerfd_settime(lstate.timerfd, 0, &(itimerspec){0}, NULL);
-          }
-        }
+        EREPORT_MULTI(
+          curl_multi_socket_action(
+            lstate.curl_mhandle, events[i].data.fd,
+            ev_bitmask,
+            &running_handles)
+        );
 
         insert_curl_responses(&lstate, CurlMemContext);
       }
@@ -197,7 +179,6 @@ void pg_net_worker(Datum main_arg) {
   }
 
   close(lstate.epfd);
-  close(lstate.timerfd);
 
   curl_multi_cleanup(lstate.curl_mhandle);
   curl_global_cleanup();
