@@ -23,7 +23,6 @@
 #include <curl/curl.h>
 #include <curl/multi.h>
 
-#include <sys/epoll.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -99,13 +98,8 @@ void pg_net_worker(Datum main_arg) {
     ereport(ERROR, errmsg("curl_global_init() returned %s\n", curl_easy_strerror(curl_ret)));
 
   LoopState lstate = {
-    .epfd = epoll_create1(0),
     .curl_mhandle = curl_multi_init(),
   };
-
-  if (lstate.epfd < 0) {
-    ereport(ERROR, errmsg("Failed to create epoll file descriptor"));
-  }
 
   if(!lstate.curl_mhandle)
     ereport(ERROR, errmsg("curl_multi_init()"));
@@ -136,34 +130,26 @@ void pg_net_worker(Datum main_arg) {
     consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
 
     int running_handles = 0;
-    epoll_event *events = palloc0(sizeof(epoll_event) * guc_batch_size);
+
+    lstate.event_set = CreateWaitEventSet(CurlMemContext, guc_batch_size);
 
     EREPORT_MULTI(
       curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
     );
 
     do {
-      int nfds = epoll_wait(lstate.epfd, events, guc_batch_size, /*timeout=*/0);
-      if (nfds < 0) {
-        int save_errno = errno;
-        if(save_errno == EINTR) { // can happen when the epoll is interrupted, for example when running under GDB. Just continue in this case.
-          continue;
-        }
-        else {
-          ereport(ERROR, errmsg("epoll_wait() failed: %s", strerror(save_errno)));
-          break;
-        }
-      }
+      WaitEvent *events = palloc(sizeof(WaitEvent)*guc_batch_size);
+      int num_events_ocurred = WaitEventSetWait(lstate.event_set, /*timeout=*/1000, events, guc_batch_size, /*pending=*/ 1);
 
-      for (int i = 0; i < nfds; i++) {
+      for (size_t i = 0; i < num_events_ocurred; i++) {
         int ev_bitmask =
-          events[i].events & EPOLLIN ? CURL_CSELECT_IN:
-          events[i].events & EPOLLOUT ? CURL_CSELECT_OUT:
+          events[i].events & WL_SOCKET_READABLE ? CURL_CSELECT_IN:
+          events[i].events & WL_SOCKET_WRITEABLE ? CURL_CSELECT_OUT:
           CURL_CSELECT_ERR;
 
         EREPORT_MULTI(
           curl_multi_socket_action(
-            lstate.curl_mhandle, events[i].data.fd,
+            lstate.curl_mhandle, events[i].fd,
             ev_bitmask,
             &running_handles)
         );
@@ -173,12 +159,10 @@ void pg_net_worker(Datum main_arg) {
 
     } while (running_handles > 0); // run again while there are curl handles, this will prevent waiting for the latch_timeout (which will cause the cause the curl timeouts to be wrong)
 
-    pfree(events);
+    FreeWaitEventSet(lstate.event_set);
 
     MemoryContextReset(CurlMemContext);
   }
-
-  close(lstate.epfd);
 
   curl_multi_cleanup(lstate.curl_mhandle);
   curl_global_cleanup();
