@@ -1,6 +1,6 @@
 PG_CFLAGS = -std=c11 -Werror -Wno-declaration-after-statement
 EXTENSION = pg_net
-EXTVERSION = 0.10.0
+EXTVERSION = 0.11.0
 
 DATA = $(wildcard sql/*--*.sql)
 
