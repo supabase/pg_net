@@ -30,6 +30,8 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include <storage/shmem.h>
+
 #include "util.h"
 #include "core.h"
 
@@ -40,17 +42,25 @@ _Static_assert(LIBCURL_VERSION_NUM >= MIN_LIBCURL_VERSION_NUM, REQUIRED_LIBCURL_
 
 PG_MODULE_MAGIC;
 
-static char *guc_ttl;
-static int guc_batch_size;
-static char* guc_database_name;
-static MemoryContext CurlMemContext = NULL;
+static char*                    guc_ttl;
+static int                      guc_batch_size;
+static char*                    guc_database_name;
+static MemoryContext            CurlMemContext = NULL;
+static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
+static long                     latch_timeout = 1000;
+static volatile sig_atomic_t    got_sigterm = false;
+static volatile sig_atomic_t    got_sighup = false;
+static bool*                    restart_worker = NULL;
 
 void _PG_init(void);
 PGDLLEXPORT void pg_net_worker(Datum main_arg) pg_attribute_noreturn();
 
-static long latch_timeout = 1000;
-static volatile sig_atomic_t got_sigterm = false;
-static volatile sig_atomic_t got_sighup = false;
+PG_FUNCTION_INFO_V1(worker_restart);
+Datum worker_restart(PG_FUNCTION_ARGS) {
+  bool result = DatumGetBool(DirectFunctionCall1(pg_reload_conf, (Datum) NULL)); // reload the config
+  *restart_worker = true;
+  PG_RETURN_BOOL(result && *restart_worker); // TODO is not necessary to return a bool here, but we do it to maintain backward compatibility
+}
 
 static void
 handle_sigterm(SIGNAL_ARGS)
@@ -141,6 +151,12 @@ void pg_net_worker(Datum main_arg) {
       ProcessConfigFile(PGC_SIGHUP);
     }
 
+    if (restart_worker && *restart_worker) {
+      *restart_worker = false;
+      elog(INFO, "Restarting pg_net worker");
+      break;
+    }
+
     delete_expired_responses(guc_ttl, guc_batch_size);
 
     consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
@@ -206,6 +222,14 @@ void pg_net_worker(Datum main_arg) {
   proc_exit(EXIT_FAILURE);
 }
 
+static void net_shmem_startup(void) {
+  if (prev_shmem_startup_hook)
+    prev_shmem_startup_hook();
+
+  restart_worker = ShmemAlloc(sizeof(bool));
+  *restart_worker = false;
+}
+
 void _PG_init(void) {
   if (IsBinaryUpgrade) {
       return;
@@ -225,6 +249,9 @@ void _PG_init(void) {
     .bgw_name = "pg_net " EXTVERSION " worker",
     .bgw_restart_time = 1,
   });
+
+  prev_shmem_startup_hook = shmem_startup_hook;
+  shmem_startup_hook = net_shmem_startup;
 
   CurlMemContext = AllocSetContextCreate(TopMemoryContext,
                        "pg_net curl context",
