@@ -63,6 +63,17 @@ def test_net_on_another_role(sess):
     ).fetchone()
     assert response[0] == "SUCCESS"
 
+    ## can use the net.worker_restart function
+    response = sess.execute(
+        text(
+            """
+        set local role to another;
+        select net.worker_restart();
+    """
+        )
+    ).fetchone()
+    assert response[0] == True
+
     sess.execute(text("""
         set local role postgres;
         drop role another;
