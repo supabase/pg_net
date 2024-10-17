@@ -96,6 +96,10 @@ create or replace function net._encode_url_with_params_array(url text, params_ar
     immutable
 as 'pg_net';
 
+create or replace function net.worker_restart()
+  returns bool
+  language 'c'
+as 'pg_net';
 
 -- Interface to make an async request
 -- API: Public
