@@ -24,6 +24,8 @@ let
 
     pg_ctl start -o "$options" -o "$ext_options"
 
+    psql -v ON_ERROR_STOP=1 -c "create role pre_existing nosuperuser login" -d postgres
+
     psql -v ON_ERROR_STOP=1 -c "create extension pg_net" -d postgres
 
     psql -t -c "\o ${pidFileName}" -c "select pid from pg_stat_activity where backend_type ilike '%pg_net%'"
