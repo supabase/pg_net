@@ -18,7 +18,7 @@ def test_http_get_error_when_worker_down(sess):
     """net.http_get returns an error when pg background worker is down"""
 
     (restarted,) = sess.execute(text("""
-        select net.worker_restart();
+        select pg_terminate_backend(pid) from pg_stat_activity where backend_type ilike '%pg_net%';
     """)).fetchone()
     assert restarted is not None
     assert restarted == True
