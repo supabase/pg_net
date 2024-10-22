@@ -146,12 +146,14 @@ the extension creates 3 configurable variables:
 1. **pg_net.batch_size** _(default: 200)_: An integer that limits the max number of rows that the extension will process from _`net.http_request_queue`_ during each read
 2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted
 3. **pg_net.database_name** _(default: 'postgres')_: A string that defines which database the extension is applied to
+4. **pg_net.username** _(default: NULL)_: A string that defines which user will the background worker be connected with. If not set (`NULL`), it will assume the bootstrap user.
 
 All these variables can be viewed with the following commands:
 ```sql
 show pg_net.batch_size;
 show pg_net.ttl;
 show pg_net.database_name;
+show pg_net.username;
 ```
 
 You can change these by editing the `postgresql.conf` file (find it with `SHOW config_file;`) or with `ALTER SYSTEM`:

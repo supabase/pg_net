@@ -45,6 +45,7 @@ PG_MODULE_MAGIC;
 static char*                    guc_ttl;
 static int                      guc_batch_size;
 static char*                    guc_database_name;
+static char*                    guc_username;
 static MemoryContext            CurlMemContext = NULL;
 static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
 static long                     latch_timeout = 1000;
@@ -101,9 +102,9 @@ void pg_net_worker(Datum main_arg) {
 
   BackgroundWorkerUnblockSignals();
 
-  BackgroundWorkerInitializeConnection(guc_database_name, NULL, 0);
+  BackgroundWorkerInitializeConnection(guc_database_name, guc_username, 0);
 
-  elog(INFO, "pg_net_worker started with a config of: pg_net.ttl=%s, pg_net.batch_size=%d, pg_net.database_name=%s", guc_ttl, guc_batch_size, guc_database_name);
+  elog(INFO, "pg_net_worker started with a config of: pg_net.ttl=%s, pg_net.batch_size=%d, pg_net.username=%s, pg_net.database_name=%s", guc_ttl, guc_batch_size, guc_username, guc_database_name);
 
   int curl_ret = curl_global_init(CURL_GLOBAL_ALL);
   if(curl_ret != CURLE_OK)
@@ -277,10 +278,18 @@ void _PG_init(void) {
                  NULL, NULL, NULL);
 
   DefineCustomStringVariable("pg_net.database_name",
-                "Database where pg_net tables are located",
+                "Database where the worker will connect to",
                 NULL,
                 &guc_database_name,
                 "postgres",
+                PGC_SIGHUP, 0,
+                NULL, NULL, NULL);
+
+  DefineCustomStringVariable("pg_net.username",
+                "Connection user for the worker",
+                NULL,
+                &guc_username,
+                NULL,
                 PGC_SIGHUP, 0,
                 NULL, NULL, NULL);
 }
