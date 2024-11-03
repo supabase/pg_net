@@ -1,12 +1,8 @@
 #ifndef CORE_H
 #define CORE_H
 
-typedef struct itimerspec itimerspec;
-typedef struct epoll_event epoll_event;
-
 typedef struct {
   int epfd;
-  int timerfd;
   CURLM *curl_mhandle;
 } LoopState;
 
