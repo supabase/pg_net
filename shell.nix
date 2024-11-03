@@ -39,8 +39,9 @@ mkShell {
       pythonDeps
       format.do format.doCheck
       nginxCustom.nginxScript
-      gdbScript
-    ] ++ nixopsScripts;
+    ] ++
+    nixopsScripts ++
+    lib.optional stdenv.isLinux [gdbScript];
   shellHook = ''
     export HISTFILE=.history
   '';
