@@ -15,7 +15,7 @@ def test_http_get_timeout_reached(sess):
     sess.commit()
 
     # wait for timeout
-    time.sleep(6)
+    time.sleep(7)
 
     (response,) = sess.execute(
         text(
@@ -39,7 +39,7 @@ def test_http_get_succeed_with_gt_timeout(sess):
 
     sess.commit()
 
-    time.sleep(4)
+    time.sleep(4.5)
 
     (status_code,) = sess.execute(
         text(
