@@ -23,8 +23,6 @@
 #include <curl/curl.h>
 #include <curl/multi.h>
 
-#include <sys/epoll.h>
-#include <sys/timerfd.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -34,6 +32,7 @@
 
 #include "util.h"
 #include "core.h"
+#include "event.h"
 
 #define MIN_LIBCURL_VERSION_NUM 0x075300 // This is the 7.83.0 version in hex as defined in curl/curlver.h
 #define REQUIRED_LIBCURL_ERR_MSG "libcurl >= 7.83.0 is required, we use the curl_easy_nextheader() function added in this version"
@@ -111,27 +110,18 @@ void pg_net_worker(Datum main_arg) {
     ereport(ERROR, errmsg("curl_global_init() returned %s\n", curl_easy_strerror(curl_ret)));
 
   LoopState lstate = {
-    .epfd = epoll_create1(0),
-    .timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC),
+    .epfd = event_monitor(),
     .curl_mhandle = curl_multi_init(),
   };
 
   if (lstate.epfd < 0) {
-    ereport(ERROR, errmsg("Failed to create epoll file descriptor"));
-  }
-
-  if (lstate.timerfd < 0) {
-    ereport(ERROR, errmsg("Failed to create timerfd"));
+    ereport(ERROR, errmsg("Failed to create event monitor file descriptor"));
   }
 
   if(!lstate.curl_mhandle)
     ereport(ERROR, errmsg("curl_multi_init()"));
 
   set_curl_mhandle(lstate.curl_mhandle, &lstate);
-
-  timerfd_settime(lstate.timerfd, 0, &(itimerspec){}, NULL);
-
-  epoll_ctl(lstate.epfd, EPOLL_CTL_ADD, lstate.timerfd, &(epoll_event){.events = EPOLLIN, .data.fd = lstate.timerfd});
 
   while (!got_sigterm) {
     WaitLatch(&MyProc->procLatch,
@@ -164,43 +154,37 @@ void pg_net_worker(Datum main_arg) {
 
     int running_handles = 0;
     int maxevents = guc_batch_size + 1; // 1 extra for the timer
-    epoll_event *events = palloc0(sizeof(epoll_event) * maxevents);
+    event *events = palloc0(sizeof(event) * maxevents);
 
     do {
-      int nfds = epoll_wait(lstate.epfd, events, maxevents, /*timeout=*/1000);
+      int nfds = wait_event(lstate.epfd, events, maxevents, 1000);
       if (nfds < 0) {
         int save_errno = errno;
-        if(save_errno == EINTR) { // can happen when the epoll is interrupted, for example when running under GDB. Just continue in this case.
+        if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
           continue;
         }
         else {
-          ereport(ERROR, errmsg("epoll_wait() failed: %s", strerror(save_errno)));
+          ereport(ERROR, errmsg("wait_event() failed: %s", strerror(save_errno)));
           break;
         }
       }
 
       for (int i = 0; i < nfds; i++) {
-        if (events[i].data.fd == lstate.timerfd) {
+        if (is_timer(events[i])) {
           EREPORT_MULTI(
             curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
           );
         } else {
-          int ev_bitmask =
-            events[i].events & EPOLLIN ? CURL_CSELECT_IN:
-            events[i].events & EPOLLOUT ? CURL_CSELECT_OUT:
-            CURL_CSELECT_ERR;
+          int curl_event = get_curl_event(events[i]);
+          int sockfd = get_socket_fd(events[i]);
 
           EREPORT_MULTI(
             curl_multi_socket_action(
-              lstate.curl_mhandle, events[i].data.fd,
-              ev_bitmask,
+              lstate.curl_mhandle,
+              sockfd,
+              curl_event,
               &running_handles)
           );
-
-          if(running_handles <= 0) {
-            elog(DEBUG2, "last transfer done, kill timeout");
-            timerfd_settime(lstate.timerfd, 0, &(itimerspec){0}, NULL);
-          }
         }
 
         insert_curl_responses(&lstate, CurlMemContext);
@@ -213,8 +197,7 @@ void pg_net_worker(Datum main_arg) {
     MemoryContextReset(CurlMemContext);
   }
 
-  close(lstate.epfd);
-  close(lstate.timerfd);
+  ev_monitor_close(&lstate);
 
   curl_multi_cleanup(lstate.curl_mhandle);
   curl_global_cleanup();
