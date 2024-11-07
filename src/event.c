@@ -14,7 +14,7 @@ typedef struct epoll_event epoll_event;
 typedef struct itimerspec itimerspec;
 
 int inline wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds){
-  return epoll_wait(fd, events, maxevents, /*timeout=*/1000);
+  return epoll_wait(fd, events, maxevents, /*timeout=*/wait_milliseconds);
 }
 
 int inline event_monitor(){
