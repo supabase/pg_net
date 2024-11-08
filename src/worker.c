@@ -102,6 +102,7 @@ void pg_net_worker(Datum main_arg) {
   BackgroundWorkerUnblockSignals();
 
   BackgroundWorkerInitializeConnection(guc_database_name, guc_username, 0);
+  pgstat_report_appname("pg_net " EXTVERSION); // set appname for pg_stat_activity
 
   elog(INFO, "pg_net_worker started with a config of: pg_net.ttl=%s, pg_net.batch_size=%d, pg_net.username=%s, pg_net.database_name=%s", guc_ttl, guc_batch_size, guc_username, guc_database_name);
 
