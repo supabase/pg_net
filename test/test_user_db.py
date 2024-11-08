@@ -32,3 +32,17 @@ def test_net_with_different_username_dbname(sess):
 
     # bg worker restarts after 1 second
     time.sleep(1.1)
+
+
+def test_net_appname(sess):
+    """Check that pg_stat_activity has appname set"""
+
+    ## can use the net.worker_restart function
+    (count,) = sess.execute(
+        text(
+            """
+        select count(1) from pg_stat_activity where application_name like '%pg_net%';
+    """
+        )
+    ).fetchone()
+    assert count == 1
