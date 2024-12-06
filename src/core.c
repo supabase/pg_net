@@ -28,9 +28,9 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "util.h"
 #include "core.h"
 #include "event.h"
+#include "errors.h"
 
 typedef struct {
   int64 id;
@@ -39,10 +39,6 @@ typedef struct {
   int32 timeout_milliseconds;
 } CurlData;
 
-typedef struct {
-  char msg[256];
-} curl_timeout_msg;
-
 static size_t
 body_cb(void *contents, size_t size, size_t nmemb, void *userp)
 {
@@ -50,6 +46,29 @@ body_cb(void *contents, size_t size, size_t nmemb, void *userp)
   size_t realsize = size * nmemb;
   appendBinaryStringInfo(cdata->body, (const char*)contents, (int)realsize);
   return realsize;
+}
+
+static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
+                                          struct curl_slist *headers) {
+    ArrayIterator iterator;
+    Datum value;
+    bool isnull;
+    char *hdr;
+
+    iterator = array_create_iterator(array, 0, NULL);
+
+    while (array_iterate(iterator, &value, &isnull)) {
+        if (isnull) {
+            continue;
+        }
+
+        hdr = TextDatumGetCString(value);
+        CURL_SLIST_APPEND(headers, hdr);
+        pfree(hdr);
+    }
+    array_free_iterator(iterator);
+
+    return headers;
 }
 
 // We need a different memory context here, as the parent function will have an SPI memory context, which has a shorter lifetime.
@@ -169,84 +188,6 @@ void delete_expired_responses(char *ttl, int batch_size){
   SPI_finish();
   PopActiveSnapshot();
   CommitTransactionCommand();
-}
-
-
-/*
- * Show a more detailed error message when a timeout happens, which includes the DNS, TCP/SSL handshake and HTTP request/response time. An example message is like:
- *
- * "Timeout of 800 ms reached. Total time: 801.159000 ms (DNS time: 73.407000 ms, TCP/SSL handshake time: 677.256000 ms, HTTP Request/Respose time: 50.103000 ms)"
- *
- * Curl allows to calculate the above by applying substractions on some internal timings. Refer to https://blog.cloudflare.com/a-question-of-timing/ for an explanation of these timings.
- *
- * There are extra considerations:
- *
- * - If a step surpasses the request timeout, say the TCP handshake (CURLINFO_CONNECT_TIME), its given timing is 0.
- *   However the TCP handshake duration can still be determined by using the total time (CURLINFO_TOTAL_TIME).
- *   We want to show at which phase the timeout occurred.
- *
- * - If a step is omitted, say an SSL handshake (CURLINFO_APPCONNECT_TIME) on non-HTTPS requests, its given timing is 0.
- *
- * - The pretransfer time (CURLINFO_PRETRANSFER_TIME) is greater than 0 when the HTTP request step starts.
- */
-static curl_timeout_msg detailed_timeout_strerror(CURL *ez_handle, int32 timeout_milliseconds){
-  double namelookup;    CURL_EZ_GETINFO(ez_handle, CURLINFO_NAMELOOKUP_TIME,    &namelookup);
-  double appconnect;    CURL_EZ_GETINFO(ez_handle, CURLINFO_APPCONNECT_TIME,    &appconnect);
-  double connect;       CURL_EZ_GETINFO(ez_handle, CURLINFO_CONNECT_TIME,       &connect);
-  double pretransfer;   CURL_EZ_GETINFO(ez_handle, CURLINFO_PRETRANSFER_TIME,   &pretransfer);
-  double starttransfer; CURL_EZ_GETINFO(ez_handle, CURLINFO_STARTTRANSFER_TIME, &starttransfer);
-  double total;         CURL_EZ_GETINFO(ez_handle, CURLINFO_TOTAL_TIME,         &total);
-
-  elog(DEBUG2, "The curl timings are time_namelookup: %f, time_connect: %f, time_appconnect: %f, time_pretransfer: %f, time_starttransfer: %f, time_total: %f",
-      namelookup, connect, appconnect, pretransfer, starttransfer, total);
-
-  // Steps at which the request timed out
-  bool timedout_at_dns       = namelookup == 0 && connect == 0; // if DNS time is 0 and no TCP occurred, it timed out at the DNS step
-  bool timedout_at_handshake = pretransfer == 0; // pretransfer determines if the HTTP step started, if 0 no HTTP ocurred and thus the timeout occurred at TCP or SSL handshake step
-  bool timedout_at_http      = pretransfer > 0; // The HTTP step did start and the timeout occurred here
-
-  // Calculate the steps times
-  double _dns_time =
-    timedout_at_dns ?
-      total: // get the total since namelookup will be 0 because of the timeout
-    timedout_at_handshake ?
-      namelookup:
-    timedout_at_http ?
-      namelookup:
-    0;
-
-  double _handshake_time =
-    timedout_at_dns ?
-      0:
-    timedout_at_handshake ?
-      total - namelookup: // connect or appconnect will be 0 because of the timeout, get the total - DNS step time
-    timedout_at_http ?
-      (connect - namelookup) +                    // TCP handshake time
-      (appconnect > 0 ? (appconnect - connect): 0): // SSL handshake time. Prevent a negative here which can happen when no SSL is involved (plain HTTP request) and appconnect is 0
-    0;
-
-  double _http_time =
-    timedout_at_dns ?
-      0:
-    timedout_at_handshake ?
-      0:
-    timedout_at_http ?
-      total - pretransfer:
-    0;
-
-  // convert seconds to milliseconds
-  double dns_time_ms       = _dns_time       * 1000;
-  double handshake_time_ms = _handshake_time * 1000;
-  double http_time_ms      = _http_time      * 1000;
-  double total_time_ms     = total           * 1000;
-
-  // build the error message
-  curl_timeout_msg result = {.msg = {}};
-  sprintf(result.msg,
-    "Timeout of %d ms reached. Total time: %f ms (DNS time: %f ms, TCP/SSL handshake time: %f ms, HTTP Request/Response time: %f ms)",
-    timeout_milliseconds, total_time_ms, dns_time_ms, handshake_time_ms, http_time_ms
-  );
-  return result;
 }
 
 static void insert_failure_response(CURL *ez_handle, CURLcode return_code, int64 id, int32 timeout_milliseconds){

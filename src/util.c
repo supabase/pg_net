@@ -66,25 +66,3 @@ Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
     PG_RETURN_TEXT_P(cstring_to_text(full_url));
 }
 
-struct curl_slist *pg_text_array_to_slist(ArrayType *array,
-                                          struct curl_slist *headers) {
-    ArrayIterator iterator;
-    Datum value;
-    bool isnull;
-    char *hdr;
-
-    iterator = array_create_iterator(array, 0, NULL);
-
-    while (array_iterate(iterator, &value, &isnull)) {
-        if (isnull) {
-            continue;
-        }
-
-        hdr = TextDatumGetCString(value);
-        CURL_SLIST_APPEND(headers, hdr);
-        pfree(hdr);
-    }
-    array_free_iterator(iterator);
-
-    return headers;
-}
