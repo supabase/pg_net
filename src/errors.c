@@ -21,12 +21,12 @@
  * - The pretransfer time (CURLINFO_PRETRANSFER_TIME) is greater than 0 when the HTTP request step starts.
  */
 curl_timeout_msg detailed_timeout_strerror(CURL *ez_handle, int32 timeout_milliseconds){
-  double namelookup;    CURL_EZ_GETINFO(ez_handle, CURLINFO_NAMELOOKUP_TIME,    &namelookup);
-  double appconnect;    CURL_EZ_GETINFO(ez_handle, CURLINFO_APPCONNECT_TIME,    &appconnect);
-  double connect;       CURL_EZ_GETINFO(ez_handle, CURLINFO_CONNECT_TIME,       &connect);
-  double pretransfer;   CURL_EZ_GETINFO(ez_handle, CURLINFO_PRETRANSFER_TIME,   &pretransfer);
-  double starttransfer; CURL_EZ_GETINFO(ez_handle, CURLINFO_STARTTRANSFER_TIME, &starttransfer);
-  double total;         CURL_EZ_GETINFO(ez_handle, CURLINFO_TOTAL_TIME,         &total);
+  double namelookup;    EREPORT_CURL_GETINFO(ez_handle, CURLINFO_NAMELOOKUP_TIME,    &namelookup);
+  double appconnect;    EREPORT_CURL_GETINFO(ez_handle, CURLINFO_APPCONNECT_TIME,    &appconnect);
+  double connect;       EREPORT_CURL_GETINFO(ez_handle, CURLINFO_CONNECT_TIME,       &connect);
+  double pretransfer;   EREPORT_CURL_GETINFO(ez_handle, CURLINFO_PRETRANSFER_TIME,   &pretransfer);
+  double starttransfer; EREPORT_CURL_GETINFO(ez_handle, CURLINFO_STARTTRANSFER_TIME, &starttransfer);
+  double total;         EREPORT_CURL_GETINFO(ez_handle, CURLINFO_TOTAL_TIME,         &total);
 
   elog(DEBUG2, "The curl timings are time_namelookup: %f, time_connect: %f, time_appconnect: %f, time_pretransfer: %f, time_starttransfer: %f, time_total: %f",
       namelookup, connect, appconnect, pretransfer, starttransfer, total);
