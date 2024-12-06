@@ -31,6 +31,7 @@
 #include <storage/shmem.h>
 
 #include "util.h"
+#include "errors.h"
 #include "core.h"
 #include "event.h"
 
