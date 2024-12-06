@@ -12,11 +12,11 @@
  *
  * There are extra considerations:
  *
- * - If a step surpasses the request timeout, say the TCP handshake (CURLINFO_CONNECT_TIME), its given timing is 0.
- *   However the TCP handshake duration can still be determined by using the total time (CURLINFO_TOTAL_TIME).
- *   We want to show at which phase the timeout occurred.
+ * - If a step (e.g. TCP handshake [CURLINFO_CONNECT_TIME]) surpasses the request timeout, its given timing is 0.
+ *   However the step duration can still be determined by using the total time (CURLINFO_TOTAL_TIME).
+ *   We want to show at which step the timeout occurred.
  *
- * - If a step is omitted, say an SSL handshake (CURLINFO_APPCONNECT_TIME) on non-HTTPS requests, its given timing is 0.
+ * - If a step is omitted its given timing is 0. This can happen on non-HTTPS requests with the SSL handshake time (CURLINFO_APPCONNECT_TIME).
  *
  * - The pretransfer time (CURLINFO_PRETRANSFER_TIME) is greater than 0 when the HTTP request step starts.
  */
