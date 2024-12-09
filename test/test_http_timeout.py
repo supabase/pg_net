@@ -1,6 +1,7 @@
 import time
 
 import pytest
+import re
 from sqlalchemy import text
 
 def test_http_get_timeout_reached(sess):
@@ -26,7 +27,65 @@ def test_http_get_timeout_reached(sess):
         {"request_id": request_id},
     ).fetchone()
 
-    assert response == u'Timeout was reached'
+    assert response.startswith("Timeout of 5000 ms reached")
+
+
+def test_http_detailed_timeout(sess):
+    """the timeout shows a detailed error msg"""
+
+    pattern = r"""
+        Total\stime:\s*                     # Match 'Total time:' with optional spaces
+        (?P<A>[0-9]*\.?[0-9]+)\s*ms         # Capture A (Total time)
+        \s*\(DNS\stime:\s*                  # Match '(DNS time:' with optional spaces
+        (?P<B>[0-9]*\.?[0-9]+)\s*ms,\s*     # Capture B (DNS time)
+        TCP/SSL\shandshake\stime:\s*        # Match 'TCP/SSL handshake time:' with spaces
+        (?P<C>[0-9]*\.?[0-9]+)\s*ms,\s*     # Capture C (TCP/SSL handshake time)
+        HTTP\sRequest/Response\stime:\s*    # Match 'HTTP Request/Response time:' with spaces
+        (?P<D>[0-9]*\.?[0-9]+)\s*ms\)       # Capture D (HTTP Request/Response time)
+    """
+
+    regex = re.compile(pattern, re.VERBOSE)
+
+    # TODO Timeout at the DNS step.
+    # TODO make this work locally. A slow DNS cannot be ensured on an external network.
+    # This can be done manually with `select net.http_get('https://news.ycombinator.com/', timeout_milliseconds := 10);`
+
+    # TODO add a TCP/SSL handshake timeout test
+    # This can be done locally on Linux with `sudo tc qdisc add dev lo root netem delay 500ms` and
+    # select net.http_get(url := 'http://localhost:8080/pathological', timeout_milliseconds := 1000);
+
+    # Timeout at the HTTP step
+    (request_id,) = sess.execute(text(
+        """
+        select net.http_get(url := 'http://localhost:8080/pathological?delay=1', timeout_milliseconds := 1000)
+    """
+    )).fetchone()
+
+    sess.commit()
+
+    # wait for timeout
+    time.sleep(2.1)
+
+    (response,) = sess.execute(
+        text(
+            """
+        select error_msg from net._http_response where id = :request_id;
+    """
+        ),
+        {"request_id": request_id},
+    ).fetchone()
+
+    match = regex.search(response)
+
+    total_time   = float(match.group('A'))
+    dns_time     = float(match.group('B'))
+    tcp_ssl_time = float(match.group('C'))
+    http_time    = float(match.group('D'))
+
+    assert total_time > 0
+    assert dns_time > 0
+    assert tcp_ssl_time > 0
+    assert http_time > 0
 
 def test_http_get_succeed_with_gt_timeout(sess):
     """net.http_get with timeout succeeds when the timeout is greater than the slow reply response time"""
@@ -75,7 +134,7 @@ def test_many_slow_mixed_with_fast(sess):
     """
       select
         count(*) filter (where error_msg is null and status_code = 200) as request_successes,
-        count(*) filter (where error_msg is not null and error_msg like 'Timeout was reached') as request_timeouts
+        count(*) filter (where error_msg is not null and error_msg like 'Timeout of 1000 ms reached%') as request_timeouts
       from net._http_response;
     """
     )).fetchone()

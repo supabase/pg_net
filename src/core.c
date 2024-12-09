@@ -28,14 +28,15 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "util.h"
 #include "core.h"
 #include "event.h"
+#include "errors.h"
 
 typedef struct {
   int64 id;
   StringInfo body;
   struct curl_slist* request_headers;
+  int32 timeout_milliseconds;
 } CurlData;
 
 static size_t
@@ -47,6 +48,29 @@ body_cb(void *contents, size_t size, size_t nmemb, void *userp)
   return realsize;
 }
 
+static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
+                                          struct curl_slist *headers) {
+    ArrayIterator iterator;
+    Datum value;
+    bool isnull;
+    char *hdr;
+
+    iterator = array_create_iterator(array, 0, NULL);
+
+    while (array_iterate(iterator, &value, &isnull)) {
+        if (isnull) {
+            continue;
+        }
+
+        hdr = TextDatumGetCString(value);
+        EREPORT_CURL_SLIST_APPEND(headers, hdr);
+        pfree(hdr);
+    }
+    array_free_iterator(iterator);
+
+    return headers;
+}
+
 // We need a different memory context here, as the parent function will have an SPI memory context, which has a shorter lifetime.
 static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int64 id, Datum urlBin, NullableDatum bodyBin, NullableDatum headersBin, Datum methodBin, int32 timeout_milliseconds){
   MemoryContext old_ctx = MemoryContextSwitchTo(curl_memctx);
@@ -55,13 +79,15 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
   cdata->id   = id;
   cdata->body = makeStringInfo();
 
+  cdata->timeout_milliseconds = timeout_milliseconds;
+
   if (!headersBin.isnull) {
     ArrayType *pgHeaders = DatumGetArrayTypeP(headersBin.value);
     struct curl_slist *request_headers = NULL;
 
     request_headers = pg_text_array_to_slist(pgHeaders, request_headers);
 
-    CURL_SLIST_APPEND(request_headers, "User-Agent: pg_net/" EXTVERSION);
+    EREPORT_CURL_SLIST_APPEND(request_headers, "User-Agent: pg_net/" EXTVERSION);
 
     cdata->request_headers = request_headers;
   }
@@ -81,39 +107,39 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
 
   if (strcasecmp(method, "GET") == 0) {
     if (reqBody) {
-      CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDS, reqBody);
-      CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_CUSTOMREQUEST, "GET");
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDS, reqBody);
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_CUSTOMREQUEST, "GET");
     }
   }
 
   if (strcasecmp(method, "POST") == 0) {
     if (reqBody) {
-      CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDS, reqBody);
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDS, reqBody);
     }
     else {
-      CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_POST, 1);
-      CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDSIZE, 0);
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POST, 1);
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDSIZE, 0);
     }
   }
 
   if (strcasecmp(method, "DELETE") == 0) {
-    CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+    EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
   }
 
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_WRITEDATA, cdata);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_HEADER, 0L);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_URL, url);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_HTTPHEADER, cdata->request_headers);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_TIMEOUT_MS, timeout_milliseconds);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_PRIVATE, cdata);
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_FOLLOWLOCATION, true);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_WRITEDATA, cdata);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_HEADER, 0L);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_URL, url);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_HTTPHEADER, cdata->request_headers);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_TIMEOUT_MS, cdata->timeout_milliseconds);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_PRIVATE, cdata);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_FOLLOWLOCATION, true);
   if (log_min_messages <= DEBUG2)
-    CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_VERBOSE, 1L);
+    EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_VERBOSE, 1L);
 #if LIBCURL_VERSION_NUM >= 0x075500 /* libcurl 7.85.0 */
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_PROTOCOLS_STR, "http,https");
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_PROTOCOLS_STR, "http,https");
 #else
-  CURL_EZ_SETOPT(curl_ez_handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 #endif
 
   EREPORT_MULTI(
@@ -124,10 +150,10 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
 }
 
 void set_curl_mhandle(CURLM *curl_mhandle, LoopState *lstate){
-  CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
-  CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETDATA, lstate);
-  CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
-  CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERDATA, lstate);
+  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
+  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETDATA, lstate);
+  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
+  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERDATA, lstate);
 }
 
 void delete_expired_responses(char *ttl, int batch_size){
@@ -164,16 +190,23 @@ void delete_expired_responses(char *ttl, int batch_size){
   CommitTransactionCommand();
 }
 
-static void insert_failure_response(CURLcode return_code, int64 id){
+static void insert_failure_response(CURL *ez_handle, CURLcode return_code, int64 id, int32 timeout_milliseconds){
   StartTransactionCommand();
   PushActiveSnapshot(GetTransactionSnapshot());
   SPI_connect();
+
+  const char* error_msg;
+  if (return_code == CURLE_OPERATION_TIMEDOUT){
+    error_msg = detailed_timeout_strerror(ez_handle, timeout_milliseconds).msg;
+  } else {
+    error_msg = curl_easy_strerror(return_code);
+  }
 
   int ret_code = SPI_execute_with_args("\
       insert into net._http_response(id, error_msg) values ($1, $2)",
       2,
       (Oid[]){INT8OID, CSTRINGOID},
-      (Datum[]){Int64GetDatum(id), CStringGetDatum(curl_easy_strerror(return_code))},
+      (Datum[]){Int64GetDatum(id), CStringGetDatum(error_msg)},
       NULL, false, 1);
 
   if (ret_code != SPI_OK_INSERT)
@@ -316,16 +349,16 @@ void insert_curl_responses(LoopState *lstate, MemoryContext curl_memctx){
       CURLcode return_code = msg->data.result;
       CURL *ez_handle= msg->easy_handle;
       CurlData *cdata = NULL;
-      CURL_EZ_GETINFO(ez_handle, CURLINFO_PRIVATE, &cdata);
+      EREPORT_CURL_GETINFO(ez_handle, CURLINFO_PRIVATE, &cdata);
 
       if (return_code != CURLE_OK) {
-        insert_failure_response(return_code, cdata->id);
+        insert_failure_response(ez_handle, return_code, cdata->id, cdata->timeout_milliseconds);
       } else {
         char *contentType;
-        CURL_EZ_GETINFO(ez_handle, CURLINFO_CONTENT_TYPE, &contentType);
+        EREPORT_CURL_GETINFO(ez_handle, CURLINFO_CONTENT_TYPE, &contentType);
 
         long http_status_code;
-        CURL_EZ_GETINFO(ez_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
+        EREPORT_CURL_GETINFO(ez_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
 
         Jsonb *jsonb_headers = jsonb_headers_from_curl_handle(ez_handle);
 

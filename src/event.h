@@ -10,7 +10,7 @@
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #define WAIT_USE_KQUEUE
 #else
-#error "no event wait implementation available"
+#error "no event loop implementation available"
 #endif
 
 #ifdef WAIT_USE_EPOLL
