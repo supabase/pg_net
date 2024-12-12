@@ -124,6 +124,9 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
 
   if (strcasecmp(method, "DELETE") == 0) {
     EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+    if (reqBody) {
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDS, reqBody);
+    }
   }
 
   EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_WRITEFUNCTION, body_cb);

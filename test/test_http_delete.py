@@ -160,3 +160,35 @@ def test_http_delete_positional_args(sess):
     assert response is not None
     assert response[0] == "SUCCESS"
     assert response[1] == "ok"
+
+
+def test_http_delete_with_body(sess):
+    """delete with request body works"""
+
+    # Create a request
+    (request_id,) = sess.execute(text(
+        """
+        select net.http_delete(
+            url  :='http://localhost:8080/delete_w_body'
+        ,   body := '{"key": "val"}'
+        );
+    """
+    )).fetchone()
+
+    # Commit so background worker can start
+    sess.commit()
+
+    # Collect the response, waiting as needed
+    (response_json,) = sess.execute(
+        text(
+            """
+        select
+            ((x.response).body)::jsonb body_json
+        from
+            net._http_collect_response(:request_id, async:=false) x;
+    """
+        ),
+        {"request_id": request_id},
+        ).fetchone()
+
+    assert response_json["key"] == "val"
