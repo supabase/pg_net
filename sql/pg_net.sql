@@ -223,11 +223,12 @@ create or replace function net.http_delete(
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000
+    timeout_milliseconds int default 5000,
+    -- optional body of the request
+    body jsonb default NULL
 )
     -- request_id reference
     returns bigint
-    strict
     volatile
     parallel safe
     language plpgsql
@@ -241,11 +242,12 @@ begin
     from jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
     values (
         'DELETE',
         net._encode_url_with_params_array(url, params_array),
         headers,
+        convert_to(body::text, 'UTF8'),
         timeout_milliseconds
     )
     returning id
