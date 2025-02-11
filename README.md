@@ -5,6 +5,7 @@ Requires libcurl >= 7.83. Compatible with PostgreSQL > = 12.
 
 ![PostgreSQL version](https://img.shields.io/badge/postgresql-12+-blue.svg)
 [![License](https://img.shields.io/pypi/l/markdown-subtemplate.svg)](https://github.com/supabase/pg_net/blob/master/LICENSE)
+[![Coverage Status](https://coveralls.io/repos/github/supabase/pg_net/badge.svg)](https://coveralls.io/github/supabase/pg_net)
 [![Tests](https://github.com/supabase/pg_net/actions/workflows/main.yml/badge.svg)](https://github.com/supabase/pg_net/actions)
 
 **Documentation**: [https://supabase.github.io/pg_net](https://supabase.github.io/pg_net)

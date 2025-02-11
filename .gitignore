@@ -7,11 +7,16 @@ __pycache__/
 .deployment.nixops*
 valgrindlog
 nix/nginx/logs/nginx.pid
+pg_net--*.sql
 .history
 *.o
 *.bc
 *.control
 *.so
+*.gcno
+*.gcda
+coverage.info
+coverage_html
 nginx.pid
 tags
 net_worker.pid

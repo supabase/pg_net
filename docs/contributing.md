@@ -14,10 +14,10 @@ For testing locally, execute:
 $ nix-shell
 
 # test on pg 12
-$ net-with-pg-12 python -m pytest -vv"
+$ nxpg-12 nxpg-build && net-with-nginx nxpg-12 nxpg-tmp nxpg-test
 
 # test on pg 13
-$ net-with-pg-13 python -m pytest -vv"
+$ nxpg-13 nxpg-build && net-with-nginx nxpg-13 nxpg-tmp nxpg-test
 ```
 
 ### Debugging
@@ -25,7 +25,7 @@ $ net-with-pg-13 python -m pytest -vv"
 You can turn on logging level to see curl traces with
 
 ```
-$ LOG_MIN_MESSAGES=debug2 net-with-pg-12 psql
+$ export LOG_MIN_MESSAGES=debug2
 ```
 
 ```sql
