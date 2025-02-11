@@ -6,24 +6,7 @@ with import (builtins.fetchTarball {
 mkShell {
   buildInputs =
     let
-      ourPg = callPackage ./nix/postgresql {
-        inherit lib;
-        inherit stdenv;
-        inherit fetchurl;
-        inherit makeWrapper;
-        inherit callPackage;
-      };
       pidFileName = "net_worker.pid";
-      supportedPgVersions = [
-        postgresql_12
-        postgresql_13
-        postgresql_14
-        postgresql_15
-        postgresql_16
-        ourPg.postgresql_17
-      ];
-      pgWithExt = { pg }: pg.withPackages (p: [ (callPackage ./nix/pg_net.nix { postgresql = pg;}) ]);
-      extAll = map (x: callPackage ./nix/pgScript.nix { postgresql = pgWithExt { pg = x;}; inherit pidFileName;}) supportedPgVersions;
       gdbScript = callPackage ./nix/gdbScript.nix {inherit pidFileName;};
       nginxCustom = callPackage ./nix/nginxCustom.nix {};
       nixopsScripts = callPackage ./nix/nixopsScripts.nix {};
@@ -33,15 +16,17 @@ mkShell {
         sqlalchemy
       ];
       format = callPackage ./nix/format.nix {};
+      nxpg = callPackage ./nix/nxpg.nix {inherit pidFileName;};
     in
     [
-      extAll
       pythonDeps
       format.do format.doCheck
       nginxCustom.nginxScript
+      curl
     ] ++
     nixopsScripts ++
-    lib.optional stdenv.isLinux [gdbScript];
+    lib.optional stdenv.isLinux [gdbScript] ++
+    nxpg;
   shellHook = ''
     export HISTFILE=.history
   '';

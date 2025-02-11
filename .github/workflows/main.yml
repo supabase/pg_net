@@ -16,8 +16,10 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
-      - name: Run pytest tests
-        run: nix-shell --run "net-with-nginx net-with-pg-${{ matrix.pg-version }} python -m pytest -vv"
+      - name: Run tests
+        run: |
+            nix-shell --run "nxpg-${{ matrix.pg-version }} nxpg-build"
+            nix-shell --run "net-with-nginx nxpg-${{ matrix.pg-version }} nxpg-tmp nxpg-test"
 
       #- name: Check C files are formatted
         #run: nix-shell --run "net-check-format"
@@ -35,4 +37,33 @@ jobs:
       with:
         nix_path: nixpkgs=channel:nixos-unstable
     - name: Run tests
-      run: nix-shell --run "net-with-nginx net-with-pg-${{ matrix.pg-version }} python -m pytest -vv"
+      run: |
+          nix-shell --run "nxpg-${{ matrix.pg-version }} nxpg-build"
+          nix-shell --run "net-with-nginx nxpg-${{ matrix.pg-version }} nxpg-tmp nxpg-test"
+
+  coverage:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        pg-version: ['16']
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: cachix/install-nix-action@v18
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Run coverage
+        run: |
+          nix-shell --run "nxpg-${{ matrix.pg-version }} nxpg-build-cov"
+          nix-shell --run "net-with-nginx nxpg-${{ matrix.pg-version }} nxpg-tmp nxpg-coverage"
+
+      - name: Send coverage to Coveralls
+        uses: coverallsapp/github-action@v2.3.6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          files: ./coverage.info
