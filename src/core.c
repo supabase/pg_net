@@ -1,25 +1,3 @@
-#include <postgres.h>
-#include <pgstat.h>
-#include <postmaster/bgworker.h>
-#include <storage/ipc.h>
-#include <storage/latch.h>
-#include <storage/proc.h>
-#include <fmgr.h>
-#include <access/xact.h>
-#include <executor/spi.h>
-#include <utils/snapmgr.h>
-#include <commands/extension.h>
-#include <catalog/pg_extension.h>
-#include <catalog/pg_type.h>
-#include <miscadmin.h>
-#include <utils/builtins.h>
-#include <access/hash.h>
-#include <utils/hsearch.h>
-#include <utils/memutils.h>
-#include <utils/jsonb.h>
-#include <utils/guc.h>
-#include <tcop/utility.h>
-
 #include <curl/curl.h>
 #include <curl/multi.h>
 
@@ -28,6 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include "pg_prelude.h"
 #include "core.h"
 #include "event.h"
 #include "errors.h"
@@ -281,7 +260,7 @@ void consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext cu
     ereport(ERROR, errmsg("Error getting http request queue: %s", SPI_result_code_string(ret_code)));
 
 
-  for (int j = 0; j < SPI_processed; j++) {
+  for (size_t j = 0; j < SPI_processed; j++) {
     bool tupIsNull = false;
 
     int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
