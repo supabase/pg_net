@@ -1,8 +1,8 @@
-#include <postgres.h>
 #include <stddef.h>
 #include <errno.h>
 #include <unistd.h>
 
+#include "pg_prelude.h"
 #include "event.h"
 
 #ifdef WAIT_USE_EPOLL
@@ -13,11 +13,11 @@ static bool timer_created = false;
 typedef struct epoll_event epoll_event;
 typedef struct itimerspec itimerspec;
 
-int inline wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds){
+inline int wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds){
   return epoll_wait(fd, events, maxevents, /*timeout=*/wait_milliseconds);
 }
 
-int inline event_monitor(){
+inline int event_monitor(){
   return epoll_create1(0);
 }
 
@@ -26,7 +26,7 @@ void ev_monitor_close(LoopState *lstate){
   close(timerfd);
 }
 
-int multi_timer_cb(CURLM *multi, long timeout_ms, LoopState *lstate) {
+int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopState *lstate) {
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
 
   if (!timer_created){
@@ -66,7 +66,7 @@ int multi_timer_cb(CURLM *multi, long timeout_ms, LoopState *lstate) {
   return 0;
 }
 
-int multi_socket_cb(CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp) {
+int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp) {
   static char *whatstrs[] = { "NONE", "CURL_POLL_IN", "CURL_POLL_OUT", "CURL_POLL_INOUT", "CURL_POLL_REMOVE" };
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
 
@@ -139,7 +139,7 @@ void ev_monitor_close(LoopState *lstate){
   close(lstate->epfd);
 }
 
-int multi_timer_cb(CURLM *multi, long timeout_ms, LoopState *lstate) {
+int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopState *lstate) {
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
   event timer_event;
   int id = 1;
@@ -164,7 +164,7 @@ int multi_timer_cb(CURLM *multi, long timeout_ms, LoopState *lstate) {
   return 0;
 }
 
-int multi_socket_cb(CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp) {
+int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp) {
   static char *whatstrs[] = { "NONE", "CURL_POLL_IN", "CURL_POLL_OUT", "CURL_POLL_INOUT", "CURL_POLL_REMOVE" };
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
 

@@ -1,7 +1,12 @@
-PG_CFLAGS = -std=c11 -Werror -Wno-declaration-after-statement
+# the `-Wno`s quiet C90 warnings
+PG_CFLAGS = -std=c11 -Wextra -Wall -Werror \
+	-Wno-declaration-after-statement \
+	-Wno-vla \
+	-Wno-long-long
 ifeq ($(COVERAGE), 1)
 PG_CFLAGS += --coverage
 endif
+
 EXTENSION = pg_net
 EXTVERSION = 0.14.0
 
