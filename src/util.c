@@ -1,11 +1,5 @@
-#include <postgres.h>
-
-#include <tcop/utility.h>
-#include <utils/builtins.h>
-#include <utils/jsonb.h>
-
-#include <curl/curl.h>
-
+#include "pg_prelude.h"
+#include "curl_prelude.h"
 #include "util.h"
 
 PG_FUNCTION_INFO_V1(_urlencode_string);

@@ -1,35 +1,10 @@
-#include <postgres.h>
-#include <pgstat.h>
-#include <postmaster/bgworker.h>
-#include <storage/ipc.h>
-#include <storage/latch.h>
-#include <storage/proc.h>
-#include <fmgr.h>
-#include <access/xact.h>
-#include <executor/spi.h>
-#include <utils/snapmgr.h>
-#include <commands/extension.h>
-#include <catalog/pg_extension.h>
-#include <catalog/pg_type.h>
-#include <miscadmin.h>
-#include <utils/builtins.h>
-#include <access/hash.h>
-#include <utils/hsearch.h>
-#include <utils/memutils.h>
-#include <utils/jsonb.h>
-#include <utils/guc.h>
-#include <tcop/utility.h>
-
-#include <curl/curl.h>
-#include <curl/multi.h>
-
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include <inttypes.h>
 
-#include <storage/shmem.h>
-
+#include "pg_prelude.h"
+#include "curl_prelude.h"
 #include "util.h"
 #include "errors.h"
 #include "core.h"
@@ -57,14 +32,14 @@ void _PG_init(void);
 PGDLLEXPORT void pg_net_worker(Datum main_arg) pg_attribute_noreturn();
 
 PG_FUNCTION_INFO_V1(worker_restart);
-Datum worker_restart(PG_FUNCTION_ARGS) {
+Datum worker_restart(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
   bool result = DatumGetBool(DirectFunctionCall1(pg_reload_conf, (Datum) NULL)); // reload the config
   *restart_worker = true;
   PG_RETURN_BOOL(result && *restart_worker); // TODO is not necessary to return a bool here, but we do it to maintain backward compatibility
 }
 
 static void
-handle_sigterm(SIGNAL_ARGS)
+handle_sigterm(__attribute__ ((unused)) SIGNAL_ARGS)
 {
   int save_errno = errno;
   got_sigterm = true;
@@ -74,7 +49,7 @@ handle_sigterm(SIGNAL_ARGS)
 }
 
 static void
-handle_sighup(SIGNAL_ARGS)
+handle_sighup(__attribute__ ((unused)) SIGNAL_ARGS)
 {
   int     save_errno = errno;
   got_sighup = true;
@@ -95,7 +70,7 @@ static bool is_extension_loaded(){
   return OidIsValid(extensionOid);
 }
 
-void pg_net_worker(Datum main_arg) {
+void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   pqsignal(SIGTERM, handle_sigterm);
   pqsignal(SIGHUP, handle_sighup);
   pqsignal(SIGUSR1, procsignal_sigusr1_handler);

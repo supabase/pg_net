@@ -1,6 +1,5 @@
-#include <postgres.h>
-#include <curl/curl.h>
-
+#include "pg_prelude.h"
+#include "curl_prelude.h"
 #include "errors.h"
 
 /*
