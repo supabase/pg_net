@@ -14,10 +14,10 @@ For testing locally, execute:
 $ nix-shell
 
 # test on pg 12
-$ nxpg-12 nxpg-build && net-with-nginx nxpg-12 nxpg-tmp nxpg-test
+$ net-with-pg-12 python -m pytest -vv
 
 # test on pg 13
-$ nxpg-13 nxpg-build && net-with-nginx nxpg-13 nxpg-tmp nxpg-test
+$ net-with-pg-13 python -m pytest -vv
 ```
 
 ### Debugging

@@ -117,6 +117,7 @@ let
       ./patches/specify_pkglibdir_at_runtime.patch
       ./patches/paths-with-postgresql-suffix.patch
 
+
       (substituteAll {
         src = ./patches/locale-binary-path.patch;
         locale = "${if stdenv.isDarwin then darwin.adv_cmds else lib.getBin stdenv.cc.libc}/bin/locale";
@@ -127,7 +128,20 @@ let
       map fetchurl (lib.attrValues muslPatches)
     ) ++ lib.optionals stdenv'.isLinux  [
       (if atLeast "13" then ./patches/socketdir-in-run-13+.patch else ./patches/socketdir-in-run.patch)
-    ];
+    ] ++ (if atLeast "17"
+      then [./patches/17-add-extension_control_path-for.patch]
+      else if atLeast "16"
+      then [./patches/16-add-extension_control_path-for.patch]
+      else if atLeast "15"
+      then [./patches/15-add-extension_control_path-for.patch]
+      else if atLeast "14"
+      then [./patches/14-add-extension_control_path-for.patch]
+      else if atLeast "13"
+      then [./patches/13-add-extension_control_path-for.patch]
+      else if atLeast "12"
+      then [./patches/12-add-extension_control_path-for.patch]
+      else []
+      );
 
     installTargets = [ "install-world" ];
 

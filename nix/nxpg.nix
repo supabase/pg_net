@@ -1,7 +1,4 @@
-{ stdenv, lib, makeWrapper, fetchurl, writeShellScriptBin, findutils, entr, callPackage, lcov
-, pidFileName, gnused, python3
-, postgresql_16, postgresql_15, postgresql_14, postgresql_13, postgresql_12
-} :
+{ stdenv, lib, makeWrapper, fetchurl, writeShellScriptBin, findutils, entr, callPackage, lcov, pidFileName, gnused, python3 } :
 let
   prefix = "nxpg";
   ourPg = callPackage ./postgresql {
@@ -13,11 +10,11 @@ let
   };
   supportedPgs = [
     ourPg.postgresql_17
-    postgresql_16
-    postgresql_15
-    postgresql_14
-    postgresql_13
-    postgresql_12
+    ourPg.postgresql_16
+    ourPg.postgresql_15
+    ourPg.postgresql_14
+    ourPg.postgresql_13
+    ourPg.postgresql_12
   ];
   build =
     writeShellScriptBin "${prefix}-build" ''
@@ -108,20 +105,28 @@ let
     allPgPaths = map (pg:
       let
         ver = builtins.head (builtins.splitVersion pg.version);
-        patchedPg = pg.overrideAttrs(oldAttrs: {
-          patches = oldAttrs.patches ++ [
-            ./postgresql/patches/${ver}-add-extension_control_path-for.patch
-          ];
-        });
         script = ''
           set -euo pipefail
 
-          export PATH=${patchedPg}/bin:"$PATH"
+          export PATH=${pg}/bin:"$PATH"
 
           "$@"
         '';
       in
       writeShellScriptBin "${prefix}-${ver}" script
+    ) supportedPgs;
+
+    netWith = map (pg:
+        let
+          ver = builtins.head (builtins.splitVersion pg.version);
+          script = ''
+            set -euo pipefail
+            export PATH=${pg}/bin:"$PATH"
+            ${buildCov}/bin/${prefix}-build-cov
+            ${tmpDb}/bin/${prefix}-tmp "$@"
+          '';
+        in
+        writeShellScriptBin "net-with-pg-${ver}" script
     ) supportedPgs;
 in
 [
@@ -132,4 +137,5 @@ in
   watch
   tmpDb
   allPgPaths
+  netWith
 ]
