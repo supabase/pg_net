@@ -1,3 +1,6 @@
+SRC_DIR = src
+BUILD_DIR ?= build
+
 # the `-Wno`s quiet C90 warnings
 PG_CFLAGS = -std=c11 -Wextra -Wall -Werror \
 	-Wno-declaration-after-statement \
@@ -19,8 +22,8 @@ REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 REGRESS_OPTS = --use-existing --inputdir=test
 
 MODULE_big = $(EXTENSION)
-SRC = $(wildcard src/*.c)
-OBJS = $(patsubst src/%.c, src/%.o, $(SRC))
+SRC = $(wildcard $(SRC_DIR)/*.c)
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRC))
 
 PG_CONFIG = pg_config
 SHLIB_LINK = -lcurl
@@ -28,13 +31,27 @@ SHLIB_LINK = -lcurl
 # Find <curl/curl.h> from system headers
 PG_CPPFLAGS := $(CPPFLAGS) -DEXTVERSION=\"$(EXTVERSION)\"
 
-all: $(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
+build: $(BUILD_DIR)/$(EXTENSION).so $(BUILD_DIR)/$(EXTENSION)--$(EXTVERSION).sql $(BUILD_DIR)/$(EXTENSION).control
 
-$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
+$(BUILD_DIR)/.gitignore:
+	mkdir -p $(BUILD_DIR)
+	echo "*" > $(BUILD_DIR)/.gitignore
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(BUILD_DIR)/.gitignore
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
 	cp $< $@
 
-$(EXTENSION).control:
-	sed "s/@PG_NET_VERSION@/$(EXTVERSION)/g" $(EXTENSION).control.in > $(EXTENSION).control
+$(BUILD_DIR)/$(EXTENSION).control:
+	sed "s/@PG_NET_VERSION@/$(EXTVERSION)/g" $(EXTENSION).control.in > $@
+
+$(BUILD_DIR)/$(EXTENSION).so: $(EXTENSION).so
+	mv $? $@
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+.PHONY: test
+test:
+	net-with-nginx python -m pytest -vv
