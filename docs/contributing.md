@@ -3,21 +3,24 @@ pg_net is OSS. PR and issues are welcome.
 
 ## Development
 
-[Nix](https://nixos.org/download.html) is required to set up the environment.
+[Nix](https://nixos.org/download.html) is required to set up the environment and [Cachix](https://docs.cachix.org/installation) for cache usage.
+
 
 ### Testing
 
 For testing locally, execute:
 
 ```bash
+$ cachix use nxpg
+
 # might take a while in downloading all the dependencies
 $ nix-shell
 
 # test on pg 12
-$ net-with-pg-12 python -m pytest -vv
+$ nxpg -v 12 test
 
 # test on pg 13
-$ net-with-pg-13 python -m pytest -vv
+$ nxpg -v 13 test
 ```
 
 ### Debugging
