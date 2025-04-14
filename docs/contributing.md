@@ -17,10 +17,10 @@ $ cachix use nxpg
 $ nix-shell
 
 # test on pg 12
-$ nxpg -v 12 test
+$ xpg -v 12 test
 
 # test on pg 13
-$ nxpg -v 13 test
+$ xpg -v 13 test
 ```
 
 ### Debugging
