@@ -23,10 +23,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --run "nxpg -v ${{ matrix.pg-version }} build"
+        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} build"
 
       - name: Run tests
-        run: nix-shell --run "nxpg -v ${{ matrix.pg-version }} test"
+        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} test"
 
   # solve https://github.com/supabase/pg_net/pull/178#issuecomment-2722690110
   #test-on-macos:
@@ -47,11 +47,11 @@ jobs:
       #- name: Use Cachix Cache
         #uses: cachix/cachix-action@v10
         #with:
-          #name: nxpg
+          #name: xpg
           #authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       #- name: Build
-        #run: nix-shell --run "nxpg -v ${{ matrix.pg-version }} build"
+        #run: nix-shell --run "xpg -v ${{ matrix.pg-version }} build"
 
       #- name: Run tests
         #run: nix-shell --run "nxpg -v ${{ matrix.pg-version }} test"
@@ -77,10 +77,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Coverage
-        run: nix-shell --run "nxpg -v ${{ matrix.pg-version }} coverage"
+        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} coverage"
 
       - name: Send coverage to Coveralls
         uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          files: ./coverage.info
+          files: ./build-${{ matrix.pg-version }}/coverage.info
