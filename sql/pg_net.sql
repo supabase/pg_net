@@ -51,9 +51,6 @@ create or replace function net._await_response(
     request_id bigint
 )
     returns bool
-    volatile
-    parallel safe
-    strict
     language plpgsql
 as $$
 declare
@@ -81,17 +78,14 @@ $$;
 create or replace function net._urlencode_string(string varchar)
     -- url encoded string
     returns text
-
     language 'c'
     immutable
-    strict
 as 'pg_net';
 
 -- API: Private
 create or replace function net._encode_url_with_params_array(url text, params_array text[])
     -- url encoded string
     returns text
-    strict
     language 'c'
     immutable
 as 'pg_net';
@@ -115,9 +109,6 @@ create or replace function net.http_get(
 )
     -- request_id reference
     returns bigint
-    strict
-    volatile
-    parallel safe
     language plpgsql
 as $$
 declare
@@ -159,8 +150,6 @@ create or replace function net.http_post(
 )
     -- request_id reference
     returns bigint
-    volatile
-    parallel safe
     language plpgsql
 as $$
 declare
@@ -229,8 +218,6 @@ create or replace function net.http_delete(
 )
     -- request_id reference
     returns bigint
-    volatile
-    parallel safe
     language plpgsql
 as $$
 declare
@@ -289,9 +276,6 @@ create or replace function net._http_collect_response(
 )
     -- http response composite wrapped in a result type
     returns net.http_response_result
-    strict
-    volatile
-    parallel safe
     language plpgsql
 as $$
 declare
@@ -343,9 +327,6 @@ create or replace function net.http_collect_response(
 )
     -- http response composite wrapped in a result type
     returns net.http_response_result
-    strict
-    volatile
-    parallel safe
     language plpgsql
 as $$
 begin
