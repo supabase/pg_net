@@ -6,6 +6,9 @@ PG_FUNCTION_INFO_V1(_urlencode_string);
 PG_FUNCTION_INFO_V1(_encode_url_with_params_array);
 
 Datum _urlencode_string(PG_FUNCTION_ARGS) {
+    if(PG_GETARG_POINTER(0) == NULL)
+      PG_RETURN_NULL();
+
     char *str = text_to_cstring(PG_GETARG_TEXT_P(0));
     char *urlencoded_str = NULL;
 
@@ -17,11 +20,12 @@ Datum _urlencode_string(PG_FUNCTION_ARGS) {
 }
 
 Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
-    CURLU *h = curl_url();
-    CURLUcode rc;
+    if(PG_GETARG_POINTER(0) == NULL || PG_GETARG_POINTER(1) == NULL)
+      PG_RETURN_NULL();
 
     char *url = text_to_cstring(PG_GETARG_TEXT_P(0));
     ArrayType *params = PG_GETARG_ARRAYTYPE_P(1);
+
     char *full_url = NULL;
 
     ArrayIterator iterator;
@@ -29,7 +33,8 @@ Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
     bool isnull;
     char *param;
 
-    rc = curl_url_set(h, CURLUPART_URL, url, 0);
+    CURLU *h = curl_url();
+    CURLUcode rc = curl_url_set(h, CURLUPART_URL, url, 0);
     if (rc != CURLUE_OK) {
         // TODO: Use curl_url_strerror once released.
         elog(ERROR, "%s", curl_easy_strerror((CURLcode)rc));

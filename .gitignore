@@ -7,7 +7,6 @@ __pycache__/
 .deployment.nixops*
 valgrindlog
 nix/nginx/logs/nginx.pid
-pg_net--*.sql
 .history
 *.o
 *.bc
