@@ -29,6 +29,50 @@ def test_bad_post(sess):
     assert 'null value in column "url"' in str(execinfo)
 
 
+def test_bad_get(sess):
+    """net.http_get with an empty url + body returns an error"""
+
+    with pytest.raises(Exception) as execinfo:
+        res = sess.execute(text(
+            """
+            select net.http_get(null);
+        """
+        ))
+    assert 'null value in column "url"' in str(execinfo)
+
+
+def test_bad_delete(sess):
+    """net.http_delete with an empty url + body returns an error"""
+
+    with pytest.raises(Exception) as execinfo:
+        res = sess.execute(text(
+            """
+            select net.http_delete(null);
+        """
+        ))
+    assert 'null value in column "url"' in str(execinfo)
+
+
+def test_bad_utils(sess):
+    """util functions of pg_net return null"""
+
+    res = sess.execute(text(
+        """
+        select net._encode_url_with_params_array(null, null);
+    """
+    )).scalar_one()
+
+    assert res is None
+
+    res = sess.execute(text(
+        """
+        select net._urlencode_string(null);
+    """
+    )).scalar_one()
+
+    assert res is None
+
+
 def test_it_keeps_working_after_many_connection_refused(sess):
     """the worker doesn't crash on many failed responses with connection refused"""
 
@@ -39,7 +83,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     ))
     sess.commit()
 
-    time.sleep(1.5)
+    time.sleep(2)
 
     (error_msg,count) = sess.execute(text(
     """
