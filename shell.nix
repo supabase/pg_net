@@ -9,6 +9,7 @@ mkShell {
       nginxCustom = callPackage ./nix/nginxCustom.nix {};
       nixopsScripts = callPackage ./nix/nixopsScripts.nix {};
       xpg = callPackage ./nix/xpg.nix {inherit fetchFromGitHub;};
+      loadtest = callPackage ./nix/loadtest.nix {};
       pythonDeps = with python3Packages; [
         pytest
         psycopg2
@@ -20,6 +21,7 @@ mkShell {
       pythonDeps
       nginxCustom.nginxScript
       curl
+      loadtest
     ] ++
     nixopsScripts;
   shellHook = ''

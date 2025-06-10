@@ -17,7 +17,7 @@ jobs:
         uses: cachix/install-nix-action@v30
 
       - name: Use Cachix Cache
-        uses: cachix/cachix-action@v10
+        uses: cachix/cachix-action@v16
         with:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -45,7 +45,7 @@ jobs:
           #nix_path: nixpkgs=channel:nixos-unstable
 
       #- name: Use Cachix Cache
-        #uses: cachix/cachix-action@v10
+        #uses: cachix/cachix-action@v16
         #with:
           #name: xpg
           #authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -55,6 +55,28 @@ jobs:
 
       #- name: Run tests
         #run: nix-shell --run "nxpg -v ${{ matrix.pg-version }} test"
+
+  loadtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+
+      - name: Use Cachix Cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: nxpg
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build
+        run: nix-shell --run "xpg build"
+
+      - name: Run load test
+        run: |
+          nix-shell --run "net-loadtest"
+          cat psrecord.md >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
 
@@ -71,7 +93,7 @@ jobs:
         uses: cachix/install-nix-action@v30
 
       - name: Use Cachix Cache
-        uses: cachix/cachix-action@v10
+        uses: cachix/cachix-action@v16
         with:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}

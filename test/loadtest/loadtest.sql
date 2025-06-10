@@ -5,7 +5,8 @@ select
   (select error_msg from net._http_response where error_msg is not null order by id desc limit 1) as last_failure_error
 from net._http_response;
 
-create or replace procedure repro_timeouts(number_of_requests int default 10000, url text default 'http://server') as $$
+-- loadtest using many gets, used to be called `repro_timeouts`
+create or replace procedure wait_for_many_gets(number_of_requests int default 10000, url text default 'http://localhost:8080') as $$
 declare
   last_id bigint;
   first_time timestamptz;
