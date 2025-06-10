@@ -114,7 +114,7 @@ in {
       };
       initialScript = pkgs.writeText "init-sql-script" ''
         create extension pg_net;
-        ${builtins.readFile ./bench.sql}
+        ${builtins.readFile ../test/loadtest/loadtest.sql}
       '';
     };
 
@@ -163,10 +163,10 @@ in {
         ''
       )
       (
-        pkgs.writeShellScriptBin "psql-reproduce-timeouts" ''
+        pkgs.writeShellScriptBin "psql-net-many-gets" ''
           set -euo pipefail
 
-          psql -U postgres -c "call repro_timeouts();"
+          psql -U postgres -c "call wait_for_many_gets(url:='$1');"
         ''
       )
     ];
