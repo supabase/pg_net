@@ -115,7 +115,6 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     }
 
     if (got_sighup) {
-      elog(INFO, "SIGHUP");
       got_sighup = false;
       ProcessConfigFile(PGC_SIGHUP);
     }
