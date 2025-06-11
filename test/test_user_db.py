@@ -28,6 +28,7 @@ def test_net_with_different_username_dbname(sess):
 
     sess.execute(text("COMMIT"))
     sess.execute(text("alter system reset pg_net.username"))
+    sess.execute(text("alter system reset pg_net.database_name"))
     sess.execute(text("select net.worker_restart()"))
 
     # bg worker restarts after 1 second
