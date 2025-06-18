@@ -17,6 +17,13 @@ _Static_assert(LIBCURL_VERSION_NUM >= MIN_LIBCURL_VERSION_NUM, REQUIRED_LIBCURL_
 
 PG_MODULE_MAGIC;
 
+typedef struct {
+  pg_atomic_uint32 should_restart;
+  Latch            latch;
+} WorkerState;
+
+WorkerState *worker_state = NULL;
+
 static char*                    guc_ttl;
 static int                      guc_batch_size;
 static char*                    guc_database_name;
@@ -26,7 +33,6 @@ static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
 static long                     latch_timeout = 1000;
 static volatile sig_atomic_t    got_sigterm = false;
 static volatile sig_atomic_t    got_sighup = false;
-static bool*                    restart_worker = NULL;
 
 void _PG_init(void);
 PGDLLEXPORT void pg_net_worker(Datum main_arg) pg_attribute_noreturn();
@@ -34,8 +40,11 @@ PGDLLEXPORT void pg_net_worker(Datum main_arg) pg_attribute_noreturn();
 PG_FUNCTION_INFO_V1(worker_restart);
 Datum worker_restart(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
   bool result = DatumGetBool(DirectFunctionCall1(pg_reload_conf, (Datum) NULL)); // reload the config
-  *restart_worker = true;
-  PG_RETURN_BOOL(result && *restart_worker); // TODO is not necessary to return a bool here, but we do it to maintain backward compatibility
+  pg_atomic_write_u32(&worker_state->should_restart, 1);
+  pg_write_barrier();
+  if (worker_state)
+    SetLatch(&worker_state->latch);
+  PG_RETURN_BOOL(result); // TODO is not necessary to return a bool here, but we do it to maintain backward compatibility
 }
 
 static void
@@ -43,8 +52,8 @@ handle_sigterm(__attribute__ ((unused)) SIGNAL_ARGS)
 {
   int save_errno = errno;
   got_sigterm = true;
-  if (MyProc)
-    SetLatch(&MyProc->procLatch);
+  if (worker_state)
+    SetLatch(&worker_state->latch);
   errno = save_errno;
 }
 
@@ -53,8 +62,8 @@ handle_sighup(__attribute__ ((unused)) SIGNAL_ARGS)
 {
   int     save_errno = errno;
   got_sighup = true;
-  if (MyProc)
-    SetLatch(&MyProc->procLatch);
+  if (worker_state)
+    SetLatch(&worker_state->latch);
   errno = save_errno;
 }
 
@@ -71,6 +80,8 @@ static bool is_extension_loaded(){
 }
 
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
+  OwnLatch(&worker_state->latch);
+
   pqsignal(SIGTERM, handle_sigterm);
   pqsignal(SIGHUP, handle_sighup);
   pqsignal(SIGUSR1, procsignal_sigusr1_handler);
@@ -101,11 +112,11 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   set_curl_mhandle(lstate.curl_mhandle, &lstate);
 
   while (!got_sigterm) {
-    WaitLatch(&MyProc->procLatch,
+    WaitLatch(&worker_state->latch,
           WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
           latch_timeout,
           PG_WAIT_EXTENSION);
-    ResetLatch(&MyProc->procLatch);
+    ResetLatch(&worker_state->latch);
 
     CHECK_FOR_INTERRUPTS();
 
@@ -119,8 +130,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       ProcessConfigFile(PGC_SIGHUP);
     }
 
-    if (restart_worker && *restart_worker) {
-      *restart_worker = false;
+    if (pg_atomic_read_u32(&worker_state->should_restart) == 1){
       elog(INFO, "Restarting pg_net worker");
       break;
     }
@@ -181,10 +191,14 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     MemoryContextReset(CurlMemContext);
   }
 
+  pg_atomic_write_u32(&worker_state->should_restart, 0);
+
   ev_monitor_close(&lstate);
 
   curl_multi_cleanup(lstate.curl_mhandle);
   curl_global_cleanup();
+
+  DisownLatch(&worker_state->latch);
 
   // causing a failure on exit will make the postmaster process restart the bg worker
   proc_exit(EXIT_FAILURE);
@@ -194,8 +208,14 @@ static void net_shmem_startup(void) {
   if (prev_shmem_startup_hook)
     prev_shmem_startup_hook();
 
-  restart_worker = ShmemAlloc(sizeof(bool));
-  *restart_worker = false;
+  bool found;
+
+  worker_state = ShmemInitStruct("pg_net worker state", sizeof(WorkerState), &found);
+
+  if (!found) { // only at worker initialization, once worker restarts it will be found
+    pg_atomic_init_u32(&worker_state->should_restart, 0);
+    InitSharedLatch(&worker_state->latch);
+  }
 }
 
 void _PG_init(void) {
