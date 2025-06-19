@@ -133,6 +133,9 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
     elog(DEBUG1, "Consumed %zu request rows", requests_consumed);
 
+    if(requests_consumed == 0)
+      continue;
+
     int running_handles = 0;
     int maxevents = guc_batch_size + 1; // 1 extra for the timer
     event *events = palloc0(sizeof(event) * maxevents);
