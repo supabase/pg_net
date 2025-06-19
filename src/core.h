@@ -6,9 +6,9 @@ typedef struct {
   CURLM *curl_mhandle;
 } LoopState;
 
-void delete_expired_responses(char *ttl, int batch_size);
+uint64 delete_expired_responses(char *ttl, int batch_size);
 
-void consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext curl_memctx);
+uint64 consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext curl_memctx);
 
 void insert_curl_responses(LoopState *lstate, MemoryContext curl_memctx);
 
