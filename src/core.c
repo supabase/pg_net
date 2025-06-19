@@ -136,7 +136,7 @@ void set_curl_mhandle(CURLM *curl_mhandle, LoopState *lstate){
   EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERDATA, lstate);
 }
 
-void delete_expired_responses(char *ttl, int batch_size){
+uint64 delete_expired_responses(char *ttl, int batch_size){
   SetCurrentStatementStartTimestamp();
   StartTransactionCommand();
   PushActiveSnapshot(GetTransactionSnapshot());
@@ -160,6 +160,8 @@ void delete_expired_responses(char *ttl, int batch_size){
     , Int32GetDatum(batch_size)
     }, NULL, false, 0);
 
+  uint64 affected_rows = SPI_processed;
+
   if (ret_code != SPI_OK_DELETE)
   {
     ereport(ERROR, errmsg("Error expiring response table rows: %s", SPI_result_code_string(ret_code)));
@@ -168,6 +170,8 @@ void delete_expired_responses(char *ttl, int batch_size){
   SPI_finish();
   PopActiveSnapshot();
   CommitTransactionCommand();
+
+  return affected_rows;
 }
 
 static void insert_failure_response(CURL *ez_handle, CURLcode return_code, int64 id, int32 timeout_milliseconds){
@@ -233,7 +237,7 @@ static void insert_success_response(CurlData *cdata, long http_status_code, char
   CommitTransactionCommand();
 }
 
-void consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext curl_memctx){
+uint64 consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext curl_memctx){
   StartTransactionCommand();
   PushActiveSnapshot(GetTransactionSnapshot());
   SPI_connect();
@@ -257,8 +261,9 @@ void consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext cu
   if (ret_code != SPI_OK_DELETE_RETURNING)
     ereport(ERROR, errmsg("Error getting http request queue: %s", SPI_result_code_string(ret_code)));
 
+  uint64 affected_rows = SPI_processed;
 
-  for (size_t j = 0; j < SPI_processed; j++) {
+  for (size_t j = 0; j < affected_rows; j++) {
     bool tupIsNull = false;
 
     int64 id = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[j], SPI_tuptable->tupdesc, 1, &tupIsNull));
@@ -289,6 +294,8 @@ void consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext cu
   SPI_finish();
   PopActiveSnapshot();
   CommitTransactionCommand();
+
+  return affected_rows;
 }
 
 static void pfree_curl_data(CurlData *cdata){

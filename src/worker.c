@@ -125,9 +125,13 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       break;
     }
 
-    delete_expired_responses(guc_ttl, guc_batch_size);
+    uint64 expired_responses = delete_expired_responses(guc_ttl, guc_batch_size);
 
-    consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
+    elog(DEBUG1, "Deleted %zu expired rows", expired_responses);
+
+    uint64 requests_consumed = consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
+
+    elog(DEBUG1, "Consumed %zu request rows", requests_consumed);
 
     int running_handles = 0;
     int maxevents = guc_batch_size + 1; // 1 extra for the timer
