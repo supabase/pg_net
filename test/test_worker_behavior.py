@@ -5,9 +5,8 @@ import time
 def test_success_when_worker_is_up(sess):
     """net.check_worker_is_up should not return anything when the worker is running"""
 
-    time.sleep(1) # wait if another test did a net.worker_restart()
-
     (result,) = sess.execute(text("""
+        select net.wait_until_running();
         select net.check_worker_is_up();
     """)).fetchone()
     assert result is not None

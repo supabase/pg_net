@@ -95,6 +95,12 @@ create or replace function net.worker_restart()
   language 'c'
 as 'pg_net';
 
+create or replace function net.wait_until_running()
+  returns void
+  language 'c'
+as 'pg_net';
+comment on function net.wait_until_running() is 'waits until the worker is running';
+
 -- Interface to make an async request
 -- API: Public
 create or replace function net.http_get(
