@@ -108,6 +108,7 @@ def test_net_on_new_role(sess):
     assert response[0] == True
 
     sess.execute(text("""
+        select net.wait_until_running();
         set local role postgres;
         drop role another;
     """))

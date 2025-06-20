@@ -6,6 +6,7 @@
 #include <postgres.h>
 #include <postmaster/bgworker.h>
 #include <pgstat.h>
+#include <storage/condition_variable.h>
 #include <storage/ipc.h>
 #include <storage/latch.h>
 #include <storage/proc.h>

@@ -10,9 +10,7 @@ def test_http_requests_deleted_after_ttl(sess):
     sess.execute(text("COMMIT"))
     sess.execute(text("alter system set pg_net.ttl to '4 seconds'"))
     sess.execute(text("select net.worker_restart()"))
-
-    # bg worker restarts after 1 second
-    time.sleep(1)
+    sess.execute(text("select net.wait_until_running()"))
 
     # Create a request
     (request_id,) = sess.execute(text(
@@ -55,6 +53,4 @@ def test_http_requests_deleted_after_ttl(sess):
     sess.execute(text("COMMIT"))
     sess.execute(text("alter system reset pg_net.ttl"))
     sess.execute(text("select net.worker_restart()"))
-
-    # wait until the worker has restarted to not affect other tests
-    time.sleep(1)
+    sess.execute(text("select net.wait_until_running()"))

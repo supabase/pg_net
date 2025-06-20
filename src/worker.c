@@ -17,9 +17,17 @@ _Static_assert(LIBCURL_VERSION_NUM >= MIN_LIBCURL_VERSION_NUM, REQUIRED_LIBCURL_
 
 PG_MODULE_MAGIC;
 
+typedef enum {
+  WS_NOT_YET = 1,
+  WS_RUNNING,
+  WS_EXITED,
+} WorkerStatus;
+
 typedef struct {
-  pg_atomic_uint32 should_restart;
-  Latch            latch;
+  pg_atomic_uint32  should_restart;
+  pg_atomic_uint32  status;
+  Latch             latch;
+  ConditionVariable cv;
 } WorkerState;
 
 WorkerState *worker_state = NULL;
@@ -45,6 +53,24 @@ Datum worker_restart(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
   if (worker_state)
     SetLatch(&worker_state->latch);
   PG_RETURN_BOOL(result); // TODO is not necessary to return a bool here, but we do it to maintain backward compatibility
+}
+
+static void wait_until_state(WorkerState *ws, WorkerStatus expected_status){
+  if (pg_atomic_read_u32(&ws->status) == expected_status) // fast return without sleeping, in case condition is fulfilled
+    return;
+
+  ConditionVariablePrepareToSleep(&ws->cv);
+  while (pg_atomic_read_u32(&ws->status) != expected_status) {
+    ConditionVariableSleep(&ws->cv, PG_WAIT_EXTENSION);
+  }
+  ConditionVariableCancelSleep();
+}
+
+PG_FUNCTION_INFO_V1(wait_until_running);
+Datum wait_until_running(__attribute__ ((unused)) PG_FUNCTION_ARGS){
+  wait_until_state(worker_state, WS_RUNNING);
+
+  PG_RETURN_VOID();
 }
 
 static void
@@ -77,6 +103,12 @@ static bool is_extension_loaded(){
   CommitTransactionCommand();
 
   return OidIsValid(extensionOid);
+}
+
+static void publish_state(WorkerStatus s) {
+  pg_atomic_write_u32(&worker_state->status, (uint32)s);
+  pg_write_barrier();
+  ConditionVariableBroadcast(&worker_state->cv);
 }
 
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
@@ -117,6 +149,8 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
           latch_timeout,
           PG_WAIT_EXTENSION);
     ResetLatch(&worker_state->latch);
+
+    publish_state(WS_RUNNING);
 
     CHECK_FOR_INTERRUPTS();
 
@@ -198,6 +232,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   curl_multi_cleanup(lstate.curl_mhandle);
   curl_global_cleanup();
 
+  publish_state(WS_EXITED);
   DisownLatch(&worker_state->latch);
 
   // causing a failure on exit will make the postmaster process restart the bg worker
@@ -214,7 +249,9 @@ static void net_shmem_startup(void) {
 
   if (!found) { // only at worker initialization, once worker restarts it will be found
     pg_atomic_init_u32(&worker_state->should_restart, 0);
+    pg_atomic_init_u32(&worker_state->status, WS_NOT_YET);
     InitSharedLatch(&worker_state->latch);
+    ConditionVariableInit(&worker_state->cv);
   }
 }
 

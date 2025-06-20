@@ -11,11 +11,8 @@ def test_net_with_different_username_dbname(sess):
     sess.execute(text("alter system set pg_net.username to 'pre_existing'"))
     sess.execute(text("alter system set pg_net.database_name to 'pre_existing'"))
     sess.execute(text("select net.worker_restart()"))
+    sess.execute(text("select net.wait_until_running()"))
 
-    # bg worker restarts after 1 second
-    time.sleep(1.1)
-
-    ## can use the net.worker_restart function
     (username,datname) = sess.execute(
         text(
             """
@@ -30,15 +27,11 @@ def test_net_with_different_username_dbname(sess):
     sess.execute(text("alter system reset pg_net.username"))
     sess.execute(text("alter system reset pg_net.database_name"))
     sess.execute(text("select net.worker_restart()"))
-
-    # bg worker restarts after 1 second
-    time.sleep(1.1)
-
+    sess.execute(text("select net.wait_until_running()"))
 
 def test_net_appname(sess):
     """Check that pg_stat_activity has appname set"""
 
-    ## can use the net.worker_restart function
     (count,) = sess.execute(
         text(
             """
