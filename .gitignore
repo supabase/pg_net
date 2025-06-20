@@ -20,3 +20,5 @@ nginx.pid
 tags
 net_worker.pid
 psrecord.*
+pg_net--*.sql
+!pg_net--*--*.sql
