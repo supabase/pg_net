@@ -39,7 +39,6 @@ static char*                    guc_username;
 static MemoryContext            CurlMemContext = NULL;
 static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
 static long                     latch_timeout = 1000;
-static volatile sig_atomic_t    got_sigterm = false;
 static volatile sig_atomic_t    got_sighup = false;
 
 void _PG_init(void);
@@ -77,7 +76,8 @@ static void
 handle_sigterm(__attribute__ ((unused)) SIGNAL_ARGS)
 {
   int save_errno = errno;
-  got_sigterm = true;
+  pg_atomic_write_u32(&worker_state->should_restart, 1);
+  pg_write_barrier();
   if (worker_state)
     SetLatch(&worker_state->latch);
   errno = save_errno;
@@ -143,7 +143,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
   set_curl_mhandle(lstate.curl_mhandle, &lstate);
 
-  while (!got_sigterm) {
+  while (!pg_atomic_read_u32(&worker_state->should_restart)) {
     WaitLatch(&worker_state->latch,
           WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
           latch_timeout,
@@ -164,8 +164,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       ProcessConfigFile(PGC_SIGHUP);
     }
 
-    if (pg_atomic_read_u32(&worker_state->should_restart) == 1){
-      elog(INFO, "Restarting pg_net worker");
+    if (pg_atomic_read_u32(&worker_state->should_restart) == 1){ // if a restart is issued, make sure we do it again after waiting
       break;
     }
 
