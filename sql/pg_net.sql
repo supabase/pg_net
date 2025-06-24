@@ -101,6 +101,11 @@ create or replace function net.wait_until_running()
 as 'pg_net';
 comment on function net.wait_until_running() is 'waits until the worker is running';
 
+create or replace function net.wake()
+  returns void
+  language 'c'
+as 'pg_net';
+
 -- Interface to make an async request
 -- API: Public
 create or replace function net.http_get(
@@ -135,6 +140,8 @@ begin
     )
     returning id
     into request_id;
+
+    perform net.wake();
 
     return request_id;
 end
@@ -204,6 +211,8 @@ begin
     returning id
     into request_id;
 
+    perform net.wake();
+
     return request_id;
 end
 $$;
@@ -245,6 +254,8 @@ begin
     )
     returning id
     into request_id;
+
+    perform net.wake();
 
     return request_id;
 end
