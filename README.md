@@ -164,7 +164,14 @@ alter system set pg_net.ttl to '1 hour'
 alter system set pg_net.batch_size to 500;
 ```
 
-Then, reload the settings and restart the `pg_net` background worker with:
+Then, you can reload the settings with:
+
+```
+select pg_reload_conf();
+```
+
+If you change the `pg_net.database_name` and `pg_net.username` configs, you'll need to restart the worker for them to apply.
+We provide a function reloads the config with `pg_reload_conf` and restarts the worker in one go:
 
 ```
 select net.worker_restart();

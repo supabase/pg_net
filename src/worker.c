@@ -289,7 +289,7 @@ void _PG_init(void) {
                  "should be a valid interval type",
                  &guc_ttl,
                  "6 hours",
-                 PGC_SUSET, 0,
+                 PGC_SIGHUP, 0,
                  NULL, NULL, NULL);
 
   DefineCustomIntVariable("pg_net.batch_size",
@@ -298,7 +298,7 @@ void _PG_init(void) {
                  &guc_batch_size,
                  200,
                  0, PG_INT16_MAX,
-                 PGC_SUSET, 0,
+                 PGC_SIGHUP, 0,
                  NULL, NULL, NULL);
 
   DefineCustomStringVariable("pg_net.database_name",
@@ -306,7 +306,7 @@ void _PG_init(void) {
                 NULL,
                 &guc_database_name,
                 "postgres",
-                PGC_SIGHUP, 0,
+                PGC_SU_BACKEND, 0,
                 NULL, NULL, NULL);
 
   DefineCustomStringVariable("pg_net.username",
@@ -314,6 +314,6 @@ void _PG_init(void) {
                 NULL,
                 &guc_username,
                 NULL,
-                PGC_SIGHUP, 0,
+                PGC_SU_BACKEND, 0,
                 NULL, NULL, NULL);
 }
