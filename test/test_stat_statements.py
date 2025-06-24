@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 @pytest.mark.skip(reason="temporary disable")
 def test_query_stat_statements(sess):
-    """Check that the background worker executes queries despite no new requests arriving"""
+    """Check that the background worker doesn't execute queries when no new requests arrive"""
 
     (pg_version,) = sess.execute(text(
         """
@@ -40,6 +40,7 @@ def test_query_stat_statements(sess):
     """
     )).fetchone()
 
+    # sleep for some time to see if new queries arrive
     time.sleep(3)
 
     (new_calls,) = sess.execute(text(
@@ -56,4 +57,4 @@ def test_query_stat_statements(sess):
     """
     )).fetchone()
 
-    assert new_calls > old_calls
+    assert new_calls == old_calls

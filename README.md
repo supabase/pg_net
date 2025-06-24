@@ -90,25 +90,18 @@ The extension introduces a new `net` schema, which contains two unlogged tables,
 
 When any of the three request functions (`http_get`, `http_post`, `http_delete`) are invoked, they create an entry in the `net.http_request_queue` table.
 
-The extension employs C's [libCurl](https://curl.se/libcurl/c/) library within a PostgreSQL [background worker](https://www.postgresql.org/docs/current/bgworker.html) to manage HTTP requests. This background worker regularly checks the `http_request_queue` table and executes the requests it finds there.
-
 Once a response is received, it gets stored in the `_http_response` table. By monitoring this table, you can keep track of response statuses and messages.
+
+> [!IMPORTANT]
+> Inserting directly into the `net.http_request_queue` won't cause the worker to process requests, you must use the request functions.
+> We do it this way to avoid polling the `net.http_request_queue` table, which would pollute `pg_stat_statements` and cause unnecesssary activity from the worker.
+
+The extension employs C's [libcurl](https://curl.se/libcurl/c/) library within a PostgreSQL [background worker](https://www.postgresql.org/docs/current/bgworker.html) to manage HTTP requests.
+This background worker sleeps until it receives a signal from the request functions, which awakes it and prompts it to read the `net.http_request_queue` table and execute the requests on it.
 
 ---
 
 # Installation
-
-## Enabling the Extension with Supabase
-
-You can activate the `pg_net` extension via Supabase's dashboard by following these steps:
-
-1. Navigate to the 'Database' page.
-2. Select 'Extensions' from the sidebar.
-3. Search for "pg_net" and enable the extension.
-
-## Local Setup
-
-### Configuring Your Device/Server
 
 Clone this repo and run
 
@@ -128,11 +121,9 @@ By default, pg_net is available on the `postgres` database. To use pg_net on a d
 pg_net.database_name = '<dbname>';
 ```
 
-Using pg_net on multiple databases in a cluster is not supported.
+Using pg_net on multiple databases in a cluster is not yet supported.
 
-### Installing in PostgreSQL
-
-To activate the extension in PostgreSQL, run the create extension command. The extension creates its own schema named net to avoid naming conflicts.
+To activate the extension in PostgreSQL, run the create extension command. The extension creates its own schema named `net` to avoid naming conflicts.
 
 ```psql
 create extension pg_net;
@@ -145,7 +136,7 @@ create extension pg_net;
 the extension creates 3 configurable variables:
 
 1. **pg_net.batch_size** _(default: 200)_: An integer that limits the max number of rows that the extension will process from _`net.http_request_queue`_ during each read
-2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted
+2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted. Note that this won't happen exactly after the TTL has passed. The worker will perform this deletion while its processing requests.
 3. **pg_net.database_name** _(default: 'postgres')_: A string that defines which database the extension is applied to
 4. **pg_net.username** _(default: NULL)_: A string that defines which user will the background worker be connected with. If not set (`NULL`), it will assume the bootstrap user.
 
@@ -430,7 +421,6 @@ The [PG_CRON](https://github.com/citusdata/pg_cron) extension enables PostgreSQL
 
 > Useful links:
 >
-> * [Supabase PG_CRON Installation Guide](https://supabase.com/docs/guides/database/extensions/pgcron)
 > * [Cron Syntax Helper](https://crontab.guru/)
 
 ### Example Cron job to call serverless function
@@ -443,7 +433,7 @@ SELECT cron.schedule(
 	    -- SQL query
 	    SELECT net.http_get(
 		-- URL of Edge function
-		url:='https://<reference id>.functions.Supabase.co/example',
+		url:='https://<reference id>.functions.supabase.co/example',
 		headers:='{
 		    "Content-Type": "application/json",
 		    "Authorization": "Bearer <TOKEN>"

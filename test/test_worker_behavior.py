@@ -124,3 +124,66 @@ def test_no_failure_on_drop_extension(sess):
     """)).fetchone()
     assert up is not None
     assert up == True
+
+
+def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess):
+    """when the background worker is restarted while working, it will pick up the remaining requests"""
+
+    autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
+    autocommit_sess.execute(text("select net.worker_restart();"))
+    autocommit_sess.execute(text("select net.wait_until_running();"))
+
+    sess.execute(text(
+        """
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,5);
+    """
+    ))
+
+    sess.commit()
+
+    # one restart will likely keep the worker awake since the wake signal could still be on, so do two restarts
+    # to ensure the wake signal is cleared
+    sess.execute(text(
+        """
+        select net.worker_restart();
+        select net.wait_until_running();
+    """
+    ))
+
+    time.sleep(0.1)
+
+    sess.execute(text(
+        """
+        select net.worker_restart();
+        select net.wait_until_running();
+    """
+    ))
+
+    time.sleep(0.1)
+
+    (status_code,count) = sess.execute(text(
+    """
+        select status_code, count(*) from net._http_response group by status_code;
+    """
+    )).fetchone()
+
+    # at most 2 requests should have finished by now because of the low batch_size
+    assert count <= 2
+    assert count > 0 # at least 1 request should be finished
+    assert status_code == 200
+
+    # if we sleep for 4 seconds the whole 5 requests should be finished
+    time.sleep(4)
+
+    (status_code,count) = sess.execute(text(
+    """
+        select status_code, count(*) from net._http_response group by status_code;
+    """
+    )).fetchone()
+
+    assert status_code == 200
+    assert count == 5
+
+    autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
+    autocommit_sess.execute(text("select net.worker_restart()"))
+    autocommit_sess.execute(text("select net.wait_until_running()"))

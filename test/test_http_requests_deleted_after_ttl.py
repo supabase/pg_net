@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import text
 
 def test_http_requests_deleted_after_ttl(sess, autocommit_sess):
-    """Check that http requests are deleted within a few seconds of their ttl"""
+    """Check that http requests will be deleted when they reach their ttl, not immediately but when the worker wakes again"""
 
     autocommit_sess.execute(text("alter system set pg_net.ttl to '4 seconds'"))
     autocommit_sess.execute(text("select net.worker_restart()"))
@@ -35,6 +35,9 @@ def test_http_requests_deleted_after_ttl(sess, autocommit_sess):
 
     # Sleep until after request should have been deleted
     time.sleep(5)
+
+    # Wake the worker manually, under normal operation this will happen when new requests are received
+    sess.execute(text("select net.wake()"))
 
     # Ensure the response is now empty
     (count,) = sess.execute(
