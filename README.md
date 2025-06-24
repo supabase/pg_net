@@ -171,7 +171,7 @@ select pg_reload_conf();
 ```
 
 If you change the `pg_net.database_name` and `pg_net.username` configs, you'll need to restart the worker for them to apply.
-We provide a function reloads the config with `pg_reload_conf` and restarts the worker in one go:
+We provide a function that reloads the config with `pg_reload_conf` and restarts the worker in one go:
 
 ```
 select net.worker_restart();
