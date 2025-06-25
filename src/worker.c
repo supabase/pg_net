@@ -32,6 +32,7 @@ typedef struct {
 
 WorkerState *worker_state = NULL;
 
+static const int                curl_handle_event_timeout_ms = 1000;
 static char*                    guc_ttl;
 static int                      guc_batch_size;
 static char*                    guc_database_name;
@@ -184,7 +185,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     event *events = palloc0(sizeof(event) * maxevents);
 
     do {
-      int nfds = wait_event(lstate.epfd, events, maxevents, 1000);
+      int nfds = wait_event(lstate.epfd, events, maxevents, curl_handle_event_timeout_ms);
       if (nfds < 0) {
         int save_errno = errno;
         if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
@@ -217,7 +218,8 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
         insert_curl_responses(&lstate, CurlMemContext);
       }
 
-    } while (running_handles > 0); // run again while there are curl handles, this will prevent waiting for the latch_timeout (which will cause the cause the curl timeouts to be wrong)
+      elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
+    } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
 
     pfree(events);
 

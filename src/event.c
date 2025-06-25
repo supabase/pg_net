@@ -13,8 +13,8 @@ static bool timer_created = false;
 typedef struct epoll_event epoll_event;
 typedef struct itimerspec itimerspec;
 
-inline int wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds){
-  return epoll_wait(fd, events, maxevents, /*timeout=*/wait_milliseconds);
+inline int wait_event(int fd, event *events, size_t maxevents, int timeout_milliseconds){
+  return epoll_wait(fd, events, maxevents, timeout_milliseconds);
 }
 
 inline int event_monitor(){
@@ -127,8 +127,8 @@ typedef struct {
   int action;
 } SocketInfo ;
 
-int inline wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds){
-  return kevent(fd, NULL, 0, events, maxevents, &(struct timespec){.tv_sec = wait_milliseconds/1000});
+int inline wait_event(int fd, event *events, size_t maxevents, int timeout_milliseconds){
+  return kevent(fd, NULL, 0, events, maxevents, &(struct timespec){.tv_sec = timeout_milliseconds/1000});
 }
 
 int inline event_monitor(){
