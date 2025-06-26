@@ -187,3 +187,27 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
     autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
     autocommit_sess.execute(text("select net.worker_restart()"))
     autocommit_sess.execute(text("select net.wait_until_running()"))
+
+
+def test_new_requests_get_attended_asap(sess):
+    """new requests get attended as soon as possible"""
+
+    sess.execute(text(
+        """
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+    """
+    ))
+
+    sess.commit()
+
+    # less than a second
+    time.sleep(0.1)
+
+    (status_code,count) = sess.execute(text(
+    """
+        select status_code, count(*) from net._http_response group by status_code;
+    """
+    )).fetchone()
+
+    assert status_code == 200
+    assert count == 10
