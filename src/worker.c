@@ -73,6 +73,7 @@ Datum wake(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
   uint32 expected = 0;
 
   bool success = pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 1);
+  pg_write_barrier();
 
   if (success) // only wake the worker on first put
     SetLatch(&worker_state->latch);
