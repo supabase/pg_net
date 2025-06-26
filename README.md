@@ -90,9 +90,14 @@ The extension introduces a new `net` schema, which contains two unlogged tables,
 
 When any of the three request functions (`http_get`, `http_post`, `http_delete`) are invoked, they create an entry in the `net.http_request_queue` table.
 
-The extension employs C's [libCurl](https://curl.se/libcurl/c/) library within a PostgreSQL [background worker](https://www.postgresql.org/docs/current/bgworker.html) to manage HTTP requests. This background worker regularly checks the `http_request_queue` table and executes the requests it finds there.
+The extension employs C's [libCurl](https://curl.se/libcurl/c/) library within a PostgreSQL [background worker](https://www.postgresql.org/docs/current/bgworker.html) to manage HTTP requests.
+This background worker waits for a signal from the aforementioned request functions and executes the requests it finds on the `net.http_request_queue` table.
 
 Once a response is received, it gets stored in the `_http_response` table. By monitoring this table, you can keep track of response statuses and messages.
+
+> [!IMPORTANT]
+> Inserting directly into the `net.http_request_queue` won't cause the worker to process requests, you must use the request functions.
+> We do it this way to avoid polling the `net.http_request_queue` table, which would pollute `pg_stat_statements` and cause unnecesssary activity from the worker.
 
 ---
 
@@ -145,7 +150,7 @@ create extension pg_net;
 the extension creates 3 configurable variables:
 
 1. **pg_net.batch_size** _(default: 200)_: An integer that limits the max number of rows that the extension will process from _`net.http_request_queue`_ during each read
-2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted
+2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted. Note that this won't happen exactly after the TTL has passed. The worker will perform this deletion while its processing requests.
 3. **pg_net.database_name** _(default: 'postgres')_: A string that defines which database the extension is applied to
 4. **pg_net.username** _(default: NULL)_: A string that defines which user will the background worker be connected with. If not set (`NULL`), it will assume the bootstrap user.
 

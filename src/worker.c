@@ -25,6 +25,7 @@ typedef enum {
 
 typedef struct {
   pg_atomic_uint32  should_restart;
+  pg_atomic_uint32  should_work;
   pg_atomic_uint32  status;
   Latch             latch;
   ConditionVariable cv;
@@ -33,13 +34,16 @@ typedef struct {
 WorkerState *worker_state = NULL;
 
 static const int                curl_handle_event_timeout_ms = 1000;
+static const long               queue_processing_wait_timeout_ms = 1000;
+static const int                net_worker_restart_time_sec = 1;
+static const long               no_timeout = -1L;
+
 static char*                    guc_ttl;
 static int                      guc_batch_size;
 static char*                    guc_database_name;
 static char*                    guc_username;
 static MemoryContext            CurlMemContext = NULL;
 static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
-static long                     latch_timeout = 1000;
 static volatile sig_atomic_t    got_sighup = false;
 
 void _PG_init(void);
@@ -73,6 +77,19 @@ Datum wait_until_running(__attribute__ ((unused)) PG_FUNCTION_ARGS){
   PG_RETURN_VOID();
 }
 
+PG_FUNCTION_INFO_V1(wake);
+Datum wake(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
+  uint32 expected = 0;
+
+  bool success = pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 1);
+  pg_write_barrier();
+
+  if (success) // only wake the worker on first put
+    SetLatch(&worker_state->latch);
+
+  PG_RETURN_VOID();
+}
+
 static void
 handle_sigterm(__attribute__ ((unused)) SIGNAL_ARGS)
 {
@@ -94,22 +111,27 @@ handle_sighup(__attribute__ ((unused)) SIGNAL_ARGS)
   errno = save_errno;
 }
 
-static bool is_extension_loaded(){
-  Oid extensionOid;
-
-  StartTransactionCommand();
-
-  extensionOid = get_extension_oid("pg_net", true);
-
-  CommitTransactionCommand();
-
-  return OidIsValid(extensionOid);
-}
-
 static void publish_state(WorkerStatus s) {
   pg_atomic_write_u32(&worker_state->status, (uint32)s);
   pg_write_barrier();
   ConditionVariableBroadcast(&worker_state->cv);
+}
+
+static bool process_interrupts(){
+  bool restart = false;
+
+  CHECK_FOR_INTERRUPTS();
+
+  if (got_sighup) {
+    got_sighup = false;
+    ProcessConfigFile(PGC_SIGHUP);
+  }
+
+  if (pg_atomic_read_u32(&worker_state->should_restart) == 1){ // if a restart is issued, make sure we do it again after waiting
+    restart = true;
+  }
+
+  return restart;
 }
 
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
@@ -144,87 +166,102 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
   set_curl_mhandle(lstate.curl_mhandle, &lstate);
 
-  while (!pg_atomic_read_u32(&worker_state->should_restart)) {
-    WaitLatch(&worker_state->latch,
-          WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
-          latch_timeout,
-          PG_WAIT_EXTENSION);
-    ResetLatch(&worker_state->latch);
-
+  while (true) {
     publish_state(WS_RUNNING);
 
-    CHECK_FOR_INTERRUPTS();
+    uint32 expected = 1;
+    if (!pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 0)){
+      elog(DEBUG1, "pg_net_worker waiting for wake");
+      // this will also wait for the `create extension net` to load, since the signal can only come from the request functions inside the `net` schema
+      WaitLatch(&worker_state->latch,
+                WL_LATCH_SET | WL_EXIT_ON_PM_DEATH,
+                no_timeout,
+                PG_WAIT_EXTENSION);
+      ResetLatch(&worker_state->latch);
+      if(process_interrupts())
+        goto restart;
 
-    if(!is_extension_loaded()){
-      elog(DEBUG1, "pg_net worker: extension not yet loaded");
       continue;
     }
 
-    if (got_sighup) {
-      got_sighup = false;
-      ProcessConfigFile(PGC_SIGHUP);
-    }
-
-    if (pg_atomic_read_u32(&worker_state->should_restart) == 1){ // if a restart is issued, make sure we do it again after waiting
-      break;
-    }
-
-    uint64 expired_responses = delete_expired_responses(guc_ttl, guc_batch_size);
-
-    elog(DEBUG1, "Deleted %zu expired rows", expired_responses);
-
-    uint64 requests_consumed = consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
-
-    elog(DEBUG1, "Consumed %zu request rows", requests_consumed);
-
-    if(requests_consumed == 0)
-      continue;
-
-    int running_handles = 0;
-    int maxevents = guc_batch_size + 1; // 1 extra for the timer
-    event *events = palloc0(sizeof(event) * maxevents);
+    uint64 requests_consumed = 0;
+    uint64 expired_responses = 0;
 
     do {
-      int nfds = wait_event(lstate.epfd, events, maxevents, curl_handle_event_timeout_ms);
-      if (nfds < 0) {
-        int save_errno = errno;
-        if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
-          continue;
+      expired_responses = delete_expired_responses(guc_ttl, guc_batch_size);
+
+      elog(DEBUG1, "Deleted %zu expired rows", expired_responses);
+
+      requests_consumed = consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
+
+      elog(DEBUG1, "Consumed %zu request rows", requests_consumed);
+
+      if(requests_consumed == 0)
+        continue;
+
+      int running_handles = 0;
+      int maxevents = guc_batch_size + 1; // 1 extra for the timer
+      event *events = palloc0(sizeof(event) * maxevents);
+
+      do {
+        int nfds = wait_event(lstate.epfd, events, maxevents, curl_handle_event_timeout_ms);
+        if (nfds < 0) {
+          int save_errno = errno;
+          if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
+            continue;
+          }
+          else {
+            ereport(ERROR, errmsg("wait_event() failed: %s", strerror(save_errno)));
+            break;
+          }
         }
-        else {
-          ereport(ERROR, errmsg("wait_event() failed: %s", strerror(save_errno)));
-          break;
+
+        for (int i = 0; i < nfds; i++) {
+          if (is_timer(events[i])) {
+            EREPORT_MULTI(
+              curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
+            );
+          } else {
+            int curl_event = get_curl_event(events[i]);
+            int sockfd = get_socket_fd(events[i]);
+
+            EREPORT_MULTI(
+              curl_multi_socket_action(
+                lstate.curl_mhandle,
+                sockfd,
+                curl_event,
+                &running_handles)
+            );
+          }
+
+          insert_curl_responses(&lstate, CurlMemContext);
         }
+
+        elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
+      } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
+
+      pfree(events);
+
+      MemoryContextReset(CurlMemContext);
+
+      // slow down queue processing to avoid using too much CPU
+      WaitLatch(&worker_state->latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, queue_processing_wait_timeout_ms, PG_WAIT_EXTENSION);
+      ResetLatch(&worker_state->latch);
+      if(process_interrupts()){
+        if(requests_consumed > 0 || expired_responses > 0) // if we have to restart, ensure the remaining work will continue
+          pg_atomic_write_u32(&worker_state->should_work, 1);
+
+        goto restart;
       }
 
-      for (int i = 0; i < nfds; i++) {
-        if (is_timer(events[i])) {
-          EREPORT_MULTI(
-            curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
-          );
-        } else {
-          int curl_event = get_curl_event(events[i]);
-          int sockfd = get_socket_fd(events[i]);
-
-          EREPORT_MULTI(
-            curl_multi_socket_action(
-              lstate.curl_mhandle,
-              sockfd,
-              curl_event,
-              &running_handles)
-          );
-        }
-
-        insert_curl_responses(&lstate, CurlMemContext);
-      }
-
-      elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
-    } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
-
-    pfree(events);
-
-    MemoryContextReset(CurlMemContext);
+    } while (requests_consumed > 0 || expired_responses > 0);
   }
+
+restart:
+
+  publish_state(WS_EXITED);
+
+  elog(DEBUG1, "pg_net_worker restarting, will it process the queue when started: %s", pg_atomic_read_u32(&worker_state->should_work)?"Yes":"No");
 
   pg_atomic_write_u32(&worker_state->should_restart, 0);
 
@@ -233,7 +270,6 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   curl_multi_cleanup(lstate.curl_mhandle);
   curl_global_cleanup();
 
-  publish_state(WS_EXITED);
   DisownLatch(&worker_state->latch);
 
   // causing a failure on exit will make the postmaster process restart the bg worker
@@ -251,6 +287,7 @@ static void net_shmem_startup(void) {
   if (!found) { // only at worker initialization, once worker restarts it will be found
     pg_atomic_init_u32(&worker_state->should_restart, 0);
     pg_atomic_init_u32(&worker_state->status, WS_NOT_YET);
+    pg_atomic_init_u32(&worker_state->should_work, 0);
     InitSharedLatch(&worker_state->latch);
     ConditionVariableInit(&worker_state->cv);
   }
@@ -273,7 +310,7 @@ void _PG_init(void) {
     .bgw_library_name = "pg_net",
     .bgw_function_name = "pg_net_worker",
     .bgw_name = "pg_net " EXTVERSION " worker",
-    .bgw_restart_time = 1,
+    .bgw_restart_time = net_worker_restart_time_sec,
   });
 
   prev_shmem_startup_hook = shmem_startup_hook;
