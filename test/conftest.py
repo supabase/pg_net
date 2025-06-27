@@ -29,8 +29,7 @@ def sess(engine):
 
     session.execute(text(
         """
-    drop extension pg_net cascade;
-    create extension if not exists pg_net;
+    drop extension if exists pg_net cascade;
     """
     ))
     session.commit()
