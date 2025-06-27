@@ -17,19 +17,6 @@ _Static_assert(LIBCURL_VERSION_NUM >= MIN_LIBCURL_VERSION_NUM, REQUIRED_LIBCURL_
 
 PG_MODULE_MAGIC;
 
-typedef enum {
-  WS_NOT_YET = 1,
-  WS_RUNNING,
-  WS_EXITED,
-} WorkerStatus;
-
-typedef struct {
-  pg_atomic_uint32  should_restart;
-  pg_atomic_uint32  status;
-  Latch             latch;
-  ConditionVariable cv;
-} WorkerState;
-
 WorkerState *worker_state = NULL;
 
 static const int                curl_handle_event_timeout_ms = 1000;
@@ -115,11 +102,10 @@ static void publish_state(WorkerStatus s) {
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   OwnLatch(&worker_state->latch);
 
+  BackgroundWorkerUnblockSignals();
   pqsignal(SIGTERM, handle_sigterm);
   pqsignal(SIGHUP, handle_sighup);
   pqsignal(SIGUSR1, procsignal_sigusr1_handler);
-
-  BackgroundWorkerUnblockSignals();
 
   BackgroundWorkerInitializeConnection(guc_database_name, guc_username, 0);
   pgstat_report_appname("pg_net " EXTVERSION); // set appname for pg_stat_activity
@@ -130,19 +116,17 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   if(curl_ret != CURLE_OK)
     ereport(ERROR, errmsg("curl_global_init() returned %s\n", curl_easy_strerror(curl_ret)));
 
-  LoopState lstate = {
-    .epfd = event_monitor(),
-    .curl_mhandle = curl_multi_init(),
-  };
+  worker_state->epfd = event_monitor();
 
-  if (lstate.epfd < 0) {
+  if (worker_state->epfd < 0) {
     ereport(ERROR, errmsg("Failed to create event monitor file descriptor"));
   }
 
-  if(!lstate.curl_mhandle)
+  worker_state->curl_mhandle = curl_multi_init();
+  if(!worker_state->curl_mhandle)
     ereport(ERROR, errmsg("curl_multi_init()"));
 
-  set_curl_mhandle(lstate.curl_mhandle, &lstate);
+  set_curl_mhandle(worker_state);
 
   while (!pg_atomic_read_u32(&worker_state->should_restart)) {
     WaitLatch(&worker_state->latch,
@@ -176,7 +160,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     StartTransactionCommand();
     PushActiveSnapshot(GetTransactionSnapshot());
 
-    uint64 requests_consumed = consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
+    uint64 requests_consumed = consume_request_queue(worker_state->curl_mhandle, guc_batch_size, CurlMemContext);
 
     elog(DEBUG1, "Consumed %zu request rows", requests_consumed);
 
@@ -186,7 +170,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       event events[maxevents];
 
       do {
-        int nfds = wait_event(lstate.epfd, events, maxevents, curl_handle_event_timeout_ms);
+        int nfds = wait_event(worker_state->epfd, events, maxevents, curl_handle_event_timeout_ms);
         if (nfds < 0) {
           int save_errno = errno;
           if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
@@ -201,7 +185,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
         for (int i = 0; i < nfds; i++) {
           if (is_timer(events[i])) {
             EREPORT_MULTI(
-              curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
+              curl_multi_socket_action(worker_state->curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
             );
           } else {
             int curl_event = get_curl_event(events[i]);
@@ -209,14 +193,14 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
             EREPORT_MULTI(
               curl_multi_socket_action(
-                lstate.curl_mhandle,
+                worker_state->curl_mhandle,
                 sockfd,
                 curl_event,
                 &running_handles)
             );
           }
 
-          insert_curl_responses(&lstate, CurlMemContext);
+          insert_curl_responses(worker_state, CurlMemContext);
         }
 
 
@@ -232,9 +216,9 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
   pg_atomic_write_u32(&worker_state->should_restart, 0);
 
-  ev_monitor_close(&lstate);
+  ev_monitor_close(worker_state);
 
-  curl_multi_cleanup(lstate.curl_mhandle);
+  curl_multi_cleanup(worker_state->curl_mhandle);
   curl_global_cleanup();
 
   publish_state(WS_EXITED);
@@ -252,11 +236,13 @@ static void net_shmem_startup(void) {
 
   worker_state = ShmemInitStruct("pg_net worker state", sizeof(WorkerState), &found);
 
-  if (!found) { // only at worker initialization, once worker restarts it will be found
+  if (!found) {
     pg_atomic_init_u32(&worker_state->should_restart, 0);
     pg_atomic_init_u32(&worker_state->status, WS_NOT_YET);
     InitSharedLatch(&worker_state->latch);
     ConditionVariableInit(&worker_state->cv);
+    worker_state->epfd = 0;
+    worker_state->curl_mhandle = NULL;
   }
 }
 
