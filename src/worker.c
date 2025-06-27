@@ -99,7 +99,21 @@ static void publish_state(WorkerStatus s) {
   ConditionVariableBroadcast(&worker_state->cv);
 }
 
+static void
+net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum arg){
+  pg_atomic_write_u32(&worker_state->should_restart, 0);
+
+  DisownLatch(&worker_state->latch);
+
+  ev_monitor_close(worker_state);
+
+  curl_multi_cleanup(worker_state->curl_mhandle);
+  curl_global_cleanup();
+}
+
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
+  on_proc_exit(net_on_exit, 0);
+
   OwnLatch(&worker_state->latch);
 
   BackgroundWorkerUnblockSignals();
@@ -121,10 +135,6 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   if (worker_state->epfd < 0) {
     ereport(ERROR, errmsg("Failed to create event monitor file descriptor"));
   }
-
-  worker_state->curl_mhandle = curl_multi_init();
-  if(!worker_state->curl_mhandle)
-    ereport(ERROR, errmsg("curl_multi_init()"));
 
   set_curl_mhandle(worker_state);
 
@@ -203,7 +213,6 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
           insert_curl_responses(worker_state, CurlMemContext);
         }
 
-
         elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
       } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
     }
@@ -214,15 +223,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     MemoryContextReset(CurlMemContext);
   }
 
-  pg_atomic_write_u32(&worker_state->should_restart, 0);
-
-  ev_monitor_close(worker_state);
-
-  curl_multi_cleanup(worker_state->curl_mhandle);
-  curl_global_cleanup();
-
   publish_state(WS_EXITED);
-  DisownLatch(&worker_state->latch);
 
   // causing a failure on exit will make the postmaster process restart the bg worker
   proc_exit(EXIT_FAILURE);
@@ -240,6 +241,7 @@ static void net_shmem_startup(void) {
     pg_atomic_init_u32(&worker_state->should_restart, 0);
     pg_atomic_init_u32(&worker_state->status, WS_NOT_YET);
     InitSharedLatch(&worker_state->latch);
+
     ConditionVariableInit(&worker_state->cv);
     worker_state->epfd = 0;
     worker_state->curl_mhandle = NULL;
