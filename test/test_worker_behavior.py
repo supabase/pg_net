@@ -1,4 +1,5 @@
 from sqlalchemy import text
+import sqlalchemy as sa
 import pytest
 import time
 
@@ -95,3 +96,31 @@ def test_worker_will_process_queue_when_up(sess):
     assert status_code == 200
     assert count == 10
 
+
+def test_no_failure_on_drop_extension(sess):
+    """while waiting for a slow request, a drop extension should wait and not crash the worker"""
+
+    (request_id,) = sess.execute(text("""
+        select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2');
+    """)).fetchone()
+    assert request_id == 1
+
+    sess.commit()
+
+    # wait until processing
+    time.sleep(1)
+
+    sess.execute(text("""
+        drop extension pg_net cascade;
+    """))
+
+    sess.commit()
+
+    # wait until it fails
+    time.sleep(3)
+
+    (up,) = sess.execute(text("""
+        select is_worker_up();
+    """)).fetchone()
+    assert up is not None
+    assert up == True
