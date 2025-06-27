@@ -129,11 +129,11 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
   MemoryContextSwitchTo(old_ctx);
 }
 
-void set_curl_mhandle(CURLM *curl_mhandle, LoopState *lstate){
-  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
-  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETDATA, lstate);
-  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
-  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERDATA, lstate);
+void set_curl_mhandle(WorkerState *wstate){
+  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
+  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_SOCKETDATA, wstate);
+  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
+  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_TIMERDATA, wstate);
 }
 
 uint64 delete_expired_responses(char *ttl, int batch_size){
@@ -313,11 +313,11 @@ static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle){
 }
 
 // Switch back to the curl memory context, which has the curl handles stored
-void insert_curl_responses(LoopState *lstate, MemoryContext curl_memctx){
+void insert_curl_responses(WorkerState *wstate, MemoryContext curl_memctx){
   MemoryContext old_ctx = MemoryContextSwitchTo(curl_memctx);
   int msgs_left=0;
   CURLMsg *msg = NULL;
-  CURLM *curl_mhandle = lstate->curl_mhandle;
+  CURLM *curl_mhandle = wstate->curl_mhandle;
 
   while ((msg = curl_multi_info_read(curl_mhandle, &msgs_left))) {
     if (msg->msg == CURLMSG_DONE) {

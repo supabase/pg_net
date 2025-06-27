@@ -21,12 +21,12 @@ inline int event_monitor(){
   return epoll_create1(0);
 }
 
-void ev_monitor_close(LoopState *lstate){
-  close(lstate->epfd);
+void ev_monitor_close(WorkerState *wstate){
+  close(wstate->epfd);
   close(timerfd);
 }
 
-int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopState *lstate) {
+int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, WorkerState *wstate) {
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
 
   if (!timer_created){
@@ -35,7 +35,7 @@ int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopS
       ereport(ERROR, errmsg("Failed to create timerfd"));
     }
     timerfd_settime(timerfd, 0, &(itimerspec){}, NULL);
-    epoll_ctl(lstate->epfd, EPOLL_CTL_ADD, timerfd, &(epoll_event){.events = EPOLLIN, .data.fd = timerfd});
+    epoll_ctl(wstate->epfd, EPOLL_CTL_ADD, timerfd, &(epoll_event){.events = EPOLLIN, .data.fd = timerfd});
 
     timer_created = true;
   }
@@ -66,7 +66,7 @@ int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopS
   return 0;
 }
 
-int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp) {
+int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, int what, WorkerState *wstate, void *socketp) {
   static char *whatstrs[] = { "NONE", "CURL_POLL_IN", "CURL_POLL_OUT", "CURL_POLL_INOUT", "CURL_POLL_REMOVE" };
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
 
@@ -74,11 +74,11 @@ int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, i
   if(!socketp){
     epoll_op = EPOLL_CTL_ADD;
     bool *socket_exists = palloc(sizeof(bool));
-    curl_multi_assign(lstate->curl_mhandle, sockfd, socket_exists);
+    curl_multi_assign(wstate->curl_mhandle, sockfd, socket_exists);
   } else if (what == CURL_POLL_REMOVE){
     epoll_op = EPOLL_CTL_DEL;
     pfree(socketp);
-    curl_multi_assign(lstate->curl_mhandle, sockfd, NULL);
+    curl_multi_assign(wstate->curl_mhandle, sockfd, NULL);
   } else {
     epoll_op = EPOLL_CTL_MOD;
   }
@@ -95,7 +95,7 @@ int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, i
 
   // epoll_ctl will copy ev, so there's no need to do palloc for the epoll_event
   // https://github.com/torvalds/linux/blob/e32cde8d2bd7d251a8f9b434143977ddf13dcec6/fs/eventpoll.c#L2408-L2418
-  if (epoll_ctl(lstate->epfd, epoll_op, sockfd, &ev) < 0) {
+  if (epoll_ctl(wstate->epfd, epoll_op, sockfd, &ev) < 0) {
     int e = errno;
     static char *opstrs[] = { "NONE", "EPOLL_CTL_ADD", "EPOLL_CTL_DEL", "EPOLL_CTL_MOD" };
     ereport(ERROR, errmsg("epoll_ctl with %s failed when receiving %s for sockfd %d: %s", whatstrs[what], opstrs[epoll_op], sockfd, strerror(e)));
@@ -135,11 +135,11 @@ int inline event_monitor(){
   return kqueue();
 }
 
-void ev_monitor_close(LoopState *lstate){
-  close(lstate->epfd);
+void ev_monitor_close(WorkerState *wstate){
+  close(wstate->epfd);
 }
 
-int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopState *lstate) {
+int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, WorkerState *wstate) {
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
   event timer_event;
   int id = 1;
@@ -156,7 +156,7 @@ int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopS
     EV_SET(&timer_event, id, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
   }
 
-  if (kevent(lstate->epfd, &timer_event, 1, NULL, 0, NULL) < 0) {
+  if (kevent(wstate->epfd, &timer_event, 1, NULL, 0, NULL) < 0) {
     int save_errno = errno;
     ereport(ERROR, errmsg("kevent with EVFILT_TIMER failed: %s", strerror(save_errno)));
   }
@@ -164,7 +164,7 @@ int multi_timer_cb(__attribute__ ((unused)) CURLM *multi, long timeout_ms, LoopS
   return 0;
 }
 
-int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp) {
+int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, int what, WorkerState *wstate, void *socketp) {
   static char *whatstrs[] = { "NONE", "CURL_POLL_IN", "CURL_POLL_OUT", "CURL_POLL_INOUT", "CURL_POLL_REMOVE" };
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
 
@@ -179,14 +179,14 @@ int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, i
     if (sock_info->action & CURL_POLL_OUT)
       EV_SET(&ev[count++], sockfd, EVFILT_WRITE, EV_DELETE, 0, 0, sock_info);
 
-    curl_multi_assign(lstate->curl_mhandle, sockfd, NULL);
+    curl_multi_assign(wstate->curl_mhandle, sockfd, NULL);
     pfree(sock_info);
   } else {
     if (!sock_info) {
       sock_info = palloc(sizeof(SocketInfo));
       sock_info->sockfd = sockfd;
       sock_info->action = what;
-      curl_multi_assign(lstate->curl_mhandle, sockfd, sock_info);
+      curl_multi_assign(wstate->curl_mhandle, sockfd, sock_info);
     }
 
     if (what & CURL_POLL_IN)
@@ -198,7 +198,7 @@ int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, i
 
   Assert(count <= 2);
 
-  if (kevent(lstate->epfd, &ev[0], count, NULL, 0, NULL) < 0) {
+  if (kevent(wstate->epfd, &ev[0], count, NULL, 0, NULL) < 0) {
     int save_errno = errno;
     ereport(ERROR, errmsg("kevent with %s failed for sockfd %d: %s", whatstrs[what], sockfd, strerror(save_errno)));
   }

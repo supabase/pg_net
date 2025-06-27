@@ -28,9 +28,9 @@ typedef struct kevent event;
 
 int wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds);
 int event_monitor(void);
-void ev_monitor_close(LoopState *lstate);
-int multi_timer_cb(CURLM *multi, long timeout_ms, LoopState *lstate);
-int multi_socket_cb(CURL *easy, curl_socket_t sockfd, int what, LoopState *lstate, void *socketp);
+void ev_monitor_close(WorkerState *wstate);
+int multi_timer_cb(CURLM *multi, long timeout_ms, WorkerState *wstate);
+int multi_socket_cb(CURL *easy, curl_socket_t sockfd, int what, WorkerState *wstate, void *socketp);
 bool is_timer(event ev);
 int get_curl_event(event ev);
 int get_socket_fd(event ev);
