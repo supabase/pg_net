@@ -94,8 +94,8 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
       EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDS, reqBody);
     }
     else {
-      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POST, 1);
-      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDSIZE, 0);
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POST, 1L);
+      EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_POSTFIELDSIZE, 0L);
     }
   }
 
@@ -111,9 +111,9 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
   EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_HEADER, 0L);
   EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_URL, url);
   EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_HTTPHEADER, cdata->request_headers);
-  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_TIMEOUT_MS, cdata->timeout_milliseconds);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_TIMEOUT_MS, (long) cdata->timeout_milliseconds);
   EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_PRIVATE, cdata);
-  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_FOLLOWLOCATION, true);
+  EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_FOLLOWLOCATION, (long) true);
   if (log_min_messages <= DEBUG2)
     EREPORT_CURL_SETOPT(curl_ez_handle, CURLOPT_VERBOSE, 1L);
 #if LIBCURL_VERSION_NUM >= 0x075500 /* libcurl 7.85.0 */
