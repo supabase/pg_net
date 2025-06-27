@@ -173,55 +173,59 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
     elog(DEBUG1, "Deleted %zu expired rows", expired_responses);
 
+    StartTransactionCommand();
+    PushActiveSnapshot(GetTransactionSnapshot());
+
     uint64 requests_consumed = consume_request_queue(lstate.curl_mhandle, guc_batch_size, CurlMemContext);
 
     elog(DEBUG1, "Consumed %zu request rows", requests_consumed);
 
-    if(requests_consumed == 0)
-      continue;
+    if(requests_consumed > 0){
+      int running_handles = 0;
+      int maxevents = guc_batch_size + 1; // 1 extra for the timer
+      event events[maxevents];
 
-    int running_handles = 0;
-    int maxevents = guc_batch_size + 1; // 1 extra for the timer
-    event *events = palloc0(sizeof(event) * maxevents);
-
-    do {
-      int nfds = wait_event(lstate.epfd, events, maxevents, curl_handle_event_timeout_ms);
-      if (nfds < 0) {
-        int save_errno = errno;
-        if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
-          continue;
-        }
-        else {
-          ereport(ERROR, errmsg("wait_event() failed: %s", strerror(save_errno)));
-          break;
-        }
-      }
-
-      for (int i = 0; i < nfds; i++) {
-        if (is_timer(events[i])) {
-          EREPORT_MULTI(
-            curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
-          );
-        } else {
-          int curl_event = get_curl_event(events[i]);
-          int sockfd = get_socket_fd(events[i]);
-
-          EREPORT_MULTI(
-            curl_multi_socket_action(
-              lstate.curl_mhandle,
-              sockfd,
-              curl_event,
-              &running_handles)
-          );
+      do {
+        int nfds = wait_event(lstate.epfd, events, maxevents, curl_handle_event_timeout_ms);
+        if (nfds < 0) {
+          int save_errno = errno;
+          if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
+            continue;
+          }
+          else {
+            ereport(ERROR, errmsg("wait_event() failed: %s", strerror(save_errno)));
+            break;
+          }
         }
 
-        insert_curl_responses(&lstate, CurlMemContext);
-      }
+        for (int i = 0; i < nfds; i++) {
+          if (is_timer(events[i])) {
+            EREPORT_MULTI(
+              curl_multi_socket_action(lstate.curl_mhandle, CURL_SOCKET_TIMEOUT, 0, &running_handles)
+            );
+          } else {
+            int curl_event = get_curl_event(events[i]);
+            int sockfd = get_socket_fd(events[i]);
 
-      elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
-    } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
+            EREPORT_MULTI(
+              curl_multi_socket_action(
+                lstate.curl_mhandle,
+                sockfd,
+                curl_event,
+                &running_handles)
+            );
+          }
 
-    pfree(events);
+          insert_curl_responses(&lstate, CurlMemContext);
+        }
+
+
+        elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
+      } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
+    }
+
+    PopActiveSnapshot();
+    CommitTransactionCommand();
 
     MemoryContextReset(CurlMemContext);
   }

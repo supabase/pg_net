@@ -175,8 +175,6 @@ uint64 delete_expired_responses(char *ttl, int batch_size){
 }
 
 static void insert_failure_response(CURL *ez_handle, CURLcode return_code, int64 id, int32 timeout_milliseconds){
-  StartTransactionCommand();
-  PushActiveSnapshot(GetTransactionSnapshot());
   SPI_connect();
 
   const char* error_msg;
@@ -199,13 +197,9 @@ static void insert_failure_response(CURL *ez_handle, CURLcode return_code, int64
   }
 
   SPI_finish();
-  PopActiveSnapshot();
-  CommitTransactionCommand();
 }
 
 static void insert_success_response(CurlData *cdata, long http_status_code, char *contentType, Jsonb *jsonb_headers){
-  StartTransactionCommand();
-  PushActiveSnapshot(GetTransactionSnapshot());
   SPI_connect();
 
   int ret_code = SPI_execute_with_args("\
@@ -233,13 +227,9 @@ static void insert_success_response(CurlData *cdata, long http_status_code, char
   }
 
   SPI_finish();
-  PopActiveSnapshot();
-  CommitTransactionCommand();
 }
 
 uint64 consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext curl_memctx){
-  StartTransactionCommand();
-  PushActiveSnapshot(GetTransactionSnapshot());
   SPI_connect();
 
   int ret_code = SPI_execute_with_args("\
@@ -292,8 +282,6 @@ uint64 consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext 
   }
 
   SPI_finish();
-  PopActiveSnapshot();
-  CommitTransactionCommand();
 
   return affected_rows;
 }
