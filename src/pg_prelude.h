@@ -9,6 +9,7 @@
 #include <storage/condition_variable.h>
 #include <storage/ipc.h>
 #include <storage/latch.h>
+#include "storage/lmgr.h"
 #include <storage/proc.h>
 #include <storage/shmem.h>
 #include <access/xact.h>
@@ -19,6 +20,7 @@
 #include <catalog/pg_type.h>
 #include <commands/defrem.h>
 #include <commands/extension.h>
+#include "commands/dbcommands.h"
 #include <executor/spi.h>
 #include <fmgr.h>
 #include <miscadmin.h>
