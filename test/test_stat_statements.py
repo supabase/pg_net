@@ -3,7 +3,6 @@ import time
 import pytest
 from sqlalchemy import text
 
-@pytest.mark.skip(reason="temporary disable")
 def test_query_stat_statements(sess):
     """Check that the background worker doesn't execute queries when no new requests arrive"""
 

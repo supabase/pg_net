@@ -23,12 +23,15 @@ static const int                curl_handle_event_timeout_ms = 1000;
 static const long               queue_processing_wait_timeout_ms = 1000;
 static const int                net_worker_restart_time_sec = 1;
 static const long               no_timeout = -1L;
+static bool                     extension_locked = false;
 
 static char*                    guc_ttl;
 static int                      guc_batch_size;
 static char*                    guc_database_name;
 static char*                    guc_username;
 static MemoryContext            CurlMemContext = NULL;
+static LockRelId                queue_table_lock;
+static LockRelId                response_table_lock;
 static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
 static volatile sig_atomic_t    got_sighup = false;
 
@@ -108,9 +111,51 @@ static void publish_state(WorkerStatus s) {
   ConditionVariableBroadcast(&worker_state->cv);
 }
 
+static bool is_extension_loaded(){
+  StartTransactionCommand();
+
+  bool extension_exists = OidIsValid(get_extension_oid("pg_net", true));
+
+  if(extension_exists && !extension_locked){
+    Oid db_oid = get_database_oid(guc_database_name, false);
+
+    Oid net_oid = get_namespace_oid("net", false);
+
+    queue_table_lock.dbId = db_oid;
+    queue_table_lock.relId = get_relname_relid("http_request_queue", net_oid);
+
+    response_table_lock.dbId = db_oid;
+    response_table_lock.relId = get_relname_relid("_http_response", net_oid);
+  }
+
+  CommitTransactionCommand();
+
+  return extension_exists;
+}
+
+static inline void lock_extension(){
+  if(!extension_locked){
+    elog(DEBUG1, "pg_net worker locking extension tables");
+    LockRelationIdForSession(&queue_table_lock, AccessShareLock);
+    LockRelationIdForSession(&response_table_lock, AccessShareLock);
+    extension_locked = true;
+  }
+}
+
+static inline void unlock_extension(){
+  if(extension_locked){
+    elog(DEBUG1, "pg_net worker unlocking extension tables");
+    UnlockRelationIdForSession(&queue_table_lock, AccessShareLock);
+    UnlockRelationIdForSession(&response_table_lock, AccessShareLock);
+    extension_locked = false;
+  }
+}
+
 static void
 net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum arg){
   pg_atomic_write_u32(&worker_state->should_restart, 0);
+
+  unlock_extension();
 
   DisownLatch(&worker_state->latch);
 
@@ -150,7 +195,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   BackgroundWorkerInitializeConnection(guc_database_name, guc_username, 0);
   pgstat_report_appname("pg_net " EXTVERSION); // set appname for pg_stat_activity
 
-  elog(INFO, "pg_net_worker started with a config of: pg_net.ttl=%s, pg_net.batch_size=%d, pg_net.username=%s, pg_net.database_name=%s", guc_ttl, guc_batch_size, guc_username, guc_database_name);
+  elog(INFO, "pg_net worker started with a config of: pg_net.ttl=%s, pg_net.batch_size=%d, pg_net.username=%s, pg_net.database_name=%s", guc_ttl, guc_batch_size, guc_username, guc_database_name);
 
   int curl_ret = curl_global_init(CURL_GLOBAL_ALL);
   if(curl_ret != CURLE_OK)
@@ -171,10 +216,22 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   while (true) {
     publish_state(WS_RUNNING);
 
+    if(!is_extension_loaded()){
+      elog(DEBUG1, "pg_net worker waiting for extension to load");
+      WaitLatch(&worker_state->latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000, PG_WAIT_EXTENSION);
+      ResetLatch(&worker_state->latch);
+      if(process_interrupts())
+        goto restart;
+
+      continue;
+    }
+
+    lock_extension(); // lock the extension immediately after it's loaded
+
     uint32 expected = 1;
     if (!pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 0)){
-      elog(DEBUG1, "pg_net_worker waiting for wake");
-      // this will also wait for the `create extension net` to load, since the signal can only come from the request functions inside the `net` schema
+      unlock_extension();
+      elog(DEBUG1, "pg_net worker waiting for wake");
       WaitLatch(&worker_state->latch,
                 WL_LATCH_SET | WL_EXIT_ON_PM_DEATH,
                 no_timeout,
@@ -263,6 +320,8 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   }
 
 restart:
+
+  unlock_extension();
 
   publish_state(WS_EXITED);
 
