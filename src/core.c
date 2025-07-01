@@ -130,10 +130,6 @@ static void init_curl_handle(CURLM *curl_mhandle, MemoryContext curl_memctx, int
 }
 
 void set_curl_mhandle(WorkerState *wstate){
-  wstate->curl_mhandle = curl_multi_init();
-  if(!wstate->curl_mhandle)
-    ereport(ERROR, errmsg("curl_multi_init()"));
-
   EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
   EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_SOCKETDATA, wstate);
   EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);

@@ -136,6 +136,10 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     ereport(ERROR, errmsg("Failed to create event monitor file descriptor"));
   }
 
+  worker_state->curl_mhandle = curl_multi_init();
+  if(!worker_state->curl_mhandle)
+    ereport(ERROR, errmsg("curl_multi_init()"));
+
   set_curl_mhandle(worker_state);
 
   while (!pg_atomic_read_u32(&worker_state->should_restart)) {
