@@ -10,7 +10,7 @@ PG_CFLAGS += --coverage
 endif
 
 EXTENSION = pg_net
-EXTVERSION = 0.17.0
+EXTVERSION = 0.18.0
 
 DATA = $(wildcard sql/*--*.sql)
 
