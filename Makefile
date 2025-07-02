@@ -62,4 +62,4 @@ include $(PGXS)
 
 .PHONY: test
 test:
-	net-with-nginx python -m pytest -vv
+	net-with-nginx python -m pytest -s --full-trace -vv
