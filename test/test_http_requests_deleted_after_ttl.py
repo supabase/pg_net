@@ -38,17 +38,16 @@ def test_http_requests_deleted_after_ttl(sess):
     # Sleep until after request should have been deleted
     time.sleep(5)
 
-    # Ensure collecting the resposne now results in an error
-    response = sess.execute(
+    # Ensure the response is now empty
+    (count,) = sess.execute(
         text(
             """
-        select * from net._http_collect_response(:request_id);
+        select count(*) from net._http_response where id = :request_id;
     """
         ),
         {"request_id": request_id},
     ).fetchone()
-    # TODO an ERROR status doesn't seem correct here
-    assert response[0] == "ERROR"
+    assert count == 0
 
     sess.execute(text("COMMIT"))
     sess.execute(text("alter system reset pg_net.ttl"))
