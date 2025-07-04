@@ -3,6 +3,7 @@
 #include <string.h>
 #include <inttypes.h>
 
+#define PG_PRELUDE_IMPL
 #include "pg_prelude.h"
 #include "curl_prelude.h"
 #include "util.h"
@@ -24,6 +25,7 @@ static const long               queue_processing_wait_timeout_ms = 1000;
 static const int                net_worker_restart_time_sec = 1;
 static const long               no_timeout = -1L;
 static bool                     extension_locked = false;
+static bool                     wake_commit_cb_active = false;
 
 static char*                    guc_ttl;
 static int                      guc_batch_size;
@@ -71,15 +73,44 @@ Datum wait_until_running(__attribute__ ((unused)) PG_FUNCTION_ARGS){
   PG_RETURN_VOID();
 }
 
+// only wake at commit time to prevent excessive and unnecessary wakes.
+// e.g only one wake when doing `select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100000);`
+static void wake_at_commit(XactEvent event, __attribute__ ((unused)) void *arg){
+  elog(DEBUG2, "pg_net xact callback received: %s", xact_event_name(event));
+
+  switch(event){
+    case XACT_EVENT_COMMIT:
+    case XACT_EVENT_PARALLEL_COMMIT:
+      if(wake_commit_cb_active){
+        uint32 expected = 0;
+        bool success = pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 1);
+        pg_write_barrier();
+
+        if (success) // only wake the worker on first put, so if many concurrent wakes come we only wake once
+          SetLatch(&worker_state->latch);
+
+        wake_commit_cb_active = false;
+      }
+      break;
+    // TODO: `PREPARE TRANSACTION 'xx';` and `COMMIT PREPARED TRANSACTION 'xx';` do not wake the worker automatically, they require a manual `net.wake()`
+    // These are disabled by default and rarely used, see `max_prepared_transactions` https://www.postgresql.org/docs/17/runtime-config-resource.html#GUC-MAX-PREPARED-TRANSACTIONS
+    case XACT_EVENT_PREPARE:
+    // abort the callback on rollback
+    case XACT_EVENT_ABORT:
+    case XACT_EVENT_PARALLEL_ABORT:
+      wake_commit_cb_active = false;
+      break;
+    default:
+      break;
+  }
+}
+
 PG_FUNCTION_INFO_V1(wake);
 Datum wake(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
-  uint32 expected = 0;
-
-  bool success = pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 1);
-  pg_write_barrier();
-
-  if (success) // only wake the worker on first put
-    SetLatch(&worker_state->latch);
+  if (!wake_commit_cb_active) { // register only one callback per transaction
+    RegisterXactCallback(wake_at_commit, NULL);
+    wake_commit_cb_active = true;
+  }
 
   PG_RETURN_VOID();
 }
