@@ -39,6 +39,8 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     # Wake the worker manually, under normal operation this will happen when new requests are received
     sess.execute(text("select net.wake()"))
 
+    sess.commit() # commit so worker  wakes
+
     # Ensure the response is now empty
     (count,) = sess.execute(
         text(
