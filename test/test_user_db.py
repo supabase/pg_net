@@ -6,8 +6,6 @@ from sqlalchemy import text
 def test_net_with_different_username_dbname(sess):
     """Check that a pre existing role can use the net schema"""
 
-    # commit to avoid "cannot run inside a transaction block" error, see https://stackoverflow.com/a/75757326/4692662
-    sess.execute(text("COMMIT"))
     sess.execute(text("alter system set pg_net.username to 'pre_existing'"))
     sess.execute(text("alter system set pg_net.database_name to 'pre_existing'"))
     sess.execute(text("select net.worker_restart()"))
@@ -23,7 +21,6 @@ def test_net_with_different_username_dbname(sess):
     assert username == 'pre_existing'
     assert datname == 'pre_existing'
 
-    sess.execute(text("COMMIT"))
     sess.execute(text("alter system reset pg_net.username"))
     sess.execute(text("alter system reset pg_net.database_name"))
     sess.execute(text("select net.worker_restart()"))
