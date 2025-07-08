@@ -15,9 +15,6 @@ def sess(engine):
 
     session = Session(engine)
 
-    # no autocommit
-    session.connection().connection.set_isolation_level(0)
-
     # Reset sequences and tables between tests
     session.execute(text(
         """
