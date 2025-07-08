@@ -3,12 +3,12 @@ import time
 import pytest
 from sqlalchemy import text
 
-def test_http_requests_deleted_after_ttl(sess):
+def test_http_requests_deleted_after_ttl(sess, autocommit_sess):
     """Check that http requests are deleted within a few seconds of their ttl"""
 
-    sess.execute(text("alter system set pg_net.ttl to '4 seconds'"))
-    sess.execute(text("select net.worker_restart()"))
-    sess.execute(text("select net.wait_until_running()"))
+    autocommit_sess.execute(text("alter system set pg_net.ttl to '4 seconds'"))
+    autocommit_sess.execute(text("select net.worker_restart()"))
+    autocommit_sess.execute(text("select net.wait_until_running()"))
 
     # Create a request
     (request_id,) = sess.execute(text(
@@ -47,6 +47,6 @@ def test_http_requests_deleted_after_ttl(sess):
     ).fetchone()
     assert count == 0
 
-    sess.execute(text("alter system reset pg_net.ttl"))
-    sess.execute(text("select net.worker_restart()"))
-    sess.execute(text("select net.wait_until_running()"))
+    autocommit_sess.execute(text("alter system reset pg_net.ttl"))
+    autocommit_sess.execute(text("select net.worker_restart()"))
+    autocommit_sess.execute(text("select net.wait_until_running()"))

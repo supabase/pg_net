@@ -36,3 +36,11 @@ def sess(engine):
     """
     ))
     session.commit()
+
+
+@pytest.fixture(scope="function")
+def autocommit_sess(engine):
+    ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+    session = Session(ac_engine)
+
+    yield session
