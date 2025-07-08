@@ -6,8 +6,6 @@ from sqlalchemy import text
 def test_http_requests_deleted_after_ttl(sess):
     """Check that http requests are deleted within a few seconds of their ttl"""
 
-    # commit to avoid "cannot run inside a transaction block" error, see https://stackoverflow.com/a/75757326/4692662
-    sess.execute(text("COMMIT"))
     sess.execute(text("alter system set pg_net.ttl to '4 seconds'"))
     sess.execute(text("select net.worker_restart()"))
     sess.execute(text("select net.wait_until_running()"))
@@ -49,7 +47,6 @@ def test_http_requests_deleted_after_ttl(sess):
     ).fetchone()
     assert count == 0
 
-    sess.execute(text("COMMIT"))
     sess.execute(text("alter system reset pg_net.ttl"))
     sess.execute(text("select net.worker_restart()"))
     sess.execute(text("select net.wait_until_running()"))
