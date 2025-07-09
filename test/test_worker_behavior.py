@@ -211,3 +211,64 @@ def test_new_requests_get_attended_asap(sess):
 
     assert status_code == 200
     assert count == 10
+
+
+def test_direct_inserts_no_requests(sess):
+    """direct insertions to the net.http_request_queue doesn't trigger new requests"""
+
+    sess.execute(text(
+        """
+        insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
+        values (
+            'GET',
+            net._encode_url_with_params_array('http://localhost:8080/pathological?status=200', '{}'),
+            '{}',
+            5000
+        );
+    """
+    ))
+
+    sess.commit()
+
+    # wait for req
+    time.sleep(0.1)
+
+    # no response
+    (count,) = sess.execute(text(
+    """
+        select count(*) from net._http_response;
+    """
+    )).fetchone()
+
+    assert count == 0
+
+    # req still in queue
+    (count,) = sess.execute(text(
+    """
+        select count(*) from net.http_request_queue;
+    """
+    )).fetchone()
+
+    assert count == 1
+
+    # an explicit wake will make it serve requests though
+
+    sess.execute(text(
+    """
+        select net.wake();
+    """
+    ))
+
+    sess.commit()
+
+    # wait for req
+    time.sleep(0.1)
+
+    (status_code, count) = sess.execute(text(
+    """
+        select status_code, count(*) from net._http_response group by status_code;
+    """
+    )).fetchone()
+
+    assert status_code == 200
+    assert count == 1
