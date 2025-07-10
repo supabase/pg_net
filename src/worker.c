@@ -18,10 +18,14 @@ _Static_assert(LIBCURL_VERSION_NUM >= MIN_LIBCURL_VERSION_NUM, REQUIRED_LIBCURL_
 
 PG_MODULE_MAGIC;
 
+typedef enum {
+  WORKER_WAIT_NO_TIMEOUT,
+  WORKER_WAIT_ONE_SECOND,
+} WorkerWait;
+
 WorkerState *worker_state = NULL;
 
 static const int                curl_handle_event_timeout_ms = 1000;
-static const long               queue_processing_wait_timeout_ms = 1000;
 static const int                net_worker_restart_time_sec = 1;
 static const long               no_timeout = -1L;
 static bool                     extension_locked = false;
@@ -198,8 +202,22 @@ net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum ar
   curl_global_cleanup();
 }
 
-static bool process_interrupts(){
+static bool wait_while_processing_interrupts(WorkerWait ww){
   bool restart = false;
+
+  switch(ww){
+    case WORKER_WAIT_NO_TIMEOUT:
+      WaitLatch(&worker_state->latch,
+                WL_LATCH_SET | WL_EXIT_ON_PM_DEATH,
+                no_timeout,
+                PG_WAIT_EXTENSION);
+      ResetLatch(&worker_state->latch);
+      break;
+    case WORKER_WAIT_ONE_SECOND:
+      WaitLatch(&worker_state->latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000, PG_WAIT_EXTENSION);
+      ResetLatch(&worker_state->latch);
+      break;
+  }
 
   CHECK_FOR_INTERRUPTS();
 
@@ -251,9 +269,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
     if(!is_extension_loaded()){
       elog(DEBUG1, "pg_net worker waiting for extension to load");
-      WaitLatch(&worker_state->latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000, PG_WAIT_EXTENSION);
-      ResetLatch(&worker_state->latch);
-      if(process_interrupts())
+      if(wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND))
         goto restart;
 
       continue;
@@ -265,12 +281,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     if (!pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 0)){
       unlock_extension();
       elog(DEBUG1, "pg_net worker waiting for wake");
-      WaitLatch(&worker_state->latch,
-                WL_LATCH_SET | WL_EXIT_ON_PM_DEATH,
-                no_timeout,
-                PG_WAIT_EXTENSION);
-      ResetLatch(&worker_state->latch);
-      if(process_interrupts())
+      if(wait_while_processing_interrupts(WORKER_WAIT_NO_TIMEOUT))
         goto restart;
 
       continue;
@@ -340,9 +351,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       MemoryContextReset(CurlMemContext);
 
       // slow down queue processing to avoid using too much CPU
-      WaitLatch(&worker_state->latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, queue_processing_wait_timeout_ms, PG_WAIT_EXTENSION);
-      ResetLatch(&worker_state->latch);
-      if(process_interrupts())
+      if(wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND))
         goto restart;
 
     } while (requests_consumed > 0 || expired_responses > 0);
