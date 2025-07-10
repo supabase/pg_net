@@ -185,7 +185,9 @@ static inline void unlock_extension(){
 static void
 net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum arg){
   pg_atomic_write_u32(&worker_state->should_restart, 0);
+  pg_atomic_write_u32(&worker_state->should_work, 1); // ensure the remaining work will continue since we'll restart
 
+  // ensure unlock happens in case of error
   unlock_extension();
 
   DisownLatch(&worker_state->latch);
@@ -340,12 +342,8 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       // slow down queue processing to avoid using too much CPU
       WaitLatch(&worker_state->latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, queue_processing_wait_timeout_ms, PG_WAIT_EXTENSION);
       ResetLatch(&worker_state->latch);
-      if(process_interrupts()){
-        if(requests_consumed > 0 || expired_responses > 0) // if we have to restart, ensure the remaining work will continue
-          pg_atomic_write_u32(&worker_state->should_work, 1);
-
+      if(process_interrupts())
         goto restart;
-      }
 
     } while (requests_consumed > 0 || expired_responses > 0);
   }
@@ -371,7 +369,7 @@ static void net_shmem_startup(void) {
   if (!found) {
     pg_atomic_init_u32(&worker_state->should_restart, 0);
     pg_atomic_init_u32(&worker_state->status, WS_NOT_YET);
-    pg_atomic_init_u32(&worker_state->should_work, 0);
+    pg_atomic_init_u32(&worker_state->should_work, 1);
     InitSharedLatch(&worker_state->latch);
 
     ConditionVariableInit(&worker_state->cv);

@@ -1,7 +1,11 @@
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from sqlalchemy import text
 import sqlalchemy as sa
 import pytest
 import time
+import subprocess
+import os
 
 def test_success_when_worker_is_up(sess):
     """net.check_worker_is_up should not return anything when the worker is running"""
@@ -341,3 +345,67 @@ def test_direct_inserts_no_requests(sess):
 
     assert status_code == 200
     assert count == 1
+
+
+def test_processing_survives_postmaster_crash():
+    """the queue will continue processing even when a postmaster crash or restart happens"""
+
+    engine = create_engine("postgresql:///postgres")
+    ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+    tmp_sess = Session(ac_engine)
+
+    tmp_sess.execute(text("create extension if not exists pg_net;"))
+
+    tmp_sess.execute(text("alter system set pg_net.batch_size to '5';"))
+    tmp_sess.execute(text("select net.worker_restart();"))
+    tmp_sess.execute(text("select net.wait_until_running();"))
+
+    tmp_sess.execute(text(
+        """
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+    """
+    )).fetchone()
+
+    (count,) = tmp_sess.execute(text(
+    """
+        select count(*) from net.http_request_queue;
+    """
+    )).fetchone()
+    assert count == 10
+
+    engine.dispose()
+
+    pgdata_env = os.getenv('PGDATA')
+    subprocess.run(["pg_ctl", "restart", "-D", pgdata_env])
+
+    # give it some time to finish restart
+    time.sleep(1)
+
+    engine = create_engine("postgresql:///postgres")
+    ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+    tmp_sess = Session(ac_engine)
+
+    # give it enough time to finish processing the queue
+    time.sleep(1)
+
+    (count,) = tmp_sess.execute(text(
+    """
+        select count(*) from net.http_request_queue;
+    """
+    )).fetchone()
+    assert count == 0
+
+    (status_code,count) = tmp_sess.execute(text(
+    """
+        select status_code, count(*) from net._http_response group by status_code;
+    """
+    )).fetchone()
+
+    assert status_code == 200
+    assert count == 10
+
+    tmp_sess.execute(text("alter system reset pg_net.batch_size"))
+    tmp_sess.execute(text("select net.worker_restart()"))
+    tmp_sess.execute(text("select net.wait_until_running()"))
+
+    engine.dispose()
