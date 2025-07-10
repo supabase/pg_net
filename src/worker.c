@@ -30,6 +30,7 @@ static const int                net_worker_restart_time_sec = 1;
 static const long               no_timeout = -1L;
 static bool                     extension_locked = false;
 static bool                     wake_commit_cb_active = false;
+static bool                     worker_should_restart = false;
 
 static char*                    guc_ttl;
 static int                      guc_batch_size;
@@ -52,7 +53,7 @@ void _PG_init(void);
 PG_FUNCTION_INFO_V1(worker_restart);
 Datum worker_restart(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
   bool result = DatumGetBool(DirectFunctionCall1(pg_reload_conf, (Datum) NULL)); // reload the config
-  pg_atomic_write_u32(&worker_state->should_restart, 1);
+  pg_atomic_write_u32(&worker_state->got_restart, 1);
   pg_write_barrier();
   if (worker_state)
     SetLatch(&worker_state->latch);
@@ -87,7 +88,7 @@ static void wake_at_commit(XactEvent event, __attribute__ ((unused)) void *arg){
     case XACT_EVENT_PARALLEL_COMMIT:
       if(wake_commit_cb_active){
         uint32 expected = 0;
-        bool success = pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 1);
+        bool success = pg_atomic_compare_exchange_u32(&worker_state->should_wake, &expected, 1);
         pg_write_barrier();
 
         if (success) // only wake the worker on first put, so if many concurrent wakes come we only wake once
@@ -123,7 +124,7 @@ static void
 handle_sigterm(__attribute__ ((unused)) SIGNAL_ARGS)
 {
   int save_errno = errno;
-  pg_atomic_write_u32(&worker_state->should_restart, 1);
+  pg_atomic_write_u32(&worker_state->got_restart, 1);
   pg_write_barrier();
   if (worker_state)
     SetLatch(&worker_state->latch);
@@ -188,8 +189,8 @@ static inline void unlock_extension(){
 
 static void
 net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum arg){
-  pg_atomic_write_u32(&worker_state->should_restart, 0);
-  pg_atomic_write_u32(&worker_state->should_work, 1); // ensure the remaining work will continue since we'll restart
+  worker_should_restart = false;
+  pg_atomic_write_u32(&worker_state->should_wake, 1); // ensure the remaining work will continue since we'll restart
 
   // ensure unlock happens in case of error
   unlock_extension();
@@ -202,9 +203,8 @@ net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum ar
   curl_global_cleanup();
 }
 
-static bool wait_while_processing_interrupts(WorkerWait ww){
-  bool restart = false;
-
+// wait according to the wait type while ensuring interrupts are processed while waiting
+static void wait_while_processing_interrupts(WorkerWait ww, bool *should_restart){
   switch(ww){
     case WORKER_WAIT_NO_TIMEOUT:
       WaitLatch(&worker_state->latch,
@@ -226,11 +226,9 @@ static bool wait_while_processing_interrupts(WorkerWait ww){
     ProcessConfigFile(PGC_SIGHUP);
   }
 
-  if (pg_atomic_read_u32(&worker_state->should_restart) == 1){
-    restart = true;
+  if (pg_atomic_exchange_u32(&worker_state->got_restart, 0)){
+    *should_restart = true;
   }
-
-  return restart;
 }
 
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
@@ -264,26 +262,23 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
   set_curl_mhandle(worker_state);
 
-  while (true) {
-    publish_state(WS_RUNNING);
+  publish_state(WS_RUNNING);
+
+  do {
 
     if(!is_extension_loaded()){
       elog(DEBUG1, "pg_net worker waiting for extension to load");
-      if(wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND))
-        goto restart;
-
+      wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND, &worker_should_restart);
       continue;
     }
 
     lock_extension(); // lock the extension immediately after it's loaded
 
     uint32 expected = 1;
-    if (!pg_atomic_compare_exchange_u32(&worker_state->should_work, &expected, 0)){
+    if (!pg_atomic_compare_exchange_u32(&worker_state->should_wake, &expected, 0)){
       unlock_extension();
       elog(DEBUG1, "pg_net worker waiting for wake");
-      if(wait_while_processing_interrupts(WORKER_WAIT_NO_TIMEOUT))
-        goto restart;
-
+      wait_while_processing_interrupts(WORKER_WAIT_NO_TIMEOUT, &worker_should_restart);
       continue;
     }
 
@@ -351,13 +346,11 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       MemoryContextReset(CurlMemContext);
 
       // slow down queue processing to avoid using too much CPU
-      if(wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND))
-        goto restart;
+      wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND, &worker_should_restart);
 
-    } while (requests_consumed > 0 || expired_responses > 0);
-  }
+    } while (!worker_should_restart && (requests_consumed > 0 || expired_responses > 0));
 
-restart:
+  } while (!worker_should_restart);
 
   unlock_extension();
 
@@ -376,9 +369,9 @@ static void net_shmem_startup(void) {
   worker_state = ShmemInitStruct("pg_net worker state", sizeof(WorkerState), &found);
 
   if (!found) {
-    pg_atomic_init_u32(&worker_state->should_restart, 0);
+    pg_atomic_init_u32(&worker_state->got_restart, 0);
     pg_atomic_init_u32(&worker_state->status, WS_NOT_YET);
-    pg_atomic_init_u32(&worker_state->should_work, 1);
+    pg_atomic_init_u32(&worker_state->should_wake, 1);
     InitSharedLatch(&worker_state->latch);
 
     ConditionVariableInit(&worker_state->cv);

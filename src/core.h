@@ -8,8 +8,8 @@ typedef enum {
 } WorkerStatus;
 
 typedef struct {
-  pg_atomic_uint32  should_restart;
-  pg_atomic_uint32  should_work;
+  pg_atomic_uint32  got_restart;
+  pg_atomic_uint32  should_wake;
   pg_atomic_uint32  status;
   Latch             latch;
   ConditionVariable cv;
