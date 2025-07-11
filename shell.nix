@@ -10,6 +10,9 @@ mkShell {
       nixopsScripts = callPackage ./nix/nixopsScripts.nix {};
       xpg = callPackage ./nix/xpg.nix {inherit fetchFromGitHub;};
       loadtest = callPackage ./nix/loadtest.nix {};
+      pg_stat_monitor15 = callPackage ./nix/pg_stat_monitor.nix {
+        postgresql = xpg.postgresql_15;
+      };
       pythonDeps = with python3Packages; [
         pytest
         psycopg2
@@ -17,7 +20,9 @@ mkShell {
       ];
     in
     [
-      xpg.xpg
+      (xpg.xpgWithExtensions {
+        exts15 = [ pg_stat_monitor15 ];
+      })
       pythonDeps
       nginxCustom.nginxScript
       curl
