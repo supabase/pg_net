@@ -91,6 +91,8 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
     sess.execute(text("select net.wake()"))
     sess.commit() # commit so worker  wakes
 
+    time.sleep(0.1)
+
     (count,) = sess.execute(
         text(
             """

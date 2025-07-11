@@ -134,7 +134,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
 
 
 def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
-    """a truncate will wait until the worker is done processing all requests"""
+    """a truncate will not wait until the worker is done processing all requests"""
 
     autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
     autocommit_sess.execute(text("select net.worker_restart();"))
@@ -148,6 +148,7 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
 
     sess.commit()
 
+    # truncate succeeds
     sess.execute(text(
         """
         truncate net.http_request_queue;
@@ -156,14 +157,37 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
 
     sess.commit()
 
+    time.sleep(0.1)
+
+    # and only one response will be done
     (count,) = sess.execute(text(
         """
         select count(*) from net._http_response;
     """
     )).fetchone()
-    assert count == 5
+    assert count == 1
 
     sess.commit()
+
+    # even if some time passes
+    time.sleep(1.1)
+
+    (count,) = sess.execute(text(
+        """
+        select count(*) from net._http_response;
+    """
+    )).fetchone()
+    assert count == 1
+
+    sess.commit()
+
+    # and the queue will be empty
+    (count,) = sess.execute(text(
+        """
+        select count(*) from net.http_request_queue;
+    """
+    )).fetchone()
+    assert count == 0
 
     autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
     autocommit_sess.execute(text("select net.worker_restart()"))

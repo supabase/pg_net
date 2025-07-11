@@ -137,9 +137,6 @@ void set_curl_mhandle(WorkerState *wstate){
 }
 
 uint64 delete_expired_responses(char *ttl, int batch_size){
-  SetCurrentStatementStartTimestamp();
-  StartTransactionCommand();
-  PushActiveSnapshot(GetTransactionSnapshot());
   SPI_connect();
 
   int ret_code = SPI_execute_with_args("\
@@ -168,8 +165,6 @@ uint64 delete_expired_responses(char *ttl, int batch_size){
   }
 
   SPI_finish();
-  PopActiveSnapshot();
-  CommitTransactionCommand();
 
   return affected_rows;
 }
