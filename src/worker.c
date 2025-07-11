@@ -28,17 +28,15 @@ static WorkerState *worker_state = NULL;
 static const int                curl_handle_event_timeout_ms = 1000;
 static const int                net_worker_restart_time_sec = 1;
 static const long               no_timeout = -1L;
-static bool                     extension_locked = false;
 static bool                     wake_commit_cb_active = false;
 static bool                     worker_should_restart = false;
+static const size_t             total_extension_tables = 2;
 
 static char*                    guc_ttl;
 static int                      guc_batch_size;
 static char*                    guc_database_name;
 static char*                    guc_username;
 static MemoryContext            CurlMemContext = NULL;
-static LockRelId                queue_table_lock;
-static LockRelId                response_table_lock;
 static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
 static volatile sig_atomic_t    got_sighup = false;
 
@@ -147,53 +145,10 @@ static void publish_state(WorkerStatus s) {
   ConditionVariableBroadcast(&worker_state->cv);
 }
 
-static bool is_extension_loaded(){
-  StartTransactionCommand();
-
-  bool extension_exists = OidIsValid(get_extension_oid("pg_net", true));
-
-  if(extension_exists && !extension_locked){
-    Oid db_oid = get_database_oid(guc_database_name, false);
-
-    Oid net_oid = get_namespace_oid("net", false);
-
-    queue_table_lock.dbId = db_oid;
-    queue_table_lock.relId = get_relname_relid("http_request_queue", net_oid);
-
-    response_table_lock.dbId = db_oid;
-    response_table_lock.relId = get_relname_relid("_http_response", net_oid);
-  }
-
-  CommitTransactionCommand();
-
-  return extension_exists;
-}
-
-static inline void lock_extension(){
-  if(!extension_locked){
-    elog(DEBUG1, "pg_net worker locking extension tables");
-    LockRelationIdForSession(&queue_table_lock, AccessShareLock);
-    LockRelationIdForSession(&response_table_lock, AccessShareLock);
-    extension_locked = true;
-  }
-}
-
-static inline void unlock_extension(){
-  if(extension_locked){
-    elog(DEBUG1, "pg_net worker unlocking extension tables");
-    UnlockRelationIdForSession(&queue_table_lock, AccessShareLock);
-    UnlockRelationIdForSession(&response_table_lock, AccessShareLock);
-    extension_locked = false;
-  }
-}
-
 static void
 net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum arg){
   worker_should_restart = false;
   pg_atomic_write_u32(&worker_state->should_wake, 1); // ensure the remaining work will continue since we'll restart
-
-  // ensure unlock happens in case of error
-  unlock_extension();
 
   DisownLatch(&worker_state->latch);
 
@@ -231,6 +186,31 @@ static void wait_while_processing_interrupts(WorkerWait ww, bool *should_restart
   }
 }
 
+static bool is_extension_locked(Oid ext_table_oids[static total_extension_tables]){
+  Oid net_oid = get_namespace_oid("net", true);
+
+  if(!OidIsValid(net_oid)){
+    return false;
+  }
+
+  Oid queue_oid = get_relname_relid("http_request_queue", net_oid);
+  Oid resp_oid = get_relname_relid("_http_response", net_oid);
+
+  bool is_locked = ConditionalLockRelationOid(queue_oid, AccessShareLock) && ConditionalLockRelationOid(resp_oid, AccessShareLock);
+
+  if (is_locked) {
+    ext_table_oids[0] = queue_oid;
+    ext_table_oids[1] = resp_oid;
+  }
+
+  return is_locked;
+}
+
+static void unlock_extension(Oid ext_table_oids[static total_extension_tables]){
+  UnlockRelationOid(ext_table_oids[0], AccessShareLock);
+  UnlockRelationOid(ext_table_oids[1], AccessShareLock);
+}
+
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   on_proc_exit(net_on_exit, 0);
 
@@ -266,17 +246,8 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
   do {
 
-    if(!is_extension_loaded()){
-      elog(DEBUG1, "pg_net worker waiting for extension to load");
-      wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND, &worker_should_restart);
-      continue;
-    }
-
-    lock_extension(); // lock the extension immediately after it's loaded
-
     uint32 expected = 1;
     if (!pg_atomic_compare_exchange_u32(&worker_state->should_wake, &expected, 0)){
-      unlock_extension();
       elog(DEBUG1, "pg_net worker waiting for wake");
       wait_while_processing_interrupts(WORKER_WAIT_NO_TIMEOUT, &worker_should_restart);
       continue;
@@ -286,12 +257,22 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     uint64 expired_responses = 0;
 
     do {
+      SetCurrentStatementStartTimestamp();
+      StartTransactionCommand();
+      PushActiveSnapshot(GetTransactionSnapshot());
+
+      Oid ext_table_oids[total_extension_tables];
+
+      if(!is_extension_locked(ext_table_oids)){
+        elog(DEBUG1, "pg_net extension not loaded");
+        PopActiveSnapshot();
+        AbortCurrentTransaction();
+        break;
+      }
+
       expired_responses = delete_expired_responses(guc_ttl, guc_batch_size);
 
       elog(DEBUG1, "Deleted "UINT64_FORMAT" expired rows", expired_responses);
-
-      StartTransactionCommand();
-      PushActiveSnapshot(GetTransactionSnapshot());
 
       requests_consumed = consume_request_queue(worker_state->curl_mhandle, guc_batch_size, CurlMemContext);
 
@@ -341,6 +322,8 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
         } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
       }
 
+      unlock_extension(ext_table_oids);
+
       PopActiveSnapshot();
       CommitTransactionCommand();
 
@@ -352,8 +335,6 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     } while (!worker_should_restart && (requests_consumed > 0 || expired_responses > 0));
 
   } while (!worker_should_restart);
-
-  unlock_extension();
 
   publish_state(WS_EXITED);
 
