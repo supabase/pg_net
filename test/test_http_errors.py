@@ -14,7 +14,8 @@ def test_get_bad_url(sess):
             select net.http_get('localhost:{wrong_port}');
         """
         ))
-    assert r"Couldn\'t resolve proxy name" in str(execinfo)
+
+    assert r"resolve proxy name" in str(execinfo)
 
 
 def test_bad_post(sess):
@@ -91,7 +92,9 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     """
     )).fetchone()
 
-    assert error_msg == "Couldn't connect to server"
+    # newer curl version changes the error message
+    expected = ("Couldn't connect to server", "Could not connect to server")
+    assert error_msg in expected
     assert count == 10
 
     (request_id,) = sess.execute(text(
