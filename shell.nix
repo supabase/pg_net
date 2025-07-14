@@ -25,7 +25,7 @@ mkShell {
       xpg.xpg
       pythonDeps
       nginxCustom.nginxScript
-      curl
+      curlWithGnuTls
       loadtest
     ] ++ nixopsScripts;
   shellHook = ''
