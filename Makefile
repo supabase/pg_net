@@ -9,6 +9,14 @@ ifeq ($(COVERAGE), 1)
 PG_CFLAGS += --coverage
 endif
 
+ifeq ($(CC),gcc)
+  GCC_MAJ := $(firstword $(subst ., ,$(shell $(CC) -dumpfullversion -dumpversion)))
+  GCC_GE14 = $(shell test $(GCC_MAJ) -ge 14; echo $$?)
+  ifeq ($(GCC_GE14),0)
+    PG_CFLAGS += -Wmissing-variable-declarations
+  endif
+endif
+
 EXTENSION = pg_net
 EXTVERSION = 0.19.0
 

@@ -23,7 +23,7 @@ typedef enum {
   WORKER_WAIT_ONE_SECOND,
 } WorkerWait;
 
-WorkerState *worker_state = NULL;
+static WorkerState *worker_state = NULL;
 
 static const int                curl_handle_event_timeout_ms = 1000;
 static const int                net_worker_restart_time_sec = 1;
