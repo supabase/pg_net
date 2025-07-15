@@ -64,8 +64,8 @@ The extension introduces a new `net` schema, which contains two unlogged tables,
             id bigint NOT NULL DEFAULT nextval('net.http_request_queue_id_seq'::regclass),
             method text NOT NULL,
             url text NOT NULL,
-            headers jsonb NOT NULL,
-            body bytea NULL,
+            headers jsonb,
+            body bytea,
             timeout_milliseconds integer NOT NULL
         )
     ```

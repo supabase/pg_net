@@ -174,3 +174,27 @@ def test_http_get_ipv6(sess):
 
     assert response is not None
     assert "Hello ipv6 only" in response[2]
+
+
+def test_http_get_null_headers(sess):
+    """net.http_get can have null headers"""
+
+    (request_id,) = sess.execute(text(
+        """
+        select net.http_get('http://localhost:8080', null::jsonb, null::jsonb, 100);
+    """
+    )).fetchone()
+
+    sess.commit()
+
+    response = sess.execute(
+        text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+    ).fetchone()
+
+    assert response is not None
+    assert "Hello world" in response[2]
