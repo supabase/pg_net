@@ -13,7 +13,7 @@ create unlogged table net.http_request_queue(
     id bigserial,
     method net.http_method not null,
     url text not null,
-    headers jsonb not null,
+    headers jsonb,
     body bytea,
     timeout_milliseconds int not null
 );
