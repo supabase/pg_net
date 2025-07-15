@@ -26,9 +26,13 @@ let
 
     export PATH=${customNginx}/bin:"$PATH"
 
-    trap 'killall nginx' sigint sigterm exit
-
     nginx -p nix/nginx -e stderr &
+
+    pidfile=nix/nginx/nginx.pid
+    while [ ! -s "$pidfile" ]; do sleep 0.05; done
+    pid=$(cat "$pidfile")
+
+    trap 'kill -TERM "$pid" 2>/dev/null || true' sigint sigterm exit
 
     "$@"
   '';
