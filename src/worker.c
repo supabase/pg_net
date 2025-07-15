@@ -288,14 +288,14 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
     do {
       expired_responses = delete_expired_responses(guc_ttl, guc_batch_size);
 
-      elog(DEBUG1, "Deleted %zu expired rows", expired_responses);
+      elog(DEBUG1, "Deleted "UINT64_FORMAT" expired rows", expired_responses);
 
       StartTransactionCommand();
       PushActiveSnapshot(GetTransactionSnapshot());
 
       requests_consumed = consume_request_queue(worker_state->curl_mhandle, guc_batch_size, CurlMemContext);
 
-      elog(DEBUG1, "Consumed %zu request rows", requests_consumed);
+      elog(DEBUG1, "Consumed "UINT64_FORMAT" request rows", requests_consumed);
 
       if(requests_consumed > 0){
         int running_handles = 0;
