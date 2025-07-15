@@ -307,6 +307,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
           if (nfds < 0) {
             int save_errno = errno;
             if(save_errno == EINTR) { // can happen when the wait is interrupted, for example when running under GDB. Just continue in this case.
+              elog(DEBUG1, "wait_event() got %s, continuing", strerror(save_errno));
               continue;
             }
             else {
