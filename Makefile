@@ -17,6 +17,14 @@ ifeq ($(CC),gcc)
   endif
 endif
 
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+    SHARED_EXT  := dylib
+else
+    SHARED_EXT  := so
+endif
+
 EXTENSION = pg_net
 EXTVERSION = 0.19.0
 
@@ -45,7 +53,7 @@ PG_CPPFLAGS := $(CPPFLAGS) -DEXTVERSION=\"$(EXTVERSION)\"
 
 all: sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
 
-build: $(BUILD_DIR)/$(EXTENSION).so sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
+build: $(BUILD_DIR)/$(EXTENSION).$(SHARED_EXT) sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
 
 $(BUILD_DIR)/.gitignore: sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).control
 	mkdir -p $(BUILD_DIR)/extension
@@ -56,7 +64,7 @@ $(BUILD_DIR)/.gitignore: sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).contro
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(BUILD_DIR)/.gitignore
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/$(EXTENSION).so: $(EXTENSION).so
+$(BUILD_DIR)/$(EXTENSION).$(SHARED_EXT): $(EXTENSION).$(SHARED_EXT)
 	mv $? $@
 
 sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
