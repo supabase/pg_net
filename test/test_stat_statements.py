@@ -106,7 +106,6 @@ def test_wakes_at_commit_time(sess):
     # wait for reqs
     time.sleep(2)
 
-
     (commit_calls,) = sess.execute(text(
         """
         select coalesce(sum(calls), 0)
@@ -118,6 +117,7 @@ def test_wakes_at_commit_time(sess):
     )).fetchone()
 
     assert commit_calls == initial_calls + 4 # only 4 queries should be made for the above requests
+                                             # 2 queries at wake, 2 extra to check if there are more rows to be processed
 
     # if the new requests are rollbacked/aborted, then no new queries will be made by the bg worker
     sess.execute(text(

@@ -6,7 +6,7 @@ from sqlalchemy import text
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     """Check that http responses will be deleted when they reach their ttl, not immediately but when the worker wakes again"""
 
-    autocommit_sess.execute(text("alter system set pg_net.ttl to '4 seconds'"))
+    autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second'"))
     autocommit_sess.execute(text("select net.worker_restart()"))
     autocommit_sess.execute(text("select net.wait_until_running()"))
 
@@ -34,12 +34,14 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     assert response[0] == "SUCCESS"
 
     # Sleep until after request should have been deleted
-    time.sleep(5)
+    time.sleep(1.1)
 
     # Wake the worker manually, under normal operation this will happen when new requests are received
     sess.execute(text("select net.wake()"))
 
     sess.commit() # commit so worker  wakes
+
+    time.sleep(0.1) # wait for deletion
 
     # Ensure the response is now empty
     (count,) = sess.execute(
@@ -60,16 +62,25 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
 def test_http_responses_will_complete_deletion(sess, autocommit_sess):
     """Check that http responses will keep being deleted until completion despite no new requests coming"""
 
-    sess.execute(text(
+    (request_id,) = sess.execute(text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4);
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    ))
+    )).fetchone()
 
     sess.commit()
 
-    # wait for reqs
-    time.sleep(0.1)
+    # Collect the last response, waiting as needed
+    response = sess.execute(
+        text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+        ).fetchone()
+    assert response is not None
+    assert response[0] == "SUCCESS"
 
     (count,) = sess.execute(
         text(
@@ -122,16 +133,25 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
 def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
     """Check that http responses will keep being despite no new requests coming" and despite restart"""
 
-    sess.execute(text(
+    (request_id,) = sess.execute(text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4);
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    ))
+    )).fetchone()
 
     sess.commit()
 
-    # wait for reqs
-    time.sleep(0.1)
+    # Collect the last response, waiting as needed
+    response = sess.execute(
+        text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+        ).fetchone()
+    assert response is not None
+    assert response[0] == "SUCCESS"
 
     (count,) = sess.execute(
         text(

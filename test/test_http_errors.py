@@ -77,14 +77,24 @@ def test_bad_utils(sess):
 def test_it_keeps_working_after_many_connection_refused(sess):
     """the worker doesn't crash on many failed responses with connection refused"""
 
-    res = sess.execute(text(
+    (request_id,) = sess.execute(text(
         f"""
-        select net.http_get('http://localhost:{wrong_port}') from generate_series(1,10);
+        select net.http_get('http://localhost:{wrong_port}') from generate_series(1,10) offset 9;
     """
-    ))
+    )).fetchone()
     sess.commit()
 
-    time.sleep(2)
+    # Collect the last response, waiting as needed
+    response = sess.execute(
+        text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+        ).fetchone()
+    assert response is not None
+    assert response[0] == "ERROR"
 
     (error_msg,count) = sess.execute(text(
     """
@@ -121,14 +131,24 @@ def test_it_keeps_working_after_many_connection_refused(sess):
 def test_it_keeps_working_after_server_returns_nothing(sess):
     """the worker doesn't crash on many failed responses with server returned nothing"""
 
-    sess.execute(text(
+    (request_id,) = sess.execute(text(
         """
-        select net.http_get('http://localhost:8080/pathological?disconnect=true') from generate_series(1,10);
+        select net.http_get('http://localhost:8080/pathological?disconnect=true') from generate_series(1,10) offset 9;
     """
-    ))
+    )).fetchone()
     sess.commit()
 
-    time.sleep(1.5)
+    # Collect the last response, waiting as needed
+    response = sess.execute(
+        text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+        ).fetchone()
+    assert response is not None
+    assert response[0] == "ERROR"
 
     (error_msg,count) = sess.execute(text(
     """
@@ -139,15 +159,25 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     assert error_msg == "Server returned nothing (no headers, no data)"
     assert count == 10
 
-    sess.execute(text(
+    (request_id,) = sess.execute(text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10) offset 9;
     """
     )).fetchone()
 
     sess.commit()
 
-    time.sleep(1.5)
+    # Collect the last response, waiting as needed
+    response = sess.execute(
+        text(
+            """
+        select * from net._http_collect_response(:request_id, async:=false);
+    """
+        ),
+        {"request_id": request_id},
+        ).fetchone()
+    assert response is not None
+    assert response[0] == "SUCCESS"
 
     (status_code,count) = sess.execute(text(
     """
