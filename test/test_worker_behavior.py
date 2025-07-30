@@ -7,6 +7,20 @@ import time
 import subprocess
 import os
 
+def test_worker_will_not_block_drop_database(autocommit_sess):
+    """the worker will not block a session doing drop database"""
+
+    autocommit_sess.execute(text("create database foo;"))
+    autocommit_sess.execute(text("drop database foo;"))
+
+    (result,) = autocommit_sess.execute(text("""
+        select 1
+    """)).fetchone()
+
+    assert result is not None
+    assert result == 1
+
+
 def test_success_when_worker_is_up(sess):
     """net.check_worker_is_up should not return anything when the worker is running"""
 
@@ -433,3 +447,4 @@ def test_processing_survives_postmaster_crash():
     tmp_sess.execute(text("select net.wait_until_running()"))
 
     engine.dispose()
+
