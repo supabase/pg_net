@@ -139,6 +139,22 @@ handle_sighup(__attribute__ ((unused)) SIGNAL_ARGS)
   errno = save_errno;
 }
 
+/*
+ *We have to handle sigusr1 explicitly because the default
+ *procsignal_sigusr1_handler doesn't `SetLatch`, this would prevent
+ *DROP DATATABASE from finishing since our worker would be sleeping and not reach
+ *CHECK_FOR_INTERRUPTS()
+ */
+static void
+handle_sigusr1(SIGNAL_ARGS)
+{
+  int     save_errno = errno;
+  if (worker_state)
+    SetLatch(&worker_state->latch);
+  errno = save_errno;
+  procsignal_sigusr1_handler(postgres_signal_arg);
+}
+
 static void publish_state(WorkerStatus s) {
   pg_atomic_write_u32(&worker_state->status, (uint32)s);
   pg_write_barrier();
@@ -219,7 +235,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   BackgroundWorkerUnblockSignals();
   pqsignal(SIGTERM, handle_sigterm);
   pqsignal(SIGHUP, handle_sighup);
-  pqsignal(SIGUSR1, procsignal_sigusr1_handler);
+  pqsignal(SIGUSR1, handle_sigusr1);
 
   BackgroundWorkerInitializeConnection(guc_database_name, guc_username, 0);
   pgstat_report_appname("pg_net " EXTVERSION); // set appname for pg_stat_activity
