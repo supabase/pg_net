@@ -20,6 +20,25 @@ def test_worker_will_not_block_drop_database(autocommit_sess):
     assert result is not None
     assert result == 1
 
+    (pg_version,) = autocommit_sess.execute(text(
+        """
+        select current_setting('server_version_num');
+    """
+    )).fetchone()
+
+    # drop database with force only available from pg 13
+    if int(pg_version) >= 130000:
+
+        autocommit_sess.execute(text("create database foo;"))
+        autocommit_sess.execute(text("drop database foo with (force);"))
+
+        (result,) = autocommit_sess.execute(text("""
+            select 1
+        """)).fetchone()
+
+        assert result is not None
+        assert result == 1
+
 
 def test_success_when_worker_is_up(sess):
     """net.check_worker_is_up should not return anything when the worker is running"""
