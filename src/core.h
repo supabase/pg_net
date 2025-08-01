@@ -11,7 +11,7 @@ typedef struct {
   pg_atomic_uint32  got_restart;
   pg_atomic_uint32  should_wake;
   pg_atomic_uint32  status;
-  Latch             latch;
+  Latch*            shared_latch;
   ConditionVariable cv;
   int               epfd;
   CURLM             *curl_mhandle;
