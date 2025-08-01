@@ -53,8 +53,8 @@ Datum worker_restart(__attribute__ ((unused)) PG_FUNCTION_ARGS) {
   bool result = DatumGetBool(DirectFunctionCall1(pg_reload_conf, (Datum) NULL)); // reload the config
   pg_atomic_write_u32(&worker_state->got_restart, 1);
   pg_write_barrier();
-  if (worker_state)
-    SetLatch(&worker_state->latch);
+  if(worker_state->shared_latch)
+    SetLatch(worker_state->shared_latch);
   PG_RETURN_BOOL(result); // TODO is not necessary to return a bool here, but we do it to maintain backward compatibility
 }
 
@@ -90,7 +90,7 @@ static void wake_at_commit(XactEvent event, __attribute__ ((unused)) void *arg){
         pg_write_barrier();
 
         if (success) // only wake the worker on first put, so if many concurrent wakes come we only wake once
-          SetLatch(&worker_state->latch);
+          SetLatch(worker_state->shared_latch);
 
         wake_commit_cb_active = false;
       }
@@ -124,8 +124,8 @@ handle_sigterm(__attribute__ ((unused)) SIGNAL_ARGS)
   int save_errno = errno;
   pg_atomic_write_u32(&worker_state->got_restart, 1);
   pg_write_barrier();
-  if (worker_state)
-    SetLatch(&worker_state->latch);
+  if(worker_state->shared_latch)
+    SetLatch(worker_state->shared_latch);
   errno = save_errno;
 }
 
@@ -134,8 +134,8 @@ handle_sighup(__attribute__ ((unused)) SIGNAL_ARGS)
 {
   int     save_errno = errno;
   got_sighup = true;
-  if (worker_state)
-    SetLatch(&worker_state->latch);
+  if(worker_state->shared_latch)
+    SetLatch(worker_state->shared_latch);
   errno = save_errno;
 }
 
@@ -149,8 +149,8 @@ static void
 handle_sigusr1(SIGNAL_ARGS)
 {
   int     save_errno = errno;
-  if (worker_state)
-    SetLatch(&worker_state->latch);
+  if(worker_state->shared_latch)
+    SetLatch(worker_state->shared_latch);
   errno = save_errno;
   procsignal_sigusr1_handler(postgres_signal_arg);
 }
@@ -166,7 +166,7 @@ net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum ar
   worker_should_restart = false;
   pg_atomic_write_u32(&worker_state->should_wake, 1); // ensure the remaining work will continue since we'll restart
 
-  DisownLatch(&worker_state->latch);
+  worker_state->shared_latch = NULL;
 
   ev_monitor_close(worker_state);
 
@@ -178,15 +178,15 @@ net_on_exit(__attribute__ ((unused)) int code, __attribute__ ((unused)) Datum ar
 static void wait_while_processing_interrupts(WorkerWait ww, bool *should_restart){
   switch(ww){
     case WORKER_WAIT_NO_TIMEOUT:
-      WaitLatch(&worker_state->latch,
+      WaitLatch(worker_state->shared_latch,
                 WL_LATCH_SET | WL_EXIT_ON_PM_DEATH,
                 no_timeout,
                 PG_WAIT_EXTENSION);
-      ResetLatch(&worker_state->latch);
+      ResetLatch(worker_state->shared_latch);
       break;
     case WORKER_WAIT_ONE_SECOND:
-      WaitLatch(&worker_state->latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000, PG_WAIT_EXTENSION);
-      ResetLatch(&worker_state->latch);
+      WaitLatch(worker_state->shared_latch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000, PG_WAIT_EXTENSION);
+      ResetLatch(worker_state->shared_latch);
       break;
   }
 
@@ -228,9 +228,8 @@ static void unlock_extension(Oid ext_table_oids[static total_extension_tables]){
 }
 
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
+  worker_state->shared_latch = &MyProc->procLatch;
   on_proc_exit(net_on_exit, 0);
-
-  OwnLatch(&worker_state->latch);
 
   BackgroundWorkerUnblockSignals();
   pqsignal(SIGTERM, handle_sigterm);
@@ -370,7 +369,7 @@ static void net_shmem_startup(void) {
     pg_atomic_init_u32(&worker_state->got_restart, 0);
     pg_atomic_init_u32(&worker_state->status, WS_NOT_YET);
     pg_atomic_init_u32(&worker_state->should_wake, 1);
-    InitSharedLatch(&worker_state->latch);
+    worker_state->shared_latch = NULL;
 
     ConditionVariableInit(&worker_state->cv);
     worker_state->epfd = 0;
