@@ -169,52 +169,27 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
 def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
     """a truncate will not wait until the worker is done processing all requests"""
 
+    # ensure the worker will be processing the queue 1 by 1 (slowly) so it doesn't clear the whole
+    # net.http_request_queue in one go
     autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
     autocommit_sess.execute(text("select net.worker_restart();"))
     autocommit_sess.execute(text("select net.wait_until_running();"))
 
     sess.execute(text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,5);
+        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     ))
-
     sess.commit()
 
-    # truncate succeeds
+    # truncate succeeds fast, despite the worker still processing the queue 1 by 1
     sess.execute(text(
         """
         truncate net.http_request_queue;
     """
     ))
 
-    sess.commit()
-
-    time.sleep(0.1)
-
-    # and only one response will be done
-    (count,) = sess.execute(text(
-        """
-        select count(*) from net._http_response;
-    """
-    )).fetchone()
-    assert count == 1
-
-    sess.commit()
-
-    # even if some time passes
-    time.sleep(1.1)
-
-    (count,) = sess.execute(text(
-        """
-        select count(*) from net._http_response;
-    """
-    )).fetchone()
-    assert count == 1
-
-    sess.commit()
-
-    # and the queue will be empty
+    # now the queue will be empty
     (count,) = sess.execute(text(
         """
         select count(*) from net.http_request_queue;

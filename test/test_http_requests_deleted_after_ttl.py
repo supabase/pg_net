@@ -169,7 +169,7 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.wait_until_running()"))
 
     # wait for ttl
-    time.sleep(1)
+    time.sleep(1.1)
 
     (count,) = sess.execute(
         text(
