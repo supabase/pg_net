@@ -47,6 +47,8 @@
 
 #pragma GCC diagnostic pop
 
+#define PG15_GTE (PG_VERSION_NUM >= 150000)
+
 const char *xact_event_name(XactEvent event);
 #endif /* PG_PRELUDE_H */
 

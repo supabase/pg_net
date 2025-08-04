@@ -37,6 +37,11 @@ static int                      guc_batch_size;
 static char*                    guc_database_name;
 static char*                    guc_username;
 static MemoryContext            CurlMemContext = NULL;
+
+#if PG15_GTE
+static shmem_request_hook_type  prev_shmem_request_hook = NULL;
+#endif
+
 static shmem_startup_hook_type  prev_shmem_startup_hook = NULL;
 static volatile sig_atomic_t    got_sighup = false;
 
@@ -357,11 +362,26 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   proc_exit(EXIT_FAILURE);
 }
 
+static Size net_memsize(void) {
+  return MAXALIGN(sizeof(WorkerState));
+}
+
+#if PG15_GTE
+static void net_shmem_request(void) {
+  if (prev_shmem_request_hook)
+    prev_shmem_request_hook();
+
+  RequestAddinShmemSpace(net_memsize());
+}
+#endif
+
 static void net_shmem_startup(void) {
   if (prev_shmem_startup_hook)
     prev_shmem_startup_hook();
 
   bool found;
+
+  LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
   worker_state = ShmemInitStruct("pg_net worker state", sizeof(WorkerState), &found);
 
@@ -375,6 +395,8 @@ static void net_shmem_startup(void) {
     worker_state->epfd = 0;
     worker_state->curl_mhandle = NULL;
   }
+
+  LWLockRelease(AddinShmemInitLock);
 }
 
 void _PG_init(void) {
@@ -396,6 +418,13 @@ void _PG_init(void) {
     .bgw_name = "pg_net " EXTVERSION " worker",
     .bgw_restart_time = net_worker_restart_time_sec,
   });
+
+#if PG15_GTE
+  prev_shmem_request_hook = shmem_request_hook;
+  shmem_request_hook = net_shmem_request;
+#else
+  RequestAddinShmemSpace(net_memsize());
+#endif
 
   prev_shmem_startup_hook = shmem_startup_hook;
   shmem_startup_hook = net_shmem_startup;
