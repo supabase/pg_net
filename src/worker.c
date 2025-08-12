@@ -36,7 +36,6 @@ static char*                    guc_ttl;
 static int                      guc_batch_size;
 static char*                    guc_database_name;
 static char*                    guc_username;
-static MemoryContext            CurlMemContext = NULL;
 
 #if PG15_GTE
 static shmem_request_hook_type  prev_shmem_request_hook = NULL;
@@ -290,17 +289,31 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
         break;
       }
 
+      SPI_connect();
+
       expired_responses = delete_expired_responses(guc_ttl, guc_batch_size);
 
       elog(DEBUG1, "Deleted "UINT64_FORMAT" expired rows", expired_responses);
 
-      requests_consumed = consume_request_queue(worker_state->curl_mhandle, guc_batch_size, CurlMemContext);
+      requests_consumed = consume_request_queue(guc_batch_size);
 
       elog(DEBUG1, "Consumed "UINT64_FORMAT" request rows", requests_consumed);
 
       if(requests_consumed > 0){
+        CurlData *cdatas = palloc(mul_size(sizeof(CurlData), requests_consumed));
+
+        // initialize curl handles
+        for (size_t j = 0; j < requests_consumed; j++) {
+          init_curl_handle(&cdatas[j], get_request_queue_row(SPI_tuptable->vals[j], SPI_tuptable->tupdesc));
+
+          EREPORT_MULTI(
+            curl_multi_add_handle(worker_state->curl_mhandle, cdatas[j].ez_handle)
+          );
+        }
+
+        // start curl event loop
         int running_handles = 0;
-        int maxevents = guc_batch_size + 1; // 1 extra for the timer
+        int maxevents = requests_consumed + 1; // 1 extra for the timer
         event events[maxevents];
 
         do {
@@ -334,21 +347,41 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
                   &running_handles)
               );
             }
-
           }
 
-          insert_curl_responses(worker_state, CurlMemContext);
+          // insert finished responses
+          CURLMsg *msg = NULL; int msgs_left=0;
+          while ((msg = curl_multi_info_read(worker_state->curl_mhandle, &msgs_left))) {
+            if (msg->msg == CURLMSG_DONE) {
+              insert_response(msg->easy_handle, msg->data.result);
+            } else {
+              ereport(ERROR, errmsg("curl_multi_info_read(), CURLMsg=%d\n", msg->msg));
+            }
+          }
 
           elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
         } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
+
+        // cleanup
+        for(uint64 i = 0; i < requests_consumed; i++){
+          EREPORT_MULTI(
+            curl_multi_remove_handle(worker_state->curl_mhandle, cdatas[i].ez_handle)
+          );
+
+          curl_easy_cleanup(cdatas[i].ez_handle);
+
+          pfree_curl_data(&cdatas[i]);
+        }
+
+        pfree(cdatas);
       }
+
+      SPI_finish();
 
       unlock_extension(ext_table_oids);
 
       PopActiveSnapshot();
       CommitTransactionCommand();
-
-      MemoryContextReset(CurlMemContext);
 
       // slow down queue processing to avoid using too much CPU
       wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND, &worker_should_restart);
@@ -429,12 +462,6 @@ void _PG_init(void) {
 
   prev_shmem_startup_hook = shmem_startup_hook;
   shmem_startup_hook = net_shmem_startup;
-
-  CurlMemContext = AllocSetContextCreate(TopMemoryContext,
-                       "pg_net curl context",
-                       ALLOCSET_DEFAULT_MINSIZE,
-                       ALLOCSET_DEFAULT_INITSIZE,
-                       ALLOCSET_DEFAULT_MAXSIZE);
 
   DefineCustomStringVariable("pg_net.ttl",
                  "time to live for request/response rows",

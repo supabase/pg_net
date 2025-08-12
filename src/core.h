@@ -17,12 +17,38 @@ typedef struct {
   CURLM             *curl_mhandle;
 } WorkerState;
 
+typedef struct {
+  int64 id;
+  StringInfo body;
+  struct curl_slist* request_headers;
+  int32 timeout_milliseconds;
+  char *url;
+  char *req_body;
+  char *method;
+  CURL *ez_handle;
+} CurlData;
+
+typedef struct {
+  int64 id;
+  Datum method;
+  Datum url;
+  int32 timeout_milliseconds;
+  NullableDatum headersBin;
+  NullableDatum bodyBin;
+} RequestQueueRow;
+
 uint64 delete_expired_responses(char *ttl, int batch_size);
 
-uint64 consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext curl_memctx);
+uint64 consume_request_queue(const int batch_size);
 
-void insert_curl_responses(WorkerState *wstate, MemoryContext curl_memctx);
+RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdesc);
 
 void set_curl_mhandle(WorkerState *wstate);
+
+void insert_response(CURL *ez_handle, CURLcode curl_return_code);
+
+void init_curl_handle(CurlData *cdata, RequestQueueRow row);
+
+void pfree_curl_data(CurlData *cdata);
 
 #endif
