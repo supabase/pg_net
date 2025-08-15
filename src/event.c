@@ -73,12 +73,12 @@ int multi_socket_cb(__attribute__ ((unused)) CURL *easy, curl_socket_t sockfd, i
   int epoll_op;
   if(!socketp){
     epoll_op = EPOLL_CTL_ADD;
-    bool *socket_exists = palloc(sizeof(bool));
-    curl_multi_assign(wstate->curl_mhandle, sockfd, socket_exists);
+    bool socket_exists = true;
+    curl_multi_assign(wstate->curl_mhandle, sockfd, &socket_exists);
   } else if (what == CURL_POLL_REMOVE){
     epoll_op = EPOLL_CTL_DEL;
-    pfree(socketp);
-    curl_multi_assign(wstate->curl_mhandle, sockfd, NULL);
+    bool socket_exists = false;
+    curl_multi_assign(wstate->curl_mhandle, sockfd, &socket_exists);
   } else {
     epoll_op = EPOLL_CTL_MOD;
   }
