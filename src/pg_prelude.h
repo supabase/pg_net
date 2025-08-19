@@ -48,8 +48,14 @@
 #pragma GCC diagnostic pop
 
 #define PG15_GTE (PG_VERSION_NUM >= 150000)
+#define PG17_LT (PG_VERSION_NUM < 170000)
 
 const char *xact_event_name(XactEvent event);
+
+#if PG17_LT
+void destroyStringInfo(StringInfo str);
+#endif
+
 #endif /* PG_PRELUDE_H */
 
 #ifdef PG_PRELUDE_IMPL
@@ -67,5 +73,16 @@ const char *xact_event_name(XactEvent event){
     default:                                 return "(unknown XactEvent)";
   }
 }
+
+
+#if PG17_LT
+// Polyfill for pg < 17
+// see https://github.com/postgres/postgres/blob/3c4e26a62c31ebe296e3aedb13ac51a7a35103bd/src/common/stringinfo.c#L402-L416
+void destroyStringInfo(StringInfo str) {
+  Assert(str->maxlen != 0);
+  pfree(str->data);
+  pfree(str);
+}
+#endif
 
 #endif /* PG_PRELUDE_IMPL */

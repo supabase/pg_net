@@ -18,15 +18,16 @@ def test_http_get_timeout_reached(sess):
     # wait for timeout
     time.sleep(7)
 
-    (response,) = sess.execute(
+    (response,timed_out) = sess.execute(
         text(
             """
-        select error_msg from net._http_response where id = :request_id;
+        select error_msg, timed_out from net._http_response where id = :request_id;
     """
         ),
         {"request_id": request_id},
     ).fetchone()
 
+    assert timed_out == True
     assert response.startswith("Timeout of 5000 ms reached")
 
 
@@ -66,10 +67,10 @@ def test_http_detailed_timeout(sess):
     # wait for timeout
     time.sleep(2.1)
 
-    (response,) = sess.execute(
+    (response, timed_out) = sess.execute(
         text(
             """
-        select error_msg from net._http_response where id = :request_id;
+        select error_msg, timed_out from net._http_response where id = :request_id;
     """
         ),
         {"request_id": request_id},
@@ -82,6 +83,7 @@ def test_http_detailed_timeout(sess):
     tcp_ssl_time = float(match.group('C'))
     http_time    = float(match.group('D'))
 
+    assert timed_out == True
     assert total_time > 0
     assert dns_time > 0
     assert tcp_ssl_time > 0
