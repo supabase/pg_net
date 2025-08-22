@@ -40,7 +40,18 @@ in
 writeShellScriptBin "net-loadtest" ''
   set -euo pipefail
 
-  net-with-nginx xpg psql -c "call wait_for_many_gets()" > /dev/null &
+  reqs=""
+  batch_size="200"
+
+  if [ -n "''${1:-}" ]; then
+    reqs="$1"
+  fi
+
+  if [ -n "''${2:-}" ]; then
+    batch_size="$2"
+  fi
+
+  net-with-nginx xpg --options "-c log_min_messages=WARNING -c pg_net.batch_size=$batch_size" psql -c "call wait_for_many_gets($reqs)" > /dev/null &
 
   # wait for process to start so we can capture it with psrecord
   sleep 2

@@ -24,7 +24,7 @@ begin
 
   commit;
 
-  raise notice 'Waiting until % requests complete', number_of_requests;
+  raise notice 'Waiting until % requests complete, using a pg_net.batch_size of %', number_of_requests, current_setting('pg_net.batch_size')::text;
 
   perform net._await_response(last_id);
 
