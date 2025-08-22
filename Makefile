@@ -26,7 +26,7 @@ else
 endif
 
 EXTENSION = pg_net
-EXTVERSION = 0.19.6
+EXTVERSION = 0.19.7
 
 DATA = $(wildcard sql/*--*.sql)
 
@@ -70,7 +70,7 @@ $(BUILD_DIR)/$(EXTENSION).$(SHARED_EXT): $(EXTENSION).$(SHARED_EXT)
 sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
 	cp $< $@
 
-$(EXTENSION).control:
+$(EXTENSION).control: $(EXTENSION).control.in
 	sed "s/@EXTVERSION@/$(EXTVERSION)/g" $(EXTENSION).control.in > $@
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
