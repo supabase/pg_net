@@ -1,3 +1,4 @@
 comment = 'Async HTTP'
 default_version = '@EXTVERSION@'
 relocatable = false
+module_pathname = '$libdir/pg_net'

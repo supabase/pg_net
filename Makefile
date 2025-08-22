@@ -70,7 +70,7 @@ $(BUILD_DIR)/$(EXTENSION).$(SHARED_EXT): $(EXTENSION).$(SHARED_EXT)
 sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
 	cp $< $@
 
-$(EXTENSION).control:
+$(EXTENSION).control: $(EXTENSION).control.in
 	sed "s/@EXTVERSION@/$(EXTVERSION)/g" $(EXTENSION).control.in > $@
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
