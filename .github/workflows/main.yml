@@ -55,6 +55,9 @@ jobs:
 
   loadtest:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        params: [ {reqs: 10000, batch: 200}, {reqs: 20000, batch: 400}, {reqs: 40000, batch: 800} ]
     steps:
       - uses: actions/checkout@v4
 
@@ -72,8 +75,7 @@ jobs:
 
       - name: Run load test
         run: |
-          nix-shell --run "net-loadtest"
-          cat psrecord.md >> "$GITHUB_STEP_SUMMARY"
+          nix-shell --run "net-loadtest ${{ matrix.params.reqs }} ${{ matrix.params.batch }}" >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
 

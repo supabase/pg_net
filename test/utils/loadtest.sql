@@ -1,8 +1,11 @@
+create table time_taken (time_taken interval);
+
 create view pg_net_stats as
 select
   count(*) filter (where error_msg is null) as request_successes,
   count(*) filter (where error_msg is not null) as request_failures,
-  (select error_msg from net._http_response where error_msg is not null order by id desc limit 1) as last_failure_error
+  (select error_msg from net._http_response where error_msg is not null order by id desc limit 1) as last_failure_error,
+  (select time_taken from time_taken limit 1) as time_taken
 from net._http_response;
 
 -- loadtest using many gets, used to be called `repro_timeouts`
@@ -24,7 +27,7 @@ begin
 
   commit;
 
-  raise notice 'Waiting until % requests complete', number_of_requests;
+  raise notice 'Waiting until % requests complete, using a pg_net.batch_size of %', number_of_requests, current_setting('pg_net.batch_size')::text;
 
   perform net._await_response(last_id);
 
@@ -32,8 +35,6 @@ begin
 
   select age(second_time, first_time) into time_taken;
 
-  raise notice 'Stats: %', (select to_json(x) from pg_net_stats x limit 1);
-
-  raise notice 'Time taken: %', time_taken;
+  insert into time_taken values (time_taken);
 end;
 $$ language plpgsql;

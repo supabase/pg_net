@@ -1,7 +1,7 @@
 { writeShellScriptBin, psrecord, writers, python3Packages } :
 
 let
-  toMarkdown =
+  psrecordToMd =
     writers.writePython3 "psrecord-to-md"
       {
         libraries = [ python3Packages.pandas python3Packages.tabulate ];
@@ -35,22 +35,59 @@ let
 
         df.to_markdown(sys.stdout, index=False, tablefmt="github")
       '';
+
+  csvToMd =
+    writers.writePython3 "csv-to-md"
+      {
+        libraries = [ python3Packages.pandas python3Packages.tabulate ];
+      }
+      ''
+        import sys
+        import pandas as pd
+
+        pd.read_csv(sys.stdin) \
+          .fillna("") \
+          .convert_dtypes() \
+          .to_markdown(sys.stdout, index=False, floatfmt='.0f')
+      '';
+
 in
 
 writeShellScriptBin "net-loadtest" ''
   set -euo pipefail
 
-  net-with-nginx xpg psql -c "call wait_for_many_gets()" > /dev/null &
+  reqs=""
+  batch_size_opt=""
+
+  load_dir=test/load
+  mkdir -p $load_dir
+  echo "*" >> $load_dir/.gitignore
+
+  record_result=$load_dir/psrecord.md
+  query_result=$load_dir/query_out.md
+
+  query_csv=$load_dir/query.csv
+  record_log=$load_dir/psrecord.log
+
+  if [ -n "''${1:-}" ]; then
+    reqs="$1"
+  fi
+
+  if [ -n "''${2:-}" ]; then
+    batch_size_opt="-c pg_net.batch_size=$2"
+  fi
+
+  net-with-nginx xpg --options "-c log_min_messages=WARNING $batch_size_opt" \
+    psql -c "call wait_for_many_gets($reqs)" -c "\pset format csv" -c "\o $query_csv" -c "select * from pg_net_stats" > /dev/null &
 
   # wait for process to start so we can capture it with psrecord
   sleep 2
 
-  record_log=psrecord.log
-  record_result=psrecord.md
-
   ${psrecord}/bin/psrecord $(cat build-17/bgworker.pid) --interval 1 --log "$record_log" > /dev/null
 
-  cat $record_log | ${toMarkdown} > $record_result
+  echo -e "## Loadtest results\n"
+  cat $query_csv  | ${csvToMd}
 
-  echo "generated $record_result"
+  echo -e "\n\n## Loadtest elapsed seconds vs CPU/MEM\n"
+  cat $record_log | ${psrecordToMd}
 ''
