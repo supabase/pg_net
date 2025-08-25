@@ -6,13 +6,7 @@ with import (builtins.fetchTarball {
 mkShell {
   buildInputs =
     let
-      nixpkgs2405 = import (builtins.fetchTarball {
-          name = "24.05";
-          url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/24.05.tar.gz";
-          sha256 = "sha256:1lr1h35prqkd1mkmzriwlpvxcb34kmhc9dnr48gkm8hh089hifmx";
-      }) {};
       nginxCustom = callPackage ./nix/nginxCustom.nix {};
-      nixopsScripts = callPackage ./nix/nixopsScripts.nix {nixops_unstable_minimal = nixpkgs2405.nixops_unstable_minimal;};
       xpg = callPackage ./nix/xpg.nix {inherit fetchFromGitHub;};
       loadtest = callPackage ./nix/loadtest.nix {};
       pythonDeps = with python3Packages; [
@@ -27,7 +21,7 @@ mkShell {
       nginxCustom.nginxScript
       curlWithGnuTls
       loadtest
-    ] ++ nixopsScripts;
+    ];
   shellHook = ''
     export HISTFILE=.history
   '';
