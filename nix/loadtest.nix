@@ -78,7 +78,7 @@ writeShellScriptBin "net-loadtest" ''
   fi
 
   net-with-nginx xpg --options "-c log_min_messages=WARNING $batch_size_opt" \
-    psql -c "call wait_for_many_gets($reqs)" -c "\pset format csv" -c "\o $query_csv" -c "select * from pg_net_stats" > /dev/null &
+    psql -c "call wait_for_many_gets($reqs)" -c "\pset format csv" -c "\o $query_csv" -c "select * from run" > /dev/null &
 
   # wait for process to start so we can capture it with psrecord
   sleep 2
