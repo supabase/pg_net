@@ -16,12 +16,17 @@ $ cachix use nxpg
 # might take a while in downloading all the dependencies
 $ nix-shell
 
+# test on latest pg
+$ xpg test
+
 # test on pg 12
 $ xpg -v 12 test
 
 # test on pg 13
 $ xpg -v 13 test
 ```
+
+This will spawn a local db and an nginx server for testing.
 
 ### Debugging
 
@@ -66,32 +71,28 @@ $ sudo net-with-gdb
 
 ## Load Testing
 
-These are scripts that wrap NixOps to deploy an AWS cloud setup. You must have `default` setup in `.aws/credentials`.
+The `net-loadtest` launchs a temporary db and a nginx server, waiting until a number of requests are done, then reporting results (plus process monitoring) at the end.
+
+It takes a two parameters: the number of requests (GETs) and the `pg_net.batch_size`.
 
 ```bash
-net-cloud-deploy
-```
+$ net-loadtest 1000 200
+...
 
-Then you can connect on the client instance and do requests to the server instance through `pg_net`.
+## Loadtest results
 
-```bash
-net-cloud-ssh
+|   requests |   batch_size | time_taken      |   request_successes |   request_failures | last_failure_error   |
+|-----------:|-------------:|:----------------|--------------------:|-------------------:|:---------------------|
+|       1000 |          200 | 00:00:04.198886 |                1000 |                  0 |                      |
 
-psql -U postgres
+## Loadtest elapsed seconds vs CPU/MEM
 
-select net.http_get('http://server');
-# this the default welcome page of nginx on the server instance
-# "server" is already included to /etc/hosts, so `curl http://server` will give the same result
-
-# do some load testing
-select net.http_get('http://server') from generate_series(1,1000);
-# run `top` on another shell(another `nixops ssh -d pg_net client`) to check the worker behavior
-```
-
-To destroy the cloud setup:
-
-```bash
-net-cloud-destroy
+|   Elapsed time |   CPU (%) |   Real (MB) |   Virtual (MB) |
+|----------------|-----------|-------------|----------------|
+|          0     |         0 |      20.227 |        437.426 |
+|          1     |         2 |      20.227 |        437.566 |
+|          2.001 |         4 |      20.418 |        437.566 |
+|          3.002 |         3 |      20.418 |        437.566 |
 ```
 
 ## Documentation
