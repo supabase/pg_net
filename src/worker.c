@@ -335,8 +335,9 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
               );
             }
 
-            insert_curl_responses(worker_state, CurlMemContext);
           }
+
+          insert_curl_responses(worker_state, CurlMemContext);
 
           elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
         } while (running_handles > 0); // run while there are curl handles, some won't finish in a single iteration since they could be slow and waiting for a timeout
