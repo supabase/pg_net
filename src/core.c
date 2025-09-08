@@ -16,6 +16,10 @@ typedef struct {
   int32 timeout_milliseconds;
 } CurlData;
 
+static SPIPlanPtr del_response_plan     = NULL;
+static SPIPlanPtr del_return_queue_plan = NULL;
+static SPIPlanPtr ins_response_plan     = NULL;
+
 static size_t
 body_cb(void *contents, size_t size, size_t nmemb, void *userp)
 {
@@ -139,19 +143,29 @@ void set_curl_mhandle(WorkerState *wstate){
 uint64 delete_expired_responses(char *ttl, int batch_size){
   SPI_connect();
 
-  int ret_code = SPI_execute_with_args("\
-    WITH\
-    rows AS (\
-      SELECT ctid\
-      FROM net._http_response\
-      WHERE created < now() - $1\
-      ORDER BY created\
-      LIMIT $2\
-    )\
-    DELETE FROM net._http_response r\
-    USING rows WHERE r.ctid = rows.ctid",
-    2,
-    (Oid[]){INTERVALOID, INT4OID},
+  if (del_response_plan == NULL) {
+      SPIPlanPtr tmp = SPI_prepare("\
+        WITH\
+        rows AS (\
+          SELECT ctid\
+          FROM net._http_response\
+          WHERE created < now() - $1\
+          ORDER BY created\
+          LIMIT $2\
+        )\
+        DELETE FROM net._http_response r\
+        USING rows WHERE r.ctid = rows.ctid",
+        2,
+        (Oid[]){INTERVALOID, INT4OID});
+      if (tmp == NULL)
+          ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
+
+      del_response_plan = SPI_saveplan(tmp);
+      if (del_response_plan == NULL)
+          ereport(ERROR, errmsg("SPI_saveplan failed"));
+  }
+
+  int ret_code = SPI_execute_plan(del_response_plan,
     (Datum[]){
       DirectFunctionCall3(interval_in, CStringGetDatum(ttl), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1))
     , Int32GetDatum(batch_size)
@@ -172,21 +186,30 @@ uint64 delete_expired_responses(char *ttl, int batch_size){
 uint64 consume_request_queue(CURLM *curl_mhandle, int batch_size, MemoryContext curl_memctx){
   SPI_connect();
 
-  int ret_code = SPI_execute_with_args("\
-    WITH\
-    rows AS (\
-      SELECT id\
-      FROM net.http_request_queue\
-      ORDER BY id\
-      LIMIT $1\
-    )\
-    DELETE FROM net.http_request_queue q\
-    USING rows WHERE q.id = rows.id\
-    RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
-    1,
-    (Oid[]){INT4OID},
-    (Datum[]){Int32GetDatum(batch_size)},
-    NULL, false, 0);
+  if (del_return_queue_plan == NULL) {
+      SPIPlanPtr tmp = SPI_prepare("\
+        WITH\
+        rows AS (\
+          SELECT id\
+          FROM net.http_request_queue\
+          ORDER BY id\
+          LIMIT $1\
+        )\
+        DELETE FROM net.http_request_queue q\
+        USING rows WHERE q.id = rows.id\
+        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
+        1,
+        (Oid[]){INT4OID});
+
+      if (tmp == NULL)
+          ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
+
+      del_return_queue_plan = SPI_saveplan(tmp);
+      if (del_return_queue_plan == NULL)
+          ereport(ERROR, errmsg("SPI_saveplan failed"));
+  }
+
+  int ret_code = SPI_execute_plan(del_return_queue_plan, (Datum[]){Int32GetDatum(batch_size)}, NULL, false, 0);
 
   if (ret_code != SPI_OK_DELETE_RETURNING)
     ereport(ERROR, errmsg("Error getting http request queue: %s", SPI_result_code_string(ret_code)));
@@ -305,12 +328,23 @@ static void insert_response(CURL *ez_handle, CurlData *cdata, CURLcode curl_retu
     }
   }
 
-  int ret_code = SPI_execute_with_args("\
-      insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
-      nparams,
-      (Oid[nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID},
-      vals, nulls,
-      false, 1);
+  if (ins_response_plan == NULL) {
+      SPIPlanPtr tmp = SPI_prepare("\
+        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
+        nparams,
+        (Oid[nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID});
+
+      if (tmp == NULL)
+          ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
+
+      ins_response_plan = SPI_saveplan(tmp);
+      if (ins_response_plan == NULL)
+          ereport(ERROR, errmsg("SPI_saveplan failed"));
+
+      SPI_freeplan(tmp);
+  }
+
+  int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);
 
   if (ret_code != SPI_OK_INSERT)
   {
