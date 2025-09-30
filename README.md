@@ -133,7 +133,7 @@ create extension pg_net;
 
 # Extension Configuration
 
-the extension creates 3 configurable variables:
+The extension creates the following configurable variables:
 
 1. **pg_net.batch_size** _(default: 200)_: An integer that limits the max number of rows that the extension will process from _`net.http_request_queue`_ during each read
 2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted. Note that this won't happen exactly after the TTL has passed. The worker will perform this deletion while its processing requests.
