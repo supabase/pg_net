@@ -105,3 +105,24 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           files: ./build-${{ matrix.pg-version }}/coverage.info
+
+  style:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.5.1
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Use Cachix Cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: nxpg
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run style check
+        run: nix-shell --run "net-style-check"

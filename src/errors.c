@@ -1,7 +1,11 @@
 #include "pg_prelude.h"
+
 #include "curl_prelude.h"
+
 #include "errors.h"
 
+// disable clang-format as it only hurts readability here
+// clang-format off
 /*
  * Show a more detailed error message when a timeout happens, which includes the DNS, TCP/SSL handshake and HTTP request/response time. An example message is like:
  *
@@ -78,3 +82,4 @@ curl_timeout_msg detailed_timeout_strerror(CURL *ez_handle, int32 timeout_millis
   );
   return result;
 }
+// clang-format on

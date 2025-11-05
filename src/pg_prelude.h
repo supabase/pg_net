@@ -7,28 +7,29 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
 #include <postgres.h>
-#include <postmaster/bgworker.h>
-#include <pgstat.h>
-#include <storage/condition_variable.h>
-#include <storage/ipc.h>
-#include <storage/latch.h>
+
+#include "commands/dbcommands.h"
 #include "storage/lmgr.h"
-#include <storage/proc.h>
-#include <storage/shmem.h>
-#include <access/xact.h>
 #include <access/hash.h>
+#include <access/xact.h>
 #include <catalog/namespace.h>
 #include <catalog/pg_authid.h>
 #include <catalog/pg_extension.h>
 #include <catalog/pg_type.h>
 #include <commands/defrem.h>
 #include <commands/extension.h>
-#include "commands/dbcommands.h"
 #include <executor/spi.h>
 #include <fmgr.h>
 #include <miscadmin.h>
 #include <nodes/makefuncs.h>
 #include <nodes/pg_list.h>
+#include <pgstat.h>
+#include <postmaster/bgworker.h>
+#include <storage/condition_variable.h>
+#include <storage/ipc.h>
+#include <storage/latch.h>
+#include <storage/proc.h>
+#include <storage/shmem.h>
 #include <tcop/utility.h>
 #include <tsearch/ts_locale.h>
 #include <utils/acl.h>
@@ -60,24 +61,23 @@ void destroyStringInfo(StringInfo str);
 
 #ifdef PG_PRELUDE_IMPL
 
-const char *xact_event_name(XactEvent event){
+const char *xact_event_name(XactEvent event) {
   switch (event) {
-    case XACT_EVENT_COMMIT:                  return "XACT_EVENT_COMMIT";
-    case XACT_EVENT_PARALLEL_COMMIT:         return "XACT_EVENT_PARALLEL_COMMIT";
-    case XACT_EVENT_ABORT:                   return "XACT_EVENT_ABORT";
-    case XACT_EVENT_PARALLEL_ABORT:          return "XACT_EVENT_PARALLEL_ABORT";
-    case XACT_EVENT_PREPARE:                 return "XACT_EVENT_PREPARE";
-    case XACT_EVENT_PRE_COMMIT:              return "XACT_EVENT_PRE_COMMIT";
-    case XACT_EVENT_PARALLEL_PRE_COMMIT:     return "XACT_EVENT_PARALLEL_PRE_COMMIT";
-    case XACT_EVENT_PRE_PREPARE:             return "XACT_EVENT_PRE_PREPARE";
-    default:                                 return "(unknown XactEvent)";
+  case XACT_EVENT_COMMIT             : return "XACT_EVENT_COMMIT";
+  case XACT_EVENT_PARALLEL_COMMIT    : return "XACT_EVENT_PARALLEL_COMMIT";
+  case XACT_EVENT_ABORT              : return "XACT_EVENT_ABORT";
+  case XACT_EVENT_PARALLEL_ABORT     : return "XACT_EVENT_PARALLEL_ABORT";
+  case XACT_EVENT_PREPARE            : return "XACT_EVENT_PREPARE";
+  case XACT_EVENT_PRE_COMMIT         : return "XACT_EVENT_PRE_COMMIT";
+  case XACT_EVENT_PARALLEL_PRE_COMMIT: return "XACT_EVENT_PARALLEL_PRE_COMMIT";
+  case XACT_EVENT_PRE_PREPARE        : return "XACT_EVENT_PRE_PREPARE";
+  default                            : return "(unknown XactEvent)";
   }
 }
 
-
 #if PG17_LT
 // Polyfill for pg < 17
-// see https://github.com/postgres/postgres/blob/3c4e26a62c31ebe296e3aedb13ac51a7a35103bd/src/common/stringinfo.c#L402-L416
+// https://github.com/postgres/postgres/blob/3c4e26a62c31ebe296e3aedb13ac51a7a35103bd/src/common/stringinfo.c#L402-L416
 void destroyStringInfo(StringInfo str) {
   Assert(str->maxlen != 0);
   pfree(str->data);
