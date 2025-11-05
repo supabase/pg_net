@@ -14,6 +14,15 @@ mkShell {
         psycopg2
         sqlalchemy
       ];
+      style =
+        writeShellScriptBin "net-style" ''
+          ${clang-tools}/bin/clang-format -i src/*
+        '';
+      styleCheck =
+        writeShellScriptBin "net-style-check" ''
+          ${clang-tools}/bin/clang-format -i src/*
+          ${git}/bin/git diff-index --exit-code HEAD -- '*.c'
+        '';
     in
     [
       xpg.xpg
@@ -21,6 +30,8 @@ mkShell {
       nginxCustom.nginxScript
       curlWithGnuTls
       loadtest
+      style
+      styleCheck
     ];
   shellHook = ''
     export HISTFILE=.history

@@ -6,33 +6,33 @@
 #include "core.h"
 
 #ifdef __linux__
-#define WAIT_USE_EPOLL
+#  define WAIT_USE_EPOLL
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#define WAIT_USE_KQUEUE
+#  define WAIT_USE_KQUEUE
 #else
-#error "no event loop implementation available"
+#  error "no event loop implementation available"
 #endif
 
 #ifdef WAIT_USE_EPOLL
 
-#include <sys/epoll.h>
-#include <sys/timerfd.h>
+#  include <sys/epoll.h>
+#  include <sys/timerfd.h>
 typedef struct epoll_event event;
 
 #else
 
-#include <sys/event.h>
+#  include <sys/event.h>
 typedef struct kevent event;
 
 #endif
 
-int wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds);
-int event_monitor(void);
+int  wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds);
+int  event_monitor(void);
 void ev_monitor_close(WorkerState *wstate);
-int multi_timer_cb(CURLM *multi, long timeout_ms, WorkerState *wstate);
+int  multi_timer_cb(CURLM *multi, long timeout_ms, WorkerState *wstate);
 int multi_socket_cb(CURL *easy, curl_socket_t sockfd, int what, WorkerState *wstate, void *socketp);
 bool is_timer(event ev);
-int get_curl_event(event ev);
-int get_socket_fd(event ev);
+int  get_curl_event(event ev);
+int  get_socket_fd(event ev);
 
 #endif

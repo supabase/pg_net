@@ -12,32 +12,33 @@ typedef struct {
   pg_atomic_uint32  got_restart;
   pg_atomic_uint32  should_wake;
   pg_atomic_uint32  status;
-  Latch*            shared_latch;
+  Latch            *shared_latch;
   ConditionVariable cv; // required to publish the state of the worker to other backends
   int               epfd;
-  CURLM             *curl_mhandle;
+  CURLM            *curl_mhandle;
 } WorkerState;
 
 // A row coming from the http_request_queue
 typedef struct {
-  int64 id;
-  Datum method;
-  Datum url;
-  int32 timeout_milliseconds;
+  int64         id;
+  Datum         method;
+  Datum         url;
+  int32         timeout_milliseconds;
   NullableDatum headersBin;
   NullableDatum bodyBin;
 } RequestQueueRow;
 
-// The curl easy handle plus additional data, this acts for both the request and response cycle
+// The curl easy handle plus additional data, this acts for both the request and
+// response cycle
 typedef struct {
-  int64 id;
-  StringInfo body;
-  struct curl_slist* request_headers;
-  int32 timeout_milliseconds;
-  char *url;
-  char *req_body;
-  char *method;
-  CURL *ez_handle;
+  int64              id;
+  StringInfo         body;
+  struct curl_slist *request_headers;
+  int32              timeout_milliseconds;
+  char              *url;
+  char              *req_body;
+  char              *method;
+  CURL              *ez_handle;
 } CurlHandle;
 
 uint64 delete_expired_responses(char *ttl, int batch_size);
