@@ -300,14 +300,14 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
       elog(DEBUG1, "Consumed "UINT64_FORMAT" request rows", requests_consumed);
 
       if(requests_consumed > 0){
-        CurlData *cdatas = palloc(mul_size(sizeof(CurlData), requests_consumed));
+        CurlHandle *handles = palloc(mul_size(sizeof(CurlHandle), requests_consumed));
 
         // initialize curl handles
         for (size_t j = 0; j < requests_consumed; j++) {
-          init_curl_handle(&cdatas[j], get_request_queue_row(SPI_tuptable->vals[j], SPI_tuptable->tupdesc));
+          init_curl_handle(&handles[j], get_request_queue_row(SPI_tuptable->vals[j], SPI_tuptable->tupdesc));
 
           EREPORT_MULTI(
-            curl_multi_add_handle(worker_state->curl_mhandle, cdatas[j].ez_handle)
+            curl_multi_add_handle(worker_state->curl_mhandle, handles[j].ez_handle)
           );
         }
 
@@ -353,7 +353,8 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
           CURLMsg *msg = NULL; int msgs_left=0;
           while ((msg = curl_multi_info_read(worker_state->curl_mhandle, &msgs_left))) {
             if (msg->msg == CURLMSG_DONE) {
-              insert_response(msg->easy_handle, msg->data.result);
+              CurlHandle *handle = NULL; EREPORT_CURL_GETINFO(msg->easy_handle, CURLINFO_PRIVATE, &handle);
+              insert_response(handle, msg->data.result);
             } else {
               ereport(ERROR, errmsg("curl_multi_info_read(), CURLMsg=%d\n", msg->msg));
             }
@@ -365,15 +366,15 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
         // cleanup
         for(uint64 i = 0; i < requests_consumed; i++){
           EREPORT_MULTI(
-            curl_multi_remove_handle(worker_state->curl_mhandle, cdatas[i].ez_handle)
+            curl_multi_remove_handle(worker_state->curl_mhandle, handles[i].ez_handle)
           );
 
-          curl_easy_cleanup(cdatas[i].ez_handle);
+          curl_easy_cleanup(handles[i].ez_handle);
 
-          pfree_curl_data(&cdatas[i]);
+          pfree_handle(&handles[i]);
         }
 
-        pfree(cdatas);
+        pfree(handles);
       }
 
       SPI_finish();
