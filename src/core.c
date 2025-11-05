@@ -16,9 +16,9 @@ static SPIPlanPtr ins_response_plan     = NULL;
 static size_t
 body_cb(void *contents, size_t size, size_t nmemb, void *userp)
 {
-  CurlData *cdata = (CurlData*) userp;
+  CurlHandle *handle = (CurlHandle*) userp;
   size_t realsize = size * nmemb;
-  appendBinaryStringInfo(cdata->body, (const char*)contents, (int)realsize);
+  appendBinaryStringInfo(handle->body, (const char*)contents, (int)realsize);
   return realsize;
 }
 
@@ -45,12 +45,12 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array,
     return headers;
 }
 
-void init_curl_handle(CurlData *cdata, RequestQueueRow row){
-  cdata->id   = row.id;
-  cdata->body = makeStringInfo();
-  cdata->ez_handle = curl_easy_init();
+void init_curl_handle(CurlHandle *handle, RequestQueueRow row){
+  handle->id   = row.id;
+  handle->body = makeStringInfo();
+  handle->ez_handle = curl_easy_init();
 
-  cdata->timeout_milliseconds = row.timeout_milliseconds;
+  handle->timeout_milliseconds = row.timeout_milliseconds;
 
   if (!row.headersBin.isnull) {
     ArrayType *pgHeaders = DatumGetArrayTypeP(row.headersBin.value);
@@ -60,57 +60,57 @@ void init_curl_handle(CurlData *cdata, RequestQueueRow row){
 
     EREPORT_CURL_SLIST_APPEND(request_headers, "User-Agent: pg_net/" EXTVERSION);
 
-    cdata->request_headers = request_headers;
+    handle->request_headers = request_headers;
   }
 
-  cdata->url = TextDatumGetCString(row.url);
+  handle->url = TextDatumGetCString(row.url);
 
-  cdata->req_body = !row.bodyBin.isnull ? TextDatumGetCString(row.bodyBin.value) : NULL;
+  handle->req_body = !row.bodyBin.isnull ? TextDatumGetCString(row.bodyBin.value) : NULL;
 
-  cdata->method = TextDatumGetCString(row.method);
+  handle->method = TextDatumGetCString(row.method);
 
-  if (strcasecmp(cdata->method, "GET") != 0 && strcasecmp(cdata->method, "POST") != 0 && strcasecmp(cdata->method, "DELETE") != 0) {
-    ereport(ERROR, errmsg("Unsupported request method %s", cdata->method));
+  if (strcasecmp(handle->method, "GET") != 0 && strcasecmp(handle->method, "POST") != 0 && strcasecmp(handle->method, "DELETE") != 0) {
+    ereport(ERROR, errmsg("Unsupported request method %s", handle->method));
   }
 
-  if (strcasecmp(cdata->method, "GET") == 0) {
-    if (cdata->req_body) {
-      EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_POSTFIELDS, cdata->req_body);
-      EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_CUSTOMREQUEST, "GET");
+  if (strcasecmp(handle->method, "GET") == 0) {
+    if (handle->req_body) {
+      EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_POSTFIELDS, handle->req_body);
+      EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_CUSTOMREQUEST, "GET");
     }
   }
 
-  if (strcasecmp(cdata->method, "POST") == 0) {
-    if (cdata->req_body) {
-      EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_POSTFIELDS, cdata->req_body);
+  if (strcasecmp(handle->method, "POST") == 0) {
+    if (handle->req_body) {
+      EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_POSTFIELDS, handle->req_body);
     }
     else {
-      EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_POST, 1L);
-      EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_POSTFIELDSIZE, 0L);
+      EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_POST, 1L);
+      EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_POSTFIELDSIZE, 0L);
     }
   }
 
-  if (strcasecmp(cdata->method, "DELETE") == 0) {
-    EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
-    if (cdata->req_body) {
-      EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_POSTFIELDS, cdata->req_body);
+  if (strcasecmp(handle->method, "DELETE") == 0) {
+    EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+    if (handle->req_body) {
+      EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_POSTFIELDS, handle->req_body);
     }
   }
 
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_WRITEDATA, cdata);
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_HEADER, 0L);
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_URL, cdata->url);
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_HTTPHEADER, cdata->request_headers);
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_TIMEOUT_MS, (long) cdata->timeout_milliseconds);
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_PRIVATE, cdata);
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_FOLLOWLOCATION, (long) true);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEDATA, handle);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HEADER, 0L);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_URL, handle->url);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HTTPHEADER, handle->request_headers);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_TIMEOUT_MS, (long) handle->timeout_milliseconds);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_PRIVATE, handle);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_FOLLOWLOCATION, (long) true);
   if (log_min_messages <= DEBUG2)
-    EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_VERBOSE, 1L);
+    EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_VERBOSE, 1L);
 #if LIBCURL_VERSION_NUM >= 0x075500 /* libcurl 7.85.0 */
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_PROTOCOLS_STR, "http,https");
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_PROTOCOLS_STR, "http,https");
 #else
-  EREPORT_CURL_SETOPT(cdata->ez_handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 #endif
 }
 
@@ -244,28 +244,25 @@ static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle){
   return jsonb_headers;
 }
 
-void insert_response(CURL *ez_handle, CURLcode curl_return_code){
+void insert_response(CurlHandle *handle, CURLcode curl_return_code){
   enum { nparams = 7 }; // using an enum because const size_t nparams doesn't compile
   Datum vals[nparams];
   char  nulls[nparams]; MemSet(nulls, 'n', nparams);
 
-  CurlData *cdata = NULL;
-  EREPORT_CURL_GETINFO(ez_handle, CURLINFO_PRIVATE, &cdata);
-
-  vals[0] = Int64GetDatum(cdata->id);
+  vals[0] = Int64GetDatum(handle->id);
   nulls[0] = ' ';
 
   if (curl_return_code == CURLE_OK) {
-    Jsonb *jsonb_headers = jsonb_headers_from_curl_handle(ez_handle);
+    Jsonb *jsonb_headers = jsonb_headers_from_curl_handle(handle->ez_handle);
     long res_http_status_code = 0;
 
-    EREPORT_CURL_GETINFO(ez_handle, CURLINFO_RESPONSE_CODE, &res_http_status_code);
+    EREPORT_CURL_GETINFO(handle->ez_handle, CURLINFO_RESPONSE_CODE, &res_http_status_code);
 
     vals[1] = Int32GetDatum(res_http_status_code);
     nulls[1] = ' ';
 
-    if (cdata->body && cdata->body->data[0] != '\0'){
-      vals[2] = CStringGetTextDatum(cdata->body->data);
+    if (handle->body && handle->body->data[0] != '\0'){
+      vals[2] = CStringGetTextDatum(handle->body->data);
       nulls[2] = ' ';
     }
 
@@ -273,7 +270,7 @@ void insert_response(CURL *ez_handle, CURLcode curl_return_code){
     nulls[3] = ' ';
 
     struct curl_header *hdr;
-    if (curl_easy_header(ez_handle, "content-type", 0, CURLH_HEADER, -1, &hdr) == CURLHE_OK){
+    if (curl_easy_header(handle->ez_handle, "content-type", 0, CURLH_HEADER, -1, &hdr) == CURLHE_OK){
       vals[4] = CStringGetTextDatum(hdr->value);
       nulls[4] = ' ';
     }
@@ -285,7 +282,7 @@ void insert_response(CURL *ez_handle, CURLcode curl_return_code){
     char *error_msg = NULL;
 
     if (timed_out){
-      error_msg = detailed_timeout_strerror(ez_handle, cdata->timeout_milliseconds).msg;
+      error_msg = detailed_timeout_strerror(handle->ez_handle, handle->timeout_milliseconds).msg;
     } else {
       error_msg = (char *) curl_easy_strerror(curl_return_code);
     }
@@ -323,15 +320,15 @@ void insert_response(CURL *ez_handle, CURLcode curl_return_code){
   }
 }
 
-void pfree_curl_data(CurlData *cdata){
-  pfree(cdata->url);
-  pfree(cdata->method);
-  if(cdata->req_body)
-    pfree(cdata->req_body);
+void pfree_handle(CurlHandle *handle){
+  pfree(handle->url);
+  pfree(handle->method);
+  if(handle->req_body)
+    pfree(handle->req_body);
 
-  if(cdata->body)
-    destroyStringInfo(cdata->body);
+  if(handle->body)
+    destroyStringInfo(handle->body);
 
-  if(cdata->request_headers) //curl_slist_free_all already handles the NULL case, but be explicit about it
-    curl_slist_free_all(cdata->request_headers);
+  if(handle->request_headers) //curl_slist_free_all already handles the NULL case, but be explicit about it
+    curl_slist_free_all(handle->request_headers);
 }
