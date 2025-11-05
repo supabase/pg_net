@@ -231,6 +231,48 @@ static void unlock_extension(Oid ext_table_oids[static total_extension_tables]){
   UnlockRelationOid(ext_table_oids[1], AccessShareLock);
 }
 
+static void *
+net_calloc(size_t a, size_t b)
+{
+  elog(DEBUG1, "net_calloc: a(%zu), b(%zu)", a, b);
+  return palloc0(mul_size(a, b));
+}
+
+static void
+net_free(void *a)
+{
+  elog(DEBUG1, "net_free");
+  if (a)
+    pfree(a);
+}
+
+static void *
+net_malloc(size_t sz)
+{
+  elog(DEBUG1, "net_malloc: sz(%zu)", sz);
+  return sz ? palloc(sz) : NULL;
+}
+
+static void *
+net_realloc(void *a, size_t sz)
+{
+  elog(DEBUG1, "net_realloc(%s): a(%p), sz(%zu)", (sz>0?(a?"repalloc":"palloc"):"return"), a, sz);
+  if (sz > 0){
+    if (a)
+      return repalloc(a, sz);
+    else
+      return net_malloc(sz);
+  }
+  else
+    return a;
+}
+
+static char *
+net_strdup(const char *in)
+{
+  return pstrdup(in);
+}
+
 void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
   worker_state->shared_latch = &MyProc->procLatch;
   on_proc_exit(net_on_exit, 0);
@@ -245,7 +287,7 @@ void pg_net_worker(__attribute__ ((unused)) Datum main_arg) {
 
   elog(INFO, "pg_net worker started with a config of: pg_net.ttl=%s, pg_net.batch_size=%d, pg_net.username=%s, pg_net.database_name=%s", guc_ttl, guc_batch_size, guc_username, guc_database_name);
 
-  int curl_ret = curl_global_init(CURL_GLOBAL_ALL);
+  int curl_ret = curl_global_init_mem(CURL_GLOBAL_DEFAULT, net_malloc, net_free, net_realloc, net_strdup, net_calloc);
   if(curl_ret != CURLE_OK)
     ereport(ERROR, errmsg("curl_global_init() returned %s\n", curl_easy_strerror(curl_ret)));
 
