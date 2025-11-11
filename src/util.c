@@ -2,6 +2,7 @@
 
 #include "curl_prelude.h"
 
+#include "errors.h"
 #include "util.h"
 
 PG_FUNCTION_INFO_V1(_urlencode_string);
@@ -33,30 +34,20 @@ Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
   bool          isnull;
   char         *param;
 
-  CURLU    *h  = curl_url();
-  CURLUcode rc = curl_url_set(h, CURLUPART_URL, url, 0);
-  if (rc != CURLUE_OK) {
-    // TODO: Use curl_url_strerror once released.
-    elog(ERROR, "%s", curl_easy_strerror((CURLcode)rc));
-  }
+  CURLU *h = curl_url();
+  EREPORT_CURL_URL_SET(h, CURLUPART_URL, url, 0);
 
   iterator = array_create_iterator(params, 0, NULL);
   while (array_iterate(iterator, &value, &isnull)) {
     if (isnull) continue;
 
     param = TextDatumGetCString(value);
-    rc    = curl_url_set(h, CURLUPART_QUERY, param, CURLU_APPENDQUERY);
-    if (rc != CURLUE_OK) {
-      elog(ERROR, "curl_url returned: %d", rc);
-    }
+    EREPORT_CURL_URL_SET(h, CURLUPART_QUERY, param, CURLU_APPENDQUERY);
     pfree(param);
   }
   array_free_iterator(iterator);
 
-  rc = curl_url_get(h, CURLUPART_URL, &full_url, 0);
-  if (rc != CURLUE_OK) {
-    elog(ERROR, "curl_url returned: %d", rc);
-  }
+  EREPORT_CURL_URL_GET(h, CURLUPART_URL, &full_url, 0, url);
 
   pfree(url);
   curl_url_cleanup(h);

@@ -26,6 +26,21 @@
     list = new_list;                                                                               \
   } while (0)
 
+// curl_url_strerror is available starting from libcurl 7.80.0
+#define EREPORT_CURL_URL_SET(hdl, part, str, flags)                                                \
+  do {                                                                                             \
+    CURLUcode rc = curl_url_set(hdl, part, str, flags);                                            \
+    if (rc != CURLUE_OK)                                                                           \
+      ereport(ERROR, errmsg("invalid URL \"%s\": %s", str, curl_url_strerror(rc)));                \
+  } while (0)
+
+#define EREPORT_CURL_URL_GET(hdl, part, out, flags, value)                                         \
+  do {                                                                                             \
+    CURLUcode rc = curl_url_get(hdl, part, out, flags);                                            \
+    if (rc != CURLUE_OK)                                                                           \
+      ereport(ERROR, errmsg("failed to encode URL \"%s\": %s", value, curl_url_strerror(rc)));     \
+  } while (0)
+
 #define EREPORT_NULL_ATTR(tupIsNull, attr)                                                         \
   do {                                                                                             \
     if (tupIsNull) ereport(ERROR, errmsg("%s cannot be null", #attr));                             \
