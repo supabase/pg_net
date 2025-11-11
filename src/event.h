@@ -1,7 +1,7 @@
 #ifndef EVENT_H
 #define EVENT_H
 
-#include <curl/multi.h>
+#include "curl_prelude.h"
 
 #include "core.h"
 
