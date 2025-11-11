@@ -15,7 +15,20 @@ def test_get_bad_url(sess):
         """
         ))
 
-    assert r"resolve proxy name" in str(execinfo)
+    assert 'Unsupported URL scheme' in str(execinfo.value)
+
+
+def test_http_get_rejects_relative_url(sess):
+    """net.http_get with a correct error when given a relative url"""
+
+    with pytest.raises(Exception) as execinfo:
+        sess.execute(text(
+            """
+            select net.http_get('/malformed_url');
+        """
+        ))
+
+    assert 'invalid URL "/malformed_url"' in str(execinfo.value)
 
 
 def test_bad_post(sess):
