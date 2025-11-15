@@ -273,21 +273,24 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
     vals[5]  = BoolGetDatum(false);
     nulls[5] = ' ';
   } else {
-    bool  timed_out = curl_return_code == CURLE_OPERATION_TIMEDOUT;
-    char *error_msg = NULL;
-
-    if (timed_out) {
-      error_msg = detailed_timeout_strerror(handle->ez_handle, handle->timeout_milliseconds).msg;
-    } else {
-      error_msg = (char *)curl_easy_strerror(curl_return_code);
-    }
+    bool timed_out = curl_return_code == CURLE_OPERATION_TIMEDOUT;
 
     vals[5]  = BoolGetDatum(timed_out);
     nulls[5] = ' ';
 
-    if (error_msg) {
-      vals[6]  = CStringGetTextDatum(error_msg);
+    if (timed_out) {
+      curl_timeout_msg timeout_msg =
+          detailed_timeout_strerror(handle->ez_handle, handle->timeout_milliseconds);
+
+      vals[6]  = CStringGetTextDatum(timeout_msg.msg);
       nulls[6] = ' ';
+    } else {
+      const char *error_msg = curl_easy_strerror(curl_return_code);
+
+      if (error_msg) {
+        vals[6]  = CStringGetTextDatum(error_msg);
+        nulls[6] = ' ';
+      }
     }
   }
 

@@ -27,7 +27,8 @@ void ev_monitor_close(WorkerState *wstate) {
   close(timerfd);
 }
 
-int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, WorkerState *wstate) {
+int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, void *userp) {
+  WorkerState *wstate = (WorkerState *)userp;
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
 
   if (!timer_created) {
@@ -71,8 +72,9 @@ int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, Worker
   return 0;
 }
 
-int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, int what,
-                    WorkerState *wstate, void *socketp) {
+int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, int what, void *userp,
+                    void *socketp) {
+  WorkerState *wstate     = (WorkerState *)userp;
   static char *whatstrs[] = {"NONE", "CURL_POLL_IN", "CURL_POLL_OUT", "CURL_POLL_INOUT",
                              "CURL_POLL_REMOVE"};
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
@@ -145,7 +147,8 @@ void ev_monitor_close(WorkerState *wstate) {
   close(wstate->epfd);
 }
 
-int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, WorkerState *wstate) {
+int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, void *userp) {
+  WorkerState *wstate = (WorkerState *)userp;
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
   event timer_event;
   int   id = 1;
@@ -171,8 +174,9 @@ int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, Worker
   return 0;
 }
 
-int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, int what,
-                    WorkerState *wstate, void *socketp) {
+int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, int what, void *userp,
+                    void *socketp) {
+  WorkerState *wstate     = (WorkerState *)userp;
   static char *whatstrs[] = {"NONE", "CURL_POLL_IN", "CURL_POLL_OUT", "CURL_POLL_INOUT",
                              "CURL_POLL_REMOVE"};
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
