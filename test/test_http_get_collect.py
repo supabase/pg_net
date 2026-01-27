@@ -14,6 +14,18 @@ def test_http_get_returns_id(sess):
     assert request_id == 1
 
 
+def test_http_get_works_with_ip(sess):
+    """net.http_get returns a bigint id when using an IP with port"""
+
+    (request_id,) = sess.execute(text(
+        """
+        select net.http_get('http://127.0.0.1:8080');
+    """
+    )).fetchone()
+
+    assert request_id == 1
+
+
 def test_http_get_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
