@@ -431,6 +431,18 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
                running_handles);
         }
 
+  
+        // cleanup whatever is remaining
+        for (size_t i = 0; i < batch_size; i++) {
+          if (slot_in_use[i]) {
+            EREPORT_MULTI(curl_multi_remove_handle(worker_state->curl_mhandle, handles[i].ez_handle));
+
+            curl_easy_cleanup(handles[i].ez_handle);
+
+            pfree_handle(&handles[i]);
+          }
+        }
+
         pfree(slot_in_use);
         pfree(handles);
       }
