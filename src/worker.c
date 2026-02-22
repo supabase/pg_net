@@ -302,11 +302,10 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
       elog(DEBUG1, "Consumed " UINT64_FORMAT " request rows", requests_consumed);
 
       if (requests_consumed > 0) {
-        int batch_size = guc_batch_size;
-        CurlHandle *handles = palloc0(mul_size(sizeof(CurlHandle), batch_size));
+        CurlHandle *handles = palloc0(mul_size(sizeof(CurlHandle), guc_batch_size));
 
         // keep track of which slots are currently in use
-        bool *slot_in_use = palloc0(mul_size(sizeof(bool), batch_size));
+        bool *slot_in_use = palloc0(mul_size(sizeof(bool), guc_batch_size));
         // and the amount of slots that are actively processing requests
         int active_count = 0;
 
@@ -321,9 +320,9 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
         // start curl event loop
         int   running_handles = 0;
-        int   maxevents       = batch_size + 1; // 1 extra for the timer, need batch_size since we might fill more slots
+        int   maxevents       = guc_batch_size + 1; // 1 extra for the timer, need batch_size since we might fill more slots
         event events[maxevents];
-        CurlHandle *finished_handles[batch_size];
+        CurlHandle *finished_handles[guc_batch_size];
 
         while (active_count > 0) {
           int nfds =
@@ -387,7 +386,7 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
           // doing it in two loops gives us a safer number of free slots
 
           // find the slot and mark it free
-          for (int i = 0; i < batch_size; i++) {
+          for (int i = 0; i < guc_batch_size; i++) {
             for (int j = 0; j < num_finished; j++) {
               if (slot_in_use[i] && &handles[i] == finished_handles[j]) {
                 curl_easy_cleanup(handles[i].ez_handle);
@@ -400,7 +399,7 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
             }
           }
 
-          int free_slots = batch_size - active_count;
+          int free_slots = guc_batch_size - active_count;
           // we refill free slots only if the worker is not supposed to restart, we will continue
           // after restart instead
           if (!worker_should_restart && free_slots > 0) {
@@ -411,7 +410,7 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
                     new_requests, free_slots);
 
               uint64 filled = 0;
-              for (int i = 0; i < batch_size && filled < new_requests; i++) {
+              for (int i = 0; i < guc_batch_size && filled < new_requests; i++) {
                 if (!slot_in_use[i]) {
                   init_curl_handle(
                       &handles[i],
@@ -433,7 +432,7 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
   
         // cleanup whatever is remaining
-        for (size_t i = 0; i < batch_size; i++) {
+        for (int i = 0; i < guc_batch_size; i++) {
           if (slot_in_use[i]) {
             EREPORT_MULTI(curl_multi_remove_handle(worker_state->curl_mhandle, handles[i].ez_handle));
 
