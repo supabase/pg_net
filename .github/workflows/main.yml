@@ -11,13 +11,13 @@ jobs:
         pg-version: ['12', '13', '14', '15', '16', '17', '18']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v31.5.1
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
 
       - name: Use Cachix Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
         with:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -34,15 +34,15 @@ jobs:
       matrix:
         pg-version: ['17']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v31.5.1
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
         with:
           nix_path: nixpkgs=channel:nixos-unstable # needed to solve a bash error on CI
 
       - name: Use Cachix Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
         with:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -59,13 +59,13 @@ jobs:
       matrix:
         params: [ {reqs: 10000, batch: 200}, {reqs: 20000, batch: 400}, {reqs: 40000, batch: 800} ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v31.5.1
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
 
       - name: Use Cachix Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
         with:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -86,13 +86,13 @@ jobs:
         pg-version: ['17']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v31.5.1
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
 
       - name: Use Cachix Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
         with:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -101,7 +101,7 @@ jobs:
         run: nix-shell --run "xpg -v ${{ matrix.pg-version }} coverage"
 
       - name: Send coverage to Coveralls
-        uses: coverallsapp/github-action@v2.3.6
+        uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           files: ./build-${{ matrix.pg-version }}/coverage.info
@@ -111,15 +111,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v31.5.1
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Use Cachix Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
         with:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
