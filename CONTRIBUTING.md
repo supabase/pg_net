@@ -1,3 +1,5 @@
+# Contributing
+
 pg_net is OSS. PR and issues are welcome.
 
 
@@ -94,26 +96,3 @@ $ net-loadtest 1000 200
 |          2.001 |         4 |      20.418 |        437.566 |
 |          3.002 |         3 |      20.418 |        437.566 |
 ```
-
-## Documentation
-
-All public API must be documented. Building documentation requires python 3.6+
-
-
-### Install Dependencies
-
-Install mkdocs, themes, and extensions.
-
-```shell
-pip install -r docs/requirements_docs.txt
-```
-
-### Serving
-
-To serve the documentation locally run
-
-```shell
-mkdocs serve
-```
-
-and visit the docs at [http://127.0.0.1:8000/pg_net/](http://127.0.0.1:8000/pg_net/)
