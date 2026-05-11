@@ -8,8 +8,6 @@ Requires libcurl >= 7.83. Compatible with PostgreSQL > = 12.
 [![Coverage Status](https://coveralls.io/repos/github/supabase/pg_net/badge.svg)](https://coveralls.io/github/supabase/pg_net)
 [![Tests](https://github.com/supabase/pg_net/actions/workflows/main.yml/badge.svg)](https://github.com/supabase/pg_net/actions)
 
-**Documentation**: [https://supabase.github.io/pg_net](https://supabase.github.io/pg_net)
-
 ---
 
 # Contents
@@ -558,4 +556,4 @@ The above function can be called using cron jobs or manually to retry failed req
 
 # Contributing
 
-Checkout the [Contributing](docs/contributing.md) page to learn more about adding to the project.
+Checkout the [Contributing](CONTRIBUTING.md) page to learn more about adding to the project.
