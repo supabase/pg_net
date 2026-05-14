@@ -13,10 +13,8 @@ pg_net is OSS. PR and issues are welcome.
 For testing locally, execute:
 
 ```bash
-$ cachix use nxpg
-
-# might take a while in downloading all the dependencies
-$ nix-shell
+# This will download all the dependencies from the cache (when prompted for trusting the nxpg cache answer yes)
+$ nix develop
 
 # test on latest pg
 $ xpg test
