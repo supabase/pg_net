@@ -1,34 +1,45 @@
-with import (builtins.fetchTarball {
-  name = "2025-11-13";
-  url = "https://github.com/NixOS/nixpkgs/archive/91c9a64ce2a84e648d0cf9671274bb9c2fb9ba60.tar.gz";
-  sha256 = "sha256:19myp93spfsf5x62k6ncan7020bmbn80kj4ywcykqhb9c3q8fdr1";
-}) {};
-mkShell {
+let
+  flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
+  nixpkgsLock = flakeLock.nodes.nixpkgs.locked;
+  xpgLock = flakeLock.nodes.xpg.locked;
+in
+{ pkgs ?
+  import (builtins.fetchTarball {
+    name = nixpkgsLock.rev;
+    url = "https://github.com/${nixpkgsLock.owner}/${nixpkgsLock.repo}/archive/${nixpkgsLock.rev}.tar.gz";
+    sha256 = nixpkgsLock.narHash;
+  }) { }
+, xpgPkgs ?
+  import (pkgs.fetchFromGitHub {
+    inherit (xpgLock) owner repo rev;
+    sha256 = xpgLock.narHash;
+  })
+}:
+let
+  nginxCustom = pkgs.callPackage ./nix/nginxCustom.nix {};
+  loadtest = pkgs.callPackage ./nix/loadtest.nix {};
+  pythonDeps = with pkgs.python3Packages; [
+    pytest
+    psycopg2
+    sqlalchemy
+  ];
+  style =
+    pkgs.writeShellScriptBin "net-style" ''
+      ${pkgs.clang-tools}/bin/clang-format -i src/*
+    '';
+  styleCheck =
+    pkgs.writeShellScriptBin "net-style-check" ''
+      ${pkgs.clang-tools}/bin/clang-format -i src/*
+      ${pkgs.git}/bin/git diff-index --exit-code HEAD -- '*.c'
+    '';
+in
+pkgs.mkShell {
   buildInputs =
-    let
-      nginxCustom = callPackage ./nix/nginxCustom.nix {};
-      xpg = callPackage ./nix/xpg.nix {inherit fetchFromGitHub;};
-      loadtest = callPackage ./nix/loadtest.nix {};
-      pythonDeps = with python3Packages; [
-        pytest
-        psycopg2
-        sqlalchemy
-      ];
-      style =
-        writeShellScriptBin "net-style" ''
-          ${clang-tools}/bin/clang-format -i src/*
-        '';
-      styleCheck =
-        writeShellScriptBin "net-style-check" ''
-          ${clang-tools}/bin/clang-format -i src/*
-          ${git}/bin/git diff-index --exit-code HEAD -- '*.c'
-        '';
-    in
     [
-      xpg.xpg
+      xpgPkgs.xpg
       pythonDeps
       nginxCustom.nginxScript
-      curlWithGnuTls
+      pkgs.curlWithGnuTls
       loadtest
       style
       styleCheck
