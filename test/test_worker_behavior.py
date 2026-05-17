@@ -442,3 +442,149 @@ def test_processing_survives_postmaster_crash():
 
     engine.dispose()
 
+
+def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
+    """the worker's INSERTs into net._http_response must be reflected in
+    pg_stat_user_tables. Without this, autovacuum/autoanalyze can never be
+    scheduled and the table silently bloats.
+    """
+
+    # Make sure the worker is fully up before we start, otherwise we race
+    # with whatever the previous test left behind.
+    autocommit_sess.execute(text("select net.wait_until_running();"))
+
+    # Clean baseline so deltas are unambiguous.
+    autocommit_sess.execute(text(
+        "select pg_stat_reset_single_table_counters('net._http_response'::regclass);"
+    ))
+
+    # Drive a batch of requests through the worker.
+    sess.execute(text("""
+        select net.http_get('http://localhost:8080/pathological?status=200')
+        from generate_series(1,30);
+    """))
+    sess.commit()
+
+    # Wait until the worker has actually drained the queue and written all
+    # responses to net._http_response. Don't assume "30 rows" - the worker
+    # may pick up the queue in chunks depending on wake() coalescing.
+    for _ in range(20):
+        time.sleep(0.5)
+        (queue_count,) = sess.execute(text(
+            "select count(*) from net.http_request_queue;"
+        )).fetchone()
+        if queue_count == 0:
+            break
+
+    # Confirm the worker actually wrote rows, otherwise the pgstat assertion
+    # below would be meaningless.
+    (resp_count,) = autocommit_sess.execute(text(
+        "select count(*) from net._http_response;"
+    )).fetchone()
+    assert resp_count > 0, "worker did not write any responses"
+
+    # Poll for the pgstat counter to reflect the worker's INSERTs. With
+    # `pgstat_report_stat(false)` and PGSTAT_MIN_INTERVAL = 1000ms, the
+    # worker's first flush attempt is normally a hit (last_flush is far in
+    # the past after a long idle), but we allow generous slack here so an
+    # off-by-a-tick scheduling doesn't flake the suite.
+    deadline = time.time() + 30.0
+    resp_ins = 0
+    resp_mod = 0
+    while time.time() < deadline:
+        (resp_ins, resp_mod) = autocommit_sess.execute(text("""
+            select n_tup_ins, n_mod_since_analyze
+            from pg_stat_user_tables where relname='_http_response';
+        """)).fetchone()
+        if resp_ins > 0:
+            break
+        time.sleep(0.5)
+
+    assert resp_ins > 0, (
+        f"net._http_response.n_tup_ins is still 0 after 30s. "
+        f"Worker wrote {resp_count} responses but none reached pgstat. "
+        f"This is the pre-fix behaviour - autovacuum/autoanalyze will never "
+        f"be scheduled and the table will silently bloat."
+    )
+    assert resp_mod > 0, (
+        f"net._http_response.n_mod_since_analyze is still 0 after 30s "
+        f"(n_tup_ins reported {resp_ins})."
+    )
+
+
+def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_sess):
+    """autoanalyze on net._http_response must fire after the worker writes
+    enough rows. Without working pgstat counters, autovacuum/autoanalyze
+    never get scheduled and the table bloats - this is the primary symptom
+    seen on production (slow expiry DELETEs from a bloated index).
+    """
+
+    # Make sure the worker is fully up before we start.
+    autocommit_sess.execute(text("select net.wait_until_running();"))
+
+    # Make autovacuum eager *before* generating traffic so the launcher is
+    # already running on a 1s naptime by the time stats threshold is crossed.
+    # autovacuum_naptime is PGC_SIGHUP (reloadable). Give the reload a moment
+    # to propagate to the launcher.
+    autocommit_sess.execute(text("alter system set autovacuum_naptime = '1s';"))
+    autocommit_sess.execute(text("select pg_reload_conf();"))
+    time.sleep(1)
+
+    # Per-table: trip the autoanalyze threshold after a handful of rows.
+    # Reloptions take effect immediately; no reload required.
+    autocommit_sess.execute(text("""
+        alter table net._http_response set (
+            autovacuum_analyze_threshold = 10,
+            autovacuum_analyze_scale_factor = 0,
+            autovacuum_vacuum_threshold = 10,
+            autovacuum_vacuum_scale_factor = 0
+        );
+    """))
+
+    autocommit_sess.execute(text(
+        "select pg_stat_reset_single_table_counters('net._http_response'::regclass);"
+    ))
+
+    # Drive 30 inserts through the worker. 30 is well above the threshold (10).
+    sess.execute(text("""
+        select net.http_get('http://localhost:8080/pathological?status=200')
+        from generate_series(1,30);
+    """))
+    sess.commit()
+
+    # 30s budget covers worst-case worker pgstat flush (PGSTAT_MIN_INTERVAL
+    # = 1s slack) + worst-case launcher cycle (autovacuum_max_workers=3,
+    # 3 databases at 1s naptime each ~= 3s/cycle, with 2-3 cycle slack) +
+    # autoanalyze worker spawn + ANALYZE on a tiny table (sub-second).
+    # Real wall time on a clean rig is typically ~2-5s; the slack is to
+    # absorb test-rig load and not flake.
+    deadline = time.time() + 30.0
+    autoanalyze_count = 0
+    while time.time() < deadline:
+        (autoanalyze_count,) = autocommit_sess.execute(text("""
+            select autoanalyze_count
+            from pg_stat_user_tables where relname='_http_response';
+        """)).fetchone()
+        if autoanalyze_count > 0:
+            break
+        time.sleep(0.5)
+
+    assert autoanalyze_count > 0, (
+        "autoanalyze never fired on net._http_response within 30s. "
+        "Worker writes are not making pgstat threshold visible to the "
+        "autovacuum launcher - the customer-facing symptom (silent bloat) "
+        "would manifest in production."
+    )
+
+    # Cleanup: restore defaults so we don't bleed into other tests.
+    autocommit_sess.execute(text("""
+        alter table net._http_response reset (
+            autovacuum_analyze_threshold,
+            autovacuum_analyze_scale_factor,
+            autovacuum_vacuum_threshold,
+            autovacuum_vacuum_scale_factor
+        );
+    """))
+    autocommit_sess.execute(text("alter system reset autovacuum_naptime;"))
+    autocommit_sess.execute(text("select pg_reload_conf();"))
+
