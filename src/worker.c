@@ -383,6 +383,15 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
       PopActiveSnapshot();
       CommitTransactionCommand();
 
+      // Background workers that modify tables must flush their pending
+      // pgstat counters themselves. Regular user backends do this
+      // automatically after each query via the main loop in
+      // tcop/postgres.c; background workers have no equivalent. Without
+      // this call, per-write counters (n_tup_ins, n_tup_del,
+      // n_mod_since_analyze) for the worker's writes never reach shared
+      // stats.
+      pgstat_report_stat(false);
+
       // slow down queue processing to avoid using too much CPU
       wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND, &worker_should_restart);
 
