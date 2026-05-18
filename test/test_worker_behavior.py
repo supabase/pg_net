@@ -588,3 +588,54 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     autocommit_sess.execute(text("alter system reset autovacuum_naptime;"))
     autocommit_sess.execute(text("select pg_reload_conf();"))
 
+
+def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
+    """the pg_net worker must call pgstat_report_activity() so its row in
+    pg_stat_activity has a valid state column.
+    """
+
+    autocommit_sess.execute(text("select net.wait_until_running();"))
+
+    # Wait for the worker to drain any leftover work from previous tests
+    # and settle into idle. Polling makes this robust regardless of what
+    # ran before.
+    deadline = time.time() + 5.0
+    state = None
+    while time.time() < deadline:
+        (state,) = autocommit_sess.execute(text(
+            "select state from pg_stat_activity where backend_type ilike '%pg_net%';"
+        )).fetchone()
+        if state == 'idle':
+            break
+        time.sleep(0.1)
+    assert state == 'idle', (
+        f"pg_net worker state expected 'idle' at rest, got {state!r}. "
+        "Without pgstat_report_activity(STATE_IDLE, ...) the state column "
+        "stays NULL."
+    )
+
+    # Fire a slow request so the worker stays active long enough to observe.
+    sess.execute(text("""
+        select net.http_get('http://localhost:8080/pathological?status=200&delay=2');
+    """))
+    sess.commit()
+
+    # Poll for 'active' for up to 5s. The slow request keeps the worker
+    # busy for ~2s, so we have a wide observation window.
+    deadline = time.time() + 5.0
+    saw_active = False
+    while time.time() < deadline:
+        (state,) = autocommit_sess.execute(text(
+            "select state from pg_stat_activity where backend_type ilike '%pg_net%';"
+        )).fetchone()
+        if state == 'active':
+            saw_active = True
+            break
+        time.sleep(0.1)
+
+    assert saw_active, (
+        "pg_net worker state was never observed as 'active' during a slow "
+        "request. Without pgstat_report_activity(STATE_RUNNING, ...) the "
+        "state column stays NULL."
+    )
+
