@@ -265,6 +265,9 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
   publish_state(WS_RUNNING);
 
+  // Initial state: we go straight into the outer loop and wait for a wake.
+  pgstat_report_activity(STATE_IDLE, NULL);
+
   do {
 
     uint32 expected = 1;
@@ -273,6 +276,8 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
       wait_while_processing_interrupts(WORKER_WAIT_NO_TIMEOUT, &worker_should_restart);
       continue;
     }
+
+    pgstat_report_activity(STATE_RUNNING, NULL);
 
     uint64 requests_consumed = 0;
     uint64 expired_responses = 0;
@@ -396,6 +401,9 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
       wait_while_processing_interrupts(WORKER_WAIT_ONE_SECOND, &worker_should_restart);
 
     } while (!worker_should_restart && (requests_consumed > 0 || expired_responses > 0));
+
+    // Inner loop drained; back to waiting for the next wake.
+    pgstat_report_activity(STATE_IDLE, NULL);
 
   } while (!worker_should_restart);
 
