@@ -104,7 +104,11 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_TIMEOUT_MS, (long)handle->timeout_milliseconds);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_PRIVATE, handle);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_FOLLOWLOCATION, (long)true);
+#if PG_VERSION_NUM >= 190000
+  if (*log_min_messages <= DEBUG2) EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_VERBOSE, 1L);
+#else
   if (log_min_messages <= DEBUG2) EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_VERBOSE, 1L);
+#endif
 #if LIBCURL_VERSION_NUM >= 0x075500 /* libcurl 7.85.0 */
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_PROTOCOLS_STR, "http,https");
 #else
@@ -219,6 +223,24 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
 static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
   struct curl_header *header, *prev = NULL;
 
+#if PG_VERSION_NUM >= 190000
+  JsonbInState headers = {0};
+  pushJsonbValue(&headers, WJB_BEGIN_OBJECT, NULL);
+
+  while ((header = curl_easy_nextheader(ez_handle, CURLH_HEADER, 0, prev))) {
+    JsonbValue key   = {.type = jbvString,
+                        .val  = {.string = {.val = header->name, .len = strlen(header->name)}}};
+    JsonbValue value = {.type = jbvString,
+                        .val  = {.string = {.val = header->value, .len = strlen(header->value)}}};
+    pushJsonbValue(&headers, WJB_KEY, &key);
+    pushJsonbValue(&headers, WJB_VALUE, &value);
+    prev = header;
+  }
+
+  pushJsonbValue(&headers, WJB_END_OBJECT, NULL);
+
+  return JsonbValueToJsonb(headers.result);
+#else
   JsonbParseState *headers = NULL;
   (void)pushJsonbValue(&headers, WJB_BEGIN_OBJECT, NULL);
 
@@ -235,6 +257,7 @@ static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
   Jsonb *jsonb_headers = JsonbValueToJsonb(pushJsonbValue(&headers, WJB_END_OBJECT, NULL));
 
   return jsonb_headers;
+#endif
 }
 
 void insert_response(CurlHandle *handle, CURLcode curl_return_code) {

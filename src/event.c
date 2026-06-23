@@ -18,7 +18,7 @@ inline int wait_event(int fd, event *events, size_t maxevents, int timeout_milli
   return epoll_wait(fd, events, maxevents, timeout_milliseconds);
 }
 
-inline int event_monitor() {
+inline int event_monitor(void) {
   return epoll_create1(0);
 }
 
@@ -139,7 +139,7 @@ int inline wait_event(int fd, event *events, size_t maxevents, int timeout_milli
                 &(struct timespec){.tv_sec = timeout_milliseconds / 1000});
 }
 
-int inline event_monitor() {
+int inline event_monitor(void) {
   return kqueue();
 }
 
