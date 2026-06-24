@@ -51,6 +51,32 @@
 #define PG15_GTE (PG_VERSION_NUM >= 150000)
 #define PG17_LT (PG_VERSION_NUM < 170000)
 
+#if PG_VERSION_NUM >= 190000
+#  define LOG_MIN_MESSAGES *log_min_messages
+
+// clang-format off
+#  define PG_SIGNAL_PARAMS                                                                         \
+    __attribute__((unused)) int   postgres_signal_arg,\
+    __attribute__((unused)) const pg_signal_info *pg_siginfo
+// clang-format on
+#  define PG_SIGNAL_ARGS postgres_signal_arg, pg_siginfo
+
+#  define PG_JSONB_INIT_STATE(name) JsonbInState name = {0}
+#  define PG_JSONB_PUSH(state, action, value) pushJsonbValue(&(state), (action), (value))
+#  define PG_JSONB_OBJECT_FINISH(state)                                                            \
+    (PG_JSONB_PUSH((state), WJB_END_OBJECT, NULL), JsonbValueToJsonb((state).result))
+#else
+#  define LOG_MIN_MESSAGES log_min_messages
+
+#  define PG_SIGNAL_PARAMS __attribute__((unused)) int postgres_signal_arg
+#  define PG_SIGNAL_ARGS postgres_signal_arg
+
+#  define PG_JSONB_INIT_STATE(name) JsonbParseState *name = NULL
+#  define PG_JSONB_PUSH(state, action, value) pushJsonbValue(&(state), (action), (value))
+#  define PG_JSONB_OBJECT_FINISH(state)                                                            \
+    JsonbValueToJsonb(PG_JSONB_PUSH((state), WJB_END_OBJECT, NULL))
+#endif
+
 const char *xact_event_name(XactEvent event);
 
 #if PG17_LT
