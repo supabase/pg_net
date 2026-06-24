@@ -1,5 +1,3 @@
-SRC_DIR = src
-
 # the `-Wno`s quiet C90 warnings
 PG_CFLAGS = -std=c11 -Wextra -Wall -Werror \
 	-Wno-declaration-after-statement \
@@ -45,12 +43,13 @@ REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 REGRESS_OPTS = --use-existing --inputdir=test
 
 MODULE_big = $(EXTENSION)
-SRC = $(wildcard $(SRC_DIR)/*.c)
+HEADERS = $(wildcard src/*.h)
+SOURCES = $(wildcard src/*.c)
 
 ifdef BUILD_DIR
-OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRC))
+OBJS = $(patsubst src/%.c, $(BUILD_DIR)/%.o, $(SOURCES))
 else
-OBJS = $(patsubst $(SRC_DIR)/%.c, src/%.o, $(SRC)) # if no BUILD_DIR, just build on src so standard PGXS `make` works
+OBJS = $(patsubst src/%.c, src/%.o, $(SOURCES)) # if no BUILD_DIR, just build on src so standard PGXS `make` works
 endif
 
 SHLIB_LINK = -lcurl
@@ -68,7 +67,7 @@ $(BUILD_DIR)/.gitignore: sql/$(EXTENSION)--$(EXTVERSION).sql $(EXTENSION).contro
 	cp sql/$(EXTENSION)--$(EXTVERSION).sql $(BUILD_DIR)/extension
 	echo "*" > $(BUILD_DIR)/.gitignore
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(BUILD_DIR)/.gitignore
+$(BUILD_DIR)/%.o: src/%.c $(HEADERS) $(BUILD_DIR)/.gitignore
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/$(EXTENSION).$(SHARED_EXT): $(EXTENSION).$(SHARED_EXT)
