@@ -131,7 +131,7 @@ Datum wake(__attribute__((unused)) PG_FUNCTION_ARGS) {
   PG_RETURN_VOID();
 }
 
-static void handle_sigterm(__attribute__((unused)) SIGNAL_ARGS) {
+static void handle_sigterm(PG_SIGNAL_PARAMS) {
   int save_errno = errno;
   pg_atomic_write_u32(&worker_state->got_restart, 1);
   pg_write_barrier();
@@ -139,7 +139,7 @@ static void handle_sigterm(__attribute__((unused)) SIGNAL_ARGS) {
   errno = save_errno;
 }
 
-static void handle_sighup(__attribute__((unused)) SIGNAL_ARGS) {
+static void handle_sighup(PG_SIGNAL_PARAMS) {
   int save_errno = errno;
   got_sighup     = true;
   if (worker_state->shared_latch) SetLatch(worker_state->shared_latch);
@@ -152,11 +152,11 @@ static void handle_sighup(__attribute__((unused)) SIGNAL_ARGS) {
  *DROP DATATABASE from finishing since our worker would be sleeping and not reach
  *CHECK_FOR_INTERRUPTS()
  */
-static void handle_sigusr1(SIGNAL_ARGS) {
+static void handle_sigusr1(PG_SIGNAL_PARAMS) {
   int save_errno = errno;
   if (worker_state->shared_latch) SetLatch(worker_state->shared_latch);
   errno = save_errno;
-  procsignal_sigusr1_handler(postgres_signal_arg);
+  procsignal_sigusr1_handler(PG_SIGNAL_ARGS);
 }
 
 static void publish_state(WorkerStatus s) {
