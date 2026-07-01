@@ -120,3 +120,42 @@ def test_net_on_new_role(sess):
         set local role postgres;
         drop role another;
     """))
+
+
+def test_public_roles_cannot_create_triggers_on_internal_tables(sess):
+    """Internal tables must not allow trigger-based privilege escalation."""
+
+    (can_select, can_trigger) = sess.execute(text("""
+        select
+            has_table_privilege('pre_existing', 'net._http_response', 'select'),
+            has_table_privilege('pre_existing', 'net._http_response', 'trigger');
+    """)).fetchone()
+
+    assert can_select is True
+    assert can_trigger is False
+
+    sess.execute(text("""
+        create table public.t1 (id text);
+
+        create or replace function public.my_trigger_fn()
+        returns trigger
+        language plpgsql
+        as $$
+        begin
+            insert into public.t1 (id) values (current_user);
+            return new;
+        end
+        $$;
+    """))
+
+    with pytest.raises(Exception) as execinfo:
+        sess.execute(text("""
+            set local role to pre_existing;
+
+            create trigger my_trigger
+            after insert on net._http_response
+            for each row
+            execute function public.my_trigger_fn();
+        """))
+
+    assert "permission denied" in str(execinfo.value)

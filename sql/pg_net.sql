@@ -354,4 +354,4 @@ $$;
 
 grant usage on schema net to PUBLIC;
 grant all on all sequences in schema net to PUBLIC;
-grant all on all tables in schema net to PUBLIC;
+grant select, insert, update, delete, truncate, references on all tables in schema net to PUBLIC;
