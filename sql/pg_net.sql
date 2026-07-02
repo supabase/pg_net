@@ -354,4 +354,8 @@ $$;
 
 grant usage on schema net to PUBLIC;
 grant all on all sequences in schema net to PUBLIC;
-grant select, insert, update, delete, truncate, references on all tables in schema net to PUBLIC;
+grant all on all tables in schema net to PUBLIC;
+
+-- we do not want users to be able to create triggers on tables in the net schema to avoid
+-- privilege escalation bugs.
+revoke trigger on all tables in schema net from PUBLIC;
