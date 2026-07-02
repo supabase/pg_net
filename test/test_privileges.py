@@ -147,6 +147,21 @@ def test_public_roles_cannot_create_triggers_on_internal_tables(sess):
         end
         $$;
     """))
+    sess.commit()
+
+    with pytest.raises(Exception) as execinfo:
+        sess.execute(text("""
+            set local role to pre_existing;
+
+            create trigger my_trigger
+            after insert on net.http_request_queue
+            for each row
+            execute function public.my_trigger_fn();
+        """))
+
+    assert "permission denied for table http_request_queue" in str(execinfo.value)
+
+    sess.rollback()
 
     with pytest.raises(Exception) as execinfo:
         sess.execute(text("""
@@ -158,4 +173,4 @@ def test_public_roles_cannot_create_triggers_on_internal_tables(sess):
             execute function public.my_trigger_fn();
         """))
 
-    assert "permission denied" in str(execinfo.value)
+    assert "permission denied for table _http_response" in str(execinfo.value)
