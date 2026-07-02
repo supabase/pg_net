@@ -195,16 +195,31 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
     curl_multi_assign(wstate->curl_mhandle, sockfd, NULL);
     pfree(sock_info);
   } else {
+    int old_action = sock_info ? sock_info->action : CURL_POLL_NONE;
+
     if (!sock_info) {
       sock_info         = palloc(sizeof(SocketInfo));
       sock_info->sockfd = sockfd;
-      sock_info->action = what;
       curl_multi_assign(wstate->curl_mhandle, sockfd, sock_info);
     }
 
-    if (what & CURL_POLL_IN) EV_SET(&ev[count++], sockfd, EVFILT_READ, EV_ADD, 0, 0, sock_info);
+    // curl can flip a socket's interest without ever sending CURL_POLL_REMOVE in
+    // between (e.g. CURL_POLL_OUT while sending the request, then CURL_POLL_IN
+    // while reading the response). Only touch the filters whose desired state
+    // actually changed, and keep `action` in sync so a later CURL_POLL_REMOVE
+    // deletes everything that's actually registered instead of leaking a kqueue
+    // entry whose sock_info we've already pfree'd (use-after-free).
+    if ((what & CURL_POLL_IN) && !(old_action & CURL_POLL_IN))
+      EV_SET(&ev[count++], sockfd, EVFILT_READ, EV_ADD, 0, 0, sock_info);
+    else if (!(what & CURL_POLL_IN) && (old_action & CURL_POLL_IN))
+      EV_SET(&ev[count++], sockfd, EVFILT_READ, EV_DELETE, 0, 0, sock_info);
 
-    if (what & CURL_POLL_OUT) EV_SET(&ev[count++], sockfd, EVFILT_WRITE, EV_ADD, 0, 0, sock_info);
+    if ((what & CURL_POLL_OUT) && !(old_action & CURL_POLL_OUT))
+      EV_SET(&ev[count++], sockfd, EVFILT_WRITE, EV_ADD, 0, 0, sock_info);
+    else if (!(what & CURL_POLL_OUT) && (old_action & CURL_POLL_OUT))
+      EV_SET(&ev[count++], sockfd, EVFILT_WRITE, EV_DELETE, 0, 0, sock_info);
+
+    sock_info->action = what;
   }
 
   Assert(count <= 2);
