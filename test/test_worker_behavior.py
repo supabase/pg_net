@@ -421,12 +421,20 @@ def test_processing_survives_postmaster_crash(wait_until):
     """
     )).fetchone()
 
-    (count,) = tmp_sess.execute(text(
+    # The worker is already running (see wait_until_running() above), so by the time this
+    # count is read it may have already drained a batch into net._http_response. Check both
+    # tables together instead of assuming the queue alone still holds all 10.
+    (queue_count,) = tmp_sess.execute(text(
     """
         select count(*) from net.http_request_queue;
     """
     )).fetchone()
-    assert count == 10
+    (response_count,) = tmp_sess.execute(text(
+    """
+        select count(*) from net._http_response;
+    """
+    )).fetchone()
+    assert queue_count + response_count == 10
 
     engine.dispose()
 
