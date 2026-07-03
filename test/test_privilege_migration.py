@@ -237,8 +237,15 @@ def test_triggers_on_net_tables_run_as_pg_net_username(sess, autocommit_sess):
         )
 
     finally:
-        sess.execute(text("drop table if exists public.trigger_witness;"))
+        # Drop the function (which cascades to the triggers on the net
+        # tables) before dropping trigger_witness. The worker's own
+        # transactions lock the net tables first and trigger_witness second
+        # (queue/response DML, then the witness trigger's INSERT); dropping
+        # trigger_witness first would acquire these same two locks in the
+        # opposite order and can deadlock with an in-flight worker
+        # transaction.
         sess.execute(text("drop function if exists public.record_trigger_user() cascade;"))
+        sess.execute(text("drop table if exists public.trigger_witness;"))
         sess.commit()
 
         autocommit_sess.execute(text("alter system reset pg_net.username;"))
