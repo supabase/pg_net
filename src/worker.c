@@ -222,6 +222,11 @@ static bool is_extension_locked(Oid ext_table_oids[static total_extension_tables
    * would crash loop on the queries that follow.
    */
   if (!OidIsValid(queue_oid) || !OidIsValid(resp_oid)) {
+    ereport(LOG,
+            errmsg("schema \"net\" exists but the pg_net extension tables are missing, skipping "
+                   "request processing"),
+            errhint("The schema \"net\" might be used by another extension or be left over from a "
+                    "partially dropped pg_net installation."));
     return false;
   }
 
