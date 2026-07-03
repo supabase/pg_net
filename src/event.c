@@ -72,6 +72,10 @@ int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, void *
   return 0;
 }
 
+typedef struct {
+  curl_socket_t sockfd;
+} SocketInfo;
+
 int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, int what, void *userp,
                     void *socketp) {
   WorkerState *wstate     = (WorkerState *)userp;
@@ -79,25 +83,30 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
                              "CURL_POLL_REMOVE"};
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
 
+  SocketInfo *sock_info = (SocketInfo *)socketp;
+
   int epoll_op;
-  if (!socketp) {
+  if (what == CURL_POLL_REMOVE) {
+    epoll_op = EPOLL_CTL_DEL;
+    curl_multi_assign(wstate->curl_mhandle, sockfd, NULL);
+  } else if (!sock_info) {
+    // socketp must point at storage that outlives this call, since curl hands it back to us
+    // verbatim on the next callback for this sockfd. The address of a local variable would be
+    // a dangling pointer as soon as we return.
     epoll_op           = EPOLL_CTL_ADD;
-    bool socket_exists = true;
-    curl_multi_assign(wstate->curl_mhandle, sockfd, &socket_exists);
-  } else if (what == CURL_POLL_REMOVE) {
-    epoll_op           = EPOLL_CTL_DEL;
-    bool socket_exists = false;
-    curl_multi_assign(wstate->curl_mhandle, sockfd, &socket_exists);
+    sock_info          = palloc(sizeof(SocketInfo));
+    sock_info->sockfd  = sockfd;
+    curl_multi_assign(wstate->curl_mhandle, sockfd, sock_info);
   } else {
     epoll_op = EPOLL_CTL_MOD;
   }
 
   epoll_event ev = {
     .data.fd = sockfd,
-    .events  = (what & CURL_POLL_IN)    ? EPOLLIN
-               : (what & CURL_POLL_OUT) ? EPOLLOUT
-                                        : 0, // no event is assigned since here we get
-                                             // CURL_POLL_REMOVE and the sockfd will be removed
+    // CURL_POLL_INOUT sets both bits, so these must combine rather than pick just one -
+    // a ternary chain here would silently drop interest in one direction.
+    .events  = (what & CURL_POLL_IN ? EPOLLIN : 0) | (what & CURL_POLL_OUT ? EPOLLOUT : 0),
+    // no event is assigned when `what` is CURL_POLL_REMOVE and the sockfd is being removed
   };
 
   // epoll_ctl will copy ev, so there's no need to do palloc for the epoll_event
@@ -108,6 +117,8 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
     ereport(ERROR, errmsg("epoll_ctl with %s failed when receiving %s for sockfd %d: %s",
                           whatstrs[what], opstrs[epoll_op], sockfd, strerror(e)));
   }
+
+  if (epoll_op == EPOLL_CTL_DEL) pfree(sock_info);
 
   return 0;
 }
