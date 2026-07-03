@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -41,3 +43,24 @@ def autocommit_sess(engine):
     session = Session(ac_engine)
 
     yield session
+
+
+@pytest.fixture(scope="function")
+def wait_until():
+    """Poll `fetch()` until `predicate(result)` is true, instead of a fixed sleep.
+
+    Returns the last fetched value on success, so callers can use it directly.
+    Raises AssertionError with the last observed value if `timeout` is exceeded.
+    """
+    def _wait_until(fetch, predicate, timeout=10, interval=0.1, description="condition"):
+        deadline = time.time() + timeout
+        result = None
+        while time.time() < deadline:
+            result = fetch()
+            if predicate(result):
+                return result
+            time.sleep(interval)
+        raise AssertionError(
+            f"Timed out after {timeout}s waiting for {description} (last value: {result!r})"
+        )
+    return _wait_until
