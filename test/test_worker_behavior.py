@@ -677,3 +677,7 @@ def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_
 
     sess.execute(text("drop schema net;"))
     sess.commit()
+
+    # exit the worker so it flushes its gcov counters; this is the last test of the
+    # suite and the immediate shutdown at the end would lose its coverage data
+    autocommit_sess.execute(text("select kill_worker();"))
