@@ -215,6 +215,21 @@ static bool is_extension_locked(Oid ext_table_oids[static total_extension_tables
   Oid queue_oid = get_relname_relid("http_request_queue", net_oid);
   Oid resp_oid  = get_relname_relid("_http_response", net_oid);
 
+  /*
+   * The "net" schema can exist without the extension tables, e.g. when another
+   * extension is installed into a schema named "net". ConditionalLockRelationOid
+   * doesn't validate the oid, so locking InvalidOid would succeed and the worker
+   * would crash loop on the queries that follow.
+   */
+  if (!OidIsValid(queue_oid) || !OidIsValid(resp_oid)) {
+    ereport(WARNING,
+            errmsg("schema \"net\" exists but the pg_net extension tables are missing, skipping "
+                   "request processing"),
+            errhint("The schema \"net\" might be used by another extension or be left over from a "
+                    "partially dropped pg_net installation."));
+    return false;
+  }
+
   bool is_locked = ConditionalLockRelationOid(queue_oid, AccessShareLock) &&
                    ConditionalLockRelationOid(resp_oid, AccessShareLock);
 

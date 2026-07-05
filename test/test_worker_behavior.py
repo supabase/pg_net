@@ -639,3 +639,45 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
         "state column stays NULL."
     )
 
+
+
+def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_sess):
+    """when a schema named "net" exists but the pg_net tables don't (e.g. another
+    extension installed into a schema named "net"), the worker should treat the
+    extension as not installed instead of crash looping"""
+
+    sess.execute(text("drop extension pg_net cascade;"))
+    sess.execute(text("create schema net;"))
+    sess.commit()
+
+    # restart the worker so it comes back up with a pending wake signal
+    autocommit_sess.execute(text("select kill_worker();"))
+
+    # wait for the worker to come back up (bgw_restart_time is 1 second)
+    pid = None
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        row = autocommit_sess.execute(text(
+            "select pid from pg_stat_activity where backend_type ilike '%pg_net%';"
+        )).fetchone()
+        if row:
+            pid = row[0]
+            break
+        time.sleep(0.1)
+    assert pid is not None, "pg_net worker did not come back up after restart"
+
+    # wait several restart cycles; a crash loop would respawn the worker with a new pid
+    time.sleep(3)
+
+    row = autocommit_sess.execute(text(
+        "select pid from pg_stat_activity where backend_type ilike '%pg_net%';"
+    )).fetchone()
+    assert row is not None, "pg_net worker is down, it crashed after seeing the net schema"
+    assert row[0] == pid, "pg_net worker restarted, it's crash looping on the net schema"
+
+    sess.execute(text("drop schema net;"))
+    sess.commit()
+
+    # exit the worker so it flushes its gcov counters; this is the last test of the
+    # suite and the immediate shutdown at the end would lose its coverage data
+    autocommit_sess.execute(text("select kill_worker();"))
