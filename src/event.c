@@ -3,7 +3,9 @@
 #include <unistd.h>
 
 #include "pg_prelude.h"
+#include "curl_prelude.h"
 
+#include "errors.h"
 #include "event.h"
 
 #ifdef WAIT_USE_EPOLL
@@ -72,9 +74,9 @@ int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, void *
   return 0;
 }
 
-typedef struct {
-  curl_socket_t sockfd;
-} SocketInfo;
+// A marker value only need to be assigned to a socket's socketp pointer via a call to
+// curl_multi_assign.
+static char socketp_marker;
 
 int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, int what, void *userp,
                     void *socketp) {
@@ -83,30 +85,32 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
                              "CURL_POLL_REMOVE"};
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
 
-  SocketInfo *sock_info = (SocketInfo *)socketp;
+  // libcurl calls the multi_socket_cb with socketp set to null for a socketfd when it is first
+  // created. At that time we set the socketp to the marker value via a call to curl_multi_assign so
+  // that any subsequent calls will have that marker value set. This helps us distinguish between
+  // EPOLL_CTL_ADD and EPOLL_CTL_MOD scenarios. We could have set the socketp to a heap allocated
+  // value but since we don't need the actual value, we avoid those allocations and use the marker
+  // value.
+  bool seen_before = socketp != NULL;
 
   int epoll_op;
-  if (what == CURL_POLL_REMOVE) {
+  if (!seen_before) {
+    epoll_op = EPOLL_CTL_ADD;
+    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, &socketp_marker);
+  } else if (what == CURL_POLL_REMOVE) {
     epoll_op = EPOLL_CTL_DEL;
-    curl_multi_assign(wstate->curl_mhandle, sockfd, NULL);
-  } else if (!sock_info) {
-    // socketp must point at storage that outlives this call, since curl hands it back to us
-    // verbatim on the next callback for this sockfd. The address of a local variable would be
-    // a dangling pointer as soon as we return.
-    epoll_op           = EPOLL_CTL_ADD;
-    sock_info          = palloc(sizeof(SocketInfo));
-    sock_info->sockfd  = sockfd;
-    curl_multi_assign(wstate->curl_mhandle, sockfd, sock_info);
+    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, NULL);
   } else {
     epoll_op = EPOLL_CTL_MOD;
   }
 
   epoll_event ev = {
     .data.fd = sockfd,
-    // CURL_POLL_INOUT sets both bits, so these must combine rather than pick just one -
-    // a ternary chain here would silently drop interest in one direction.
-    .events  = (what & CURL_POLL_IN ? EPOLLIN : 0) | (what & CURL_POLL_OUT ? EPOLLOUT : 0),
-    // no event is assigned when `what` is CURL_POLL_REMOVE and the sockfd is being removed
+    // We can get the `what` variable value equal to either CURL_POLL_IN, CURL_POLL_OUT,
+    // CURL_POLL_INOUT (equivalent to CURL_POLL_IN | CURL_POLL_OUT), or CURL_POLL_REMOVE. We want to
+    // set the events member correspondingly to EPOLLIN, EPOLLOUT, EPOLLIN | EPOLLOUT, or 0 (ignored
+    // when epoll_op is EPOLL_CTL_DEL).
+    .events = (what & CURL_POLL_IN ? EPOLLIN : 0) | (what & CURL_POLL_OUT ? EPOLLOUT : 0),
   };
 
   // epoll_ctl will copy ev, so there's no need to do palloc for the epoll_event
@@ -117,8 +121,6 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
     ereport(ERROR, errmsg("epoll_ctl with %s failed when receiving %s for sockfd %d: %s",
                           whatstrs[what], opstrs[epoll_op], sockfd, strerror(e)));
   }
-
-  if (epoll_op == EPOLL_CTL_DEL) pfree(sock_info);
 
   return 0;
 }
