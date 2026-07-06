@@ -21,7 +21,7 @@ UNAME_S := $(shell uname -s)
 PG_CONFIG = pg_config
 
 ifeq ($(UNAME_S),Darwin)
-    # macOS switched the loadable-module extension from .so to .dylib in PG16
+    # PG16 switched the loadable-module extension from .so to .dylib on macOS
     # So we check the postgres version to decide the correct extension to use
     PG_MAJORVERSION := $(shell $(PG_CONFIG) --version | sed -E 's/PostgreSQL ([0-9]+).*/\1/')
     ifeq ($(shell test $(PG_MAJORVERSION) -ge 16; echo $$?),0)
