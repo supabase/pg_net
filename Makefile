@@ -18,9 +18,17 @@ ifeq ($(CC),gcc)
 endif
 
 UNAME_S := $(shell uname -s)
+PG_CONFIG = pg_config
 
 ifeq ($(UNAME_S),Darwin)
-    SHARED_EXT  := dylib
+    # PG16 switched the loadable-module extension from .so to .dylib on macOS
+    # So we check the postgres version to decide the correct extension to use
+    PG_MAJORVERSION := $(shell $(PG_CONFIG) --version | sed -E 's/PostgreSQL ([0-9]+).*/\1/')
+    ifeq ($(shell test $(PG_MAJORVERSION) -ge 16; echo $$?),0)
+        SHARED_EXT  := dylib
+    else
+        SHARED_EXT  := so
+    endif
 else
     SHARED_EXT  := so
 endif
@@ -45,7 +53,6 @@ else
 OBJS = $(patsubst $(SRC_DIR)/%.c, src/%.o, $(SRC)) # if no BUILD_DIR, just build on src so standard PGXS `make` works
 endif
 
-PG_CONFIG = pg_config
 SHLIB_LINK = -lcurl
 
 # Find <curl/curl.h> from system headers
