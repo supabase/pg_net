@@ -24,6 +24,18 @@ typedef struct epoll_event event;
 #  include <sys/event.h>
 typedef struct kevent event;
 
+// Diffs `what` (desired filter interest) against `sock_info->action` (currently
+// registered interest) for a single poll bit / kqueue filter pair, and appends an
+// EV_ADD or EV_DELETE to `ev`/`count` only when that filter's state actually changed.
+// Relies on `what`, `sock_info`, `sockfd`, `ev`, and `count` from the caller's scope.
+#define UPDATE_FILTER(poll_bit, filter)                                                            \
+    do {                                                                                           \
+      if ((what & (poll_bit)) && !(sock_info->action & (poll_bit)))                                \
+        EV_SET(&ev[count++], sockfd, (filter), EV_ADD, 0, 0, sock_info);                           \
+      else if (!(what & (poll_bit)) && (sock_info->action & (poll_bit)))                           \
+        EV_SET(&ev[count++], sockfd, (filter), EV_DELETE, 0, 0, sock_info);                        \
+    } while (0)
+
 #endif
 
 int  wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds);
