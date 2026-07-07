@@ -149,32 +149,35 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.worker_restart();"))
     autocommit_sess.execute(text("select net.wait_until_running();"))
 
-    sess.execute(text(
+    try:
+        sess.execute(text(
+            """
+            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
-    """
-    ))
+        ))
 
-    sess.commit()
+        sess.commit()
 
-    # This intentionally races a short, fixed sleep against the (slow,
-    # batch_size=1) worker to catch it mid-queue, then asserts most rows are
-    # still unprocessed. Polling for "some processing happened" would fight
-    # that intent, so this stays a fixed sleep.
-    time.sleep(0.1)
+        # This intentionally races a short, fixed sleep against the (slow,
+        # batch_size=1) worker to catch it mid-queue, then asserts most rows are
+        # still unprocessed. Polling for "some processing happened" would fight
+        # that intent, so this stays a fixed sleep.
+        time.sleep(0.1)
 
-    (count,) = sess.execute(text(
+        (count,) = sess.execute(text(
+            """
+            WITH deleted AS (DELETE FROM net.http_request_queue RETURNING *) SELECT count(*) FROM deleted;
         """
-        WITH deleted AS (DELETE FROM net.http_request_queue RETURNING *) SELECT count(*) FROM deleted;
-    """
-    )).fetchone()
-    assert count > 1
+        )).fetchone()
+        assert count > 1
 
-    sess.commit()
-
-    autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+        sess.commit()
+    finally:
+        # Always restore batch_size, even on assertion failure - it's set via
+        # ALTER SYSTEM so it would otherwise leak into and slow down later tests.
+        autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
+        autocommit_sess.execute(text("select net.worker_restart()"))
+        autocommit_sess.execute(text("select net.wait_until_running()"))
 
 
 def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
@@ -186,31 +189,34 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.worker_restart();"))
     autocommit_sess.execute(text("select net.wait_until_running();"))
 
-    sess.execute(text(
+    try:
+        sess.execute(text(
+            """
+            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
-    """
-    ))
-    sess.commit()
+        ))
+        sess.commit()
 
-    # truncate succeeds fast, despite the worker still processing the queue 1 by 1
-    sess.execute(text(
+        # truncate succeeds fast, despite the worker still processing the queue 1 by 1
+        sess.execute(text(
+            """
+            truncate net.http_request_queue;
         """
-        truncate net.http_request_queue;
-    """
-    ))
+        ))
 
-    # now the queue will be empty
-    (count,) = sess.execute(text(
+        # now the queue will be empty
+        (count,) = sess.execute(text(
+            """
+            select count(*) from net.http_request_queue;
         """
-        select count(*) from net.http_request_queue;
-    """
-    )).fetchone()
-    assert count == 0
-
-    autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+        )).fetchone()
+        assert count == 0
+    finally:
+        # Always restore batch_size, even on assertion failure - it's set via
+        # ALTER SYSTEM so it would otherwise leak into and slow down later tests.
+        autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
+        autocommit_sess.execute(text("select net.worker_restart()"))
+        autocommit_sess.execute(text("select net.wait_until_running()"))
 
 
 def test_no_failure_on_drop_extension(sess, wait_until):
@@ -256,63 +262,70 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess,
     autocommit_sess.execute(text("select net.worker_restart();"))
     autocommit_sess.execute(text("select net.wait_until_running();"))
 
-    sess.execute(text(
+    try:
+        sess.execute(text(
+            """
+            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,5);
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,5);
-    """
-    ))
+        ))
 
-    sess.commit()
+        sess.commit()
 
-    # one restart will likely keep the worker awake since the wake signal could still be on, so do two restarts
-    # to ensure the wake signal is cleared. There's no observable signal for "the wake flag is
-    # cleared", so these stay fixed sleeps.
-    sess.execute(text(
+        # one restart will likely keep the worker awake since the wake signal could still be on, so do two restarts
+        # to ensure the wake signal is cleared. There's no observable signal for "the wake flag is
+        # cleared", so these stay fixed sleeps.
+        sess.execute(text(
+            """
+            select net.worker_restart();
+            select net.wait_until_running();
         """
-        select net.worker_restart();
-        select net.wait_until_running();
-    """
-    ))
+        ))
 
-    time.sleep(0.1)
+        time.sleep(0.1)
 
-    sess.execute(text(
+        sess.execute(text(
+            """
+            select net.worker_restart();
+            select net.wait_until_running();
         """
-        select net.worker_restart();
-        select net.wait_until_running();
-    """
-    ))
+        ))
 
-    time.sleep(0.1)
+        time.sleep(0.1)
 
-    (status_code,count) = sess.execute(text(
-    """
-        select status_code, count(*) from net._http_response group by status_code;
-    """
-    )).fetchone()
+        (status_code,count) = sess.execute(text(
+        """
+            select status_code, count(*) from net._http_response group by status_code;
+        """
+        )).fetchone()
 
-    # at most 2 requests should have finished by now because of the low batch_size. This is an
-    # intentional snapshot of a partial, in-flight state, so it isn't converted to polling.
-    assert count <= 2
-    assert count > 0 # at least 1 request should be finished
-    assert status_code == 200
+        # at most 2 requests should have finished by now because of the low batch_size. This is an
+        # intentional snapshot of a partial, in-flight state, so it isn't converted to polling.
+        assert count <= 2
+        assert count > 0 # at least 1 request should be finished
+        assert status_code == 200
 
-    # wait until the whole 5 requests are finished
-    (status_code,count) = wait_until(
-        fetch=lambda: sess.execute(text(
-            "select status_code, count(*) from net._http_response group by status_code"
-        )).fetchone(),
-        predicate=lambda r: r is not None and r[1] == 5,
-        timeout=10,
-        description="all 5 requests to finish processing",
-    )
+        # wait until the whole 5 requests are finished. Generous timeout, matching
+        # the slack used elsewhere in this file for restart/throttle-heavy cases:
+        # with batch_size=1 each request costs ~1s of deliberate throttling (see
+        # worker.c's post-batch wait), plus the two restarts above each pay a
+        # postmaster restart backoff, so this needs more slack than a normal poll.
+        (status_code,count) = wait_until(
+            fetch=lambda: sess.execute(text(
+                "select status_code, count(*) from net._http_response group by status_code"
+            )).fetchone(),
+            predicate=lambda r: r is not None and r[1] == 5,
+            timeout=30,
+            description="all 5 requests to finish processing",
+        )
 
-    assert status_code == 200
-    assert count == 5
-
-    autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+        assert status_code == 200
+        assert count == 5
+    finally:
+        # Always restore batch_size, even on assertion failure - it's set via
+        # ALTER SYSTEM so it would otherwise leak into and slow down later tests.
+        autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
+        autocommit_sess.execute(text("select net.worker_restart()"))
+        autocommit_sess.execute(text("select net.wait_until_running()"))
 
 
 def test_new_requests_get_attended_asap(sess, wait_until):
