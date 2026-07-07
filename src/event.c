@@ -2,8 +2,8 @@
 #include <stddef.h>
 #include <unistd.h>
 
-#include "pg_prelude.h"
 #include "curl_prelude.h"
+#include "pg_prelude.h"
 
 #include "errors.h"
 #include "event.h"
