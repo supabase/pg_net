@@ -94,10 +94,10 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
   int epoll_op;
   if (!socketp) {
     epoll_op = EPOLL_CTL_ADD;
-    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, &socketp_marker);
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, &socketp_marker));
   } else if (what == CURL_POLL_REMOVE) {
     epoll_op = EPOLL_CTL_DEL;
-    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, NULL);
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, NULL));
   } else {
     epoll_op = EPOLL_CTL_MOD;
   }
@@ -200,7 +200,7 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
     sock_info         = palloc(sizeof(SocketInfo));
     sock_info->sockfd = sockfd;
     sock_info->action = CURL_POLL_NONE;
-    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, sock_info);
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, sock_info));
   }
 
   UPDATE_FILTER(CURL_POLL_IN, EVFILT_READ);
@@ -209,7 +209,7 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
   sock_info->action = what;
 
   if (what == CURL_POLL_REMOVE) {
-    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, NULL);
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, NULL));
     pfree(sock_info);
   }
 

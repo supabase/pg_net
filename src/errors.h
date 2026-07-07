@@ -19,13 +19,6 @@
       ereport(ERROR, errmsg("Could not curl_multi_setopt(%s)", #opt));                             \
   } while (0)
 
-#define EREPORT_CURL_MULTI_ASSIGN(multi_handle, sockfd, sockp)                                     \
-  do {                                                                                             \
-    CURLMcode mresult = curl_multi_assign(multi_handle, sockfd, sockp);                            \
-    if (mresult != CURLM_OK)                                                                       \
-      ereport(ERROR, errmsg("Could not curl_multi_assign(%s)", curl_multi_strerror(mresult)));     \
-  } while (0)
-
 #define EREPORT_CURL_SLIST_APPEND(list, str)                                                       \
   do {                                                                                             \
     struct curl_slist *new_list = curl_slist_append(list, str);                                    \
