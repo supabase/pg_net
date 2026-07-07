@@ -75,48 +75,53 @@ def test_net_on_new_role(sess):
         create role another;
     """))
 
-    # Create a request
-    (request_id, current_user) = sess.execute(text(
+    try:
+        # Create a request
+        (request_id, current_user) = sess.execute(text(
+            """
+            set local role to another;
+            select net.http_get(
+                'http://localhost:8080/anything'
+            ), current_user;
         """
-        set local role to another;
-        select net.http_get(
-            'http://localhost:8080/anything'
-        ), current_user;
-    """
-    )).fetchone()
-    assert request_id == 1
-    assert current_user == 'another'
+        )).fetchone()
+        assert request_id == 1
+        assert current_user == 'another'
 
-    # Commit so background worker can start
-    sess.commit()
+        # Commit so background worker can start
+        sess.commit()
 
-    # Confirm that the request was retrievable
-    response = sess.execute(
-        text(
-            """
-        set local role to another;
-        select *, current_user from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert response[0] == "SUCCESS"
-    assert response[3] == 'another' # current-user
+        # Confirm that the request was retrievable
+        response = sess.execute(
+            text(
+                """
+            set local role to another;
+            select *, current_user from net._http_collect_response(:request_id, async:=false);
+        """
+            ),
+            {"request_id": request_id},
+        ).fetchone()
+        assert response[0] == "SUCCESS"
+        assert response[3] == 'another' # current-user
 
-    ## can use the net.worker_restart function
-    (res, current_user) = sess.execute(
-        text(
-            """
-        set local role to another;
-        select net.worker_restart(), current_user;
-    """
-        )
-    ).fetchone()
-    assert res == True
-    assert current_user == 'another'
+        ## can use the net.worker_restart function
+        (res, current_user) = sess.execute(
+            text(
+                """
+            set local role to another;
+            select net.worker_restart(), current_user;
+        """
+            )
+        ).fetchone()
+        assert res == True
+        assert current_user == 'another'
 
-    sess.execute(text("""
-        select net.wait_until_running();
-        set local role postgres;
-        drop role another;
-    """))
+        sess.execute(text("select net.wait_until_running();"))
+    finally:
+        # Always drop the role, even on assertion failure - otherwise a rerun
+        # against the same cluster fails with a duplicate-object error on
+        # `create role another;` instead of surfacing the real regression.
+        sess.execute(text("""
+            set local role postgres;
+            drop role if exists another;
+        """))

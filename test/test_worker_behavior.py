@@ -428,74 +428,85 @@ def test_processing_survives_postmaster_crash(wait_until):
     tmp_sess.execute(text("select net.worker_restart();"))
     tmp_sess.execute(text("select net.wait_until_running();"))
 
-    tmp_sess.execute(text(
+    try:
+        tmp_sess.execute(text(
+            """
+            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
-    """
-    )).fetchone()
+        )).fetchone()
 
-    # The worker is already running (see wait_until_running() above), so by the time this
-    # count is read it may have already drained a batch into net._http_response. Check both
-    # tables together instead of assuming the queue alone still holds all 10.
-    (queue_count,) = tmp_sess.execute(text(
-    """
-        select count(*) from net.http_request_queue;
-    """
-    )).fetchone()
-    (response_count,) = tmp_sess.execute(text(
-    """
-        select count(*) from net._http_response;
-    """
-    )).fetchone()
-    assert queue_count + response_count == 10
+        # The worker is already running (see wait_until_running() above), so by the time this
+        # count is read it may have already drained a batch into net._http_response. Check both
+        # tables together instead of assuming the queue alone still holds all 10.
+        (queue_count,) = tmp_sess.execute(text(
+        """
+            select count(*) from net.http_request_queue;
+        """
+        )).fetchone()
+        (response_count,) = tmp_sess.execute(text(
+        """
+            select count(*) from net._http_response;
+        """
+        )).fetchone()
+        assert queue_count + response_count == 10
 
-    engine.dispose()
+        engine.dispose()
 
-    pgdata_env = os.getenv('PGDATA')
-    subprocess.run(["pg_ctl", "restart", "-D", pgdata_env])
+        pgdata_env = os.getenv('PGDATA')
+        subprocess.run(["pg_ctl", "restart", "-D", pgdata_env])
 
-    # wait for postgres to accept connections again after the restart
-    engine = create_engine("postgresql:///postgres")
-    ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+        # wait for postgres to accept connections again after the restart
+        engine = create_engine("postgresql:///postgres")
+        ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
 
-    def _try_connect():
+        def _try_connect():
+            try:
+                s = Session(ac_engine)
+                s.execute(text("select 1"))
+                return s
+            except Exception:
+                return None
+
+        tmp_sess = wait_until(
+            fetch=_try_connect,
+            predicate=lambda s: s is not None,
+            timeout=15,
+            description="postgres to accept connections after restart",
+        )
+
+        # give it enough time to finish processing the queue
+        (count,) = wait_until(
+            fetch=lambda: tmp_sess.execute(text("select count(*) from net.http_request_queue")).fetchone(),
+            predicate=lambda r: r[0] == 0,
+            timeout=10,
+            description="queued requests to be processed after restart",
+        )
+        assert count == 0
+
+        (status_code,count) = tmp_sess.execute(text(
+        """
+            select status_code, count(*) from net._http_response group by status_code;
+        """
+        )).fetchone()
+
+        assert status_code == 200
+        assert count == 10
+    finally:
+        # Always restore batch_size, even on assertion failure - it's set via
+        # ALTER SYSTEM so it would otherwise leak into and slow down later tests.
+        # `tmp_sess`/`engine` may point at the pre-restart or post-restart
+        # connection depending on where a failure happened above; best-effort
+        # cleanup with whichever is currently live, without masking the
+        # original failure if the connection itself is unusable (e.g. postgres
+        # never came back up after the restart).
         try:
-            s = Session(ac_engine)
-            s.execute(text("select 1"))
-            return s
+            tmp_sess.execute(text("alter system reset pg_net.batch_size"))
+            tmp_sess.execute(text("select net.worker_restart()"))
+            tmp_sess.execute(text("select net.wait_until_running()"))
         except Exception:
-            return None
+            pass
 
-    tmp_sess = wait_until(
-        fetch=_try_connect,
-        predicate=lambda s: s is not None,
-        timeout=15,
-        description="postgres to accept connections after restart",
-    )
-
-    # give it enough time to finish processing the queue
-    (count,) = wait_until(
-        fetch=lambda: tmp_sess.execute(text("select count(*) from net.http_request_queue")).fetchone(),
-        predicate=lambda r: r[0] == 0,
-        timeout=10,
-        description="queued requests to be processed after restart",
-    )
-    assert count == 0
-
-    (status_code,count) = tmp_sess.execute(text(
-    """
-        select status_code, count(*) from net._http_response group by status_code;
-    """
-    )).fetchone()
-
-    assert status_code == 200
-    assert count == 10
-
-    tmp_sess.execute(text("alter system reset pg_net.batch_size"))
-    tmp_sess.execute(text("select net.worker_restart()"))
-    tmp_sess.execute(text("select net.wait_until_running()"))
-
-    engine.dispose()
+        engine.dispose()
 
 
 def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess, wait_until):
@@ -583,65 +594,72 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     # "the launcher picked up the new naptime", so this stays a fixed sleep.
     autocommit_sess.execute(text("alter system set autovacuum_naptime = '1s';"))
     autocommit_sess.execute(text("select pg_reload_conf();"))
-    time.sleep(1)
 
-    # Per-table: trip the autoanalyze threshold after a handful of rows.
-    # Reloptions take effect immediately; no reload required.
-    autocommit_sess.execute(text("""
-        alter table net._http_response set (
-            autovacuum_analyze_threshold = 10,
-            autovacuum_analyze_scale_factor = 0,
-            autovacuum_vacuum_threshold = 10,
-            autovacuum_vacuum_scale_factor = 0
-        );
-    """))
+    try:
+        time.sleep(1)
 
-    autocommit_sess.execute(text(
-        "select pg_stat_reset_single_table_counters('net._http_response'::regclass);"
-    ))
+        # Per-table: trip the autoanalyze threshold after a handful of rows.
+        # Reloptions take effect immediately; no reload required.
+        autocommit_sess.execute(text("""
+            alter table net._http_response set (
+                autovacuum_analyze_threshold = 10,
+                autovacuum_analyze_scale_factor = 0,
+                autovacuum_vacuum_threshold = 10,
+                autovacuum_vacuum_scale_factor = 0
+            );
+        """))
 
-    # Drive 30 inserts through the worker. 30 is well above the threshold (10).
-    sess.execute(text("""
-        select net.http_get('http://localhost:8080/pathological?status=200')
-        from generate_series(1,30);
-    """))
-    sess.commit()
+        autocommit_sess.execute(text(
+            "select pg_stat_reset_single_table_counters('net._http_response'::regclass);"
+        ))
 
-    # 30s budget covers worst-case worker pgstat flush (PGSTAT_MIN_INTERVAL
-    # = 1s slack) + worst-case launcher cycle (autovacuum_max_workers=3,
-    # 3 databases at 1s naptime each ~= 3s/cycle, with 2-3 cycle slack) +
-    # autoanalyze worker spawn + ANALYZE on a tiny table (sub-second).
-    # Real wall time on a clean rig is typically ~2-5s; the slack is to
-    # absorb test-rig load and not flake.
-    (autoanalyze_count,) = wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select autoanalyze_count
-            from pg_stat_user_tables where relname='_http_response';
-        """)).fetchone(),
-        predicate=lambda r: r[0] > 0,
-        timeout=30,
-        interval=0.5,
-        description="autoanalyze to fire on net._http_response",
-    )
+        # Drive 30 inserts through the worker. 30 is well above the threshold (10).
+        sess.execute(text("""
+            select net.http_get('http://localhost:8080/pathological?status=200')
+            from generate_series(1,30);
+        """))
+        sess.commit()
 
-    assert autoanalyze_count > 0, (
-        "autoanalyze never fired on net._http_response within 30s. "
-        "Worker writes are not making pgstat threshold visible to the "
-        "autovacuum launcher - the customer-facing symptom (silent bloat) "
-        "would manifest in production."
-    )
+        # 30s budget covers worst-case worker pgstat flush (PGSTAT_MIN_INTERVAL
+        # = 1s slack) + worst-case launcher cycle (autovacuum_max_workers=3,
+        # 3 databases at 1s naptime each ~= 3s/cycle, with 2-3 cycle slack) +
+        # autoanalyze worker spawn + ANALYZE on a tiny table (sub-second).
+        # Real wall time on a clean rig is typically ~2-5s; the slack is to
+        # absorb test-rig load and not flake.
+        (autoanalyze_count,) = wait_until(
+            fetch=lambda: autocommit_sess.execute(text("""
+                select autoanalyze_count
+                from pg_stat_user_tables where relname='_http_response';
+            """)).fetchone(),
+            predicate=lambda r: r[0] > 0,
+            timeout=30,
+            interval=0.5,
+            description="autoanalyze to fire on net._http_response",
+        )
 
-    # Cleanup: restore defaults so we don't bleed into other tests.
-    autocommit_sess.execute(text("""
-        alter table net._http_response reset (
-            autovacuum_analyze_threshold,
-            autovacuum_analyze_scale_factor,
-            autovacuum_vacuum_threshold,
-            autovacuum_vacuum_scale_factor
-        );
-    """))
-    autocommit_sess.execute(text("alter system reset autovacuum_naptime;"))
-    autocommit_sess.execute(text("select pg_reload_conf();"))
+        assert autoanalyze_count > 0, (
+            "autoanalyze never fired on net._http_response within 30s. "
+            "Worker writes are not making pgstat threshold visible to the "
+            "autovacuum launcher - the customer-facing symptom (silent bloat) "
+            "would manifest in production."
+        )
+    finally:
+        # Always restore defaults, even on assertion failure - `autovacuum_naptime`
+        # is a system-wide GUC that would otherwise leak into every other test/
+        # database for the rest of the suite. The table reloptions are lower risk
+        # (the `sess` fixture drops+recreates the table with the extension), but
+        # are restored too for a clean baseline regardless of where net._http_response
+        # ends up.
+        autocommit_sess.execute(text("""
+            alter table net._http_response reset (
+                autovacuum_analyze_threshold,
+                autovacuum_analyze_scale_factor,
+                autovacuum_vacuum_threshold,
+                autovacuum_vacuum_scale_factor
+            );
+        """))
+        autocommit_sess.execute(text("alter system reset autovacuum_naptime;"))
+        autocommit_sess.execute(text("select pg_reload_conf();"))
 
 
 def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess, wait_until):
