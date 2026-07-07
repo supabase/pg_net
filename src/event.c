@@ -91,10 +91,8 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
   // EPOLL_CTL_ADD and EPOLL_CTL_MOD scenarios. We could have set the socketp to a heap allocated
   // value but since we don't need the actual value, we avoid those allocations and use the marker
   // value.
-  bool seen_before = socketp != NULL;
-
   int epoll_op;
-  if (!seen_before) {
+  if (!socketp) {
     epoll_op = EPOLL_CTL_ADD;
     EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, &socketp_marker);
   } else if (what == CURL_POLL_REMOVE) {
@@ -203,8 +201,6 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
     sock_info->sockfd = sockfd;
     sock_info->action = CURL_POLL_NONE;
     EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, sock_info);
-  } else if (what == CURL_POLL_REMOVE) {
-    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, NULL);
   }
 
   UPDATE_FILTER(CURL_POLL_IN, EVFILT_READ);
@@ -212,7 +208,10 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
 
   sock_info->action = what;
 
-  if (what == CURL_POLL_REMOVE) pfree(sock_info);
+  if (what == CURL_POLL_REMOVE) {
+    EREPORT_CURL_MULTI_ASSIGN(wstate->curl_mhandle, sockfd, NULL);
+    pfree(sock_info);
+  }
 
   Assert(count <= 2);
 
