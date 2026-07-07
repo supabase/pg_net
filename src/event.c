@@ -2,8 +2,10 @@
 #include <stddef.h>
 #include <unistd.h>
 
+#include "curl_prelude.h"
 #include "pg_prelude.h"
 
+#include "errors.h"
 #include "event.h"
 
 #ifdef WAIT_USE_EPOLL
@@ -72,6 +74,10 @@ int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms, void *
   return 0;
 }
 
+// A marker value only need to be assigned to a socket's socketp pointer via a call to
+// curl_multi_assign.
+static char socketp_marker;
+
 int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, int what, void *userp,
                     void *socketp) {
   WorkerState *wstate     = (WorkerState *)userp;
@@ -79,25 +85,30 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
                              "CURL_POLL_REMOVE"};
   elog(DEBUG2, "multi_socket_cb: sockfd %d received %s", sockfd, whatstrs[what]);
 
+  // libcurl calls the multi_socket_cb with socketp set to null for a socketfd when it is first
+  // created. At that time we set the socketp to the marker value via a call to curl_multi_assign so
+  // that any subsequent calls will have that marker value set. This helps us distinguish between
+  // EPOLL_CTL_ADD and EPOLL_CTL_MOD scenarios. We could have set the socketp to a heap allocated
+  // value but since we don't need the actual value, we avoid those allocations and use the marker
+  // value.
   int epoll_op;
   if (!socketp) {
-    epoll_op           = EPOLL_CTL_ADD;
-    bool socket_exists = true;
-    curl_multi_assign(wstate->curl_mhandle, sockfd, &socket_exists);
+    epoll_op = EPOLL_CTL_ADD;
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, &socketp_marker));
   } else if (what == CURL_POLL_REMOVE) {
-    epoll_op           = EPOLL_CTL_DEL;
-    bool socket_exists = false;
-    curl_multi_assign(wstate->curl_mhandle, sockfd, &socket_exists);
+    epoll_op = EPOLL_CTL_DEL;
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, NULL));
   } else {
     epoll_op = EPOLL_CTL_MOD;
   }
 
   epoll_event ev = {
     .data.fd = sockfd,
-    .events  = (what & CURL_POLL_IN)    ? EPOLLIN
-               : (what & CURL_POLL_OUT) ? EPOLLOUT
-                                        : 0, // no event is assigned since here we get
-                                             // CURL_POLL_REMOVE and the sockfd will be removed
+    // We can get the `what` variable value equal to either CURL_POLL_IN, CURL_POLL_OUT,
+    // CURL_POLL_INOUT (equivalent to CURL_POLL_IN | CURL_POLL_OUT), or CURL_POLL_REMOVE. We want to
+    // set the events member correspondingly to EPOLLIN, EPOLLOUT, EPOLLIN | EPOLLOUT, or 0 (ignored
+    // when epoll_op is EPOLL_CTL_DEL).
+    .events = (what & CURL_POLL_IN ? EPOLLIN : 0) | (what & CURL_POLL_OUT ? EPOLLOUT : 0),
   };
 
   // epoll_ctl will copy ev, so there's no need to do palloc for the epoll_event
@@ -185,26 +196,21 @@ int multi_socket_cb(__attribute__((unused)) CURL *easy, curl_socket_t sockfd, in
   struct kevent ev[2];
   int           count = 0;
 
+  if (!sock_info) {
+    sock_info         = palloc(sizeof(SocketInfo));
+    sock_info->sockfd = sockfd;
+    sock_info->action = CURL_POLL_NONE;
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, sock_info));
+  }
+
+  UPDATE_FILTER(CURL_POLL_IN, EVFILT_READ);
+  UPDATE_FILTER(CURL_POLL_OUT, EVFILT_WRITE);
+
+  sock_info->action = what;
+
   if (what == CURL_POLL_REMOVE) {
-    if (sock_info->action & CURL_POLL_IN)
-      EV_SET(&ev[count++], sockfd, EVFILT_READ, EV_DELETE, 0, 0, sock_info);
-
-    if (sock_info->action & CURL_POLL_OUT)
-      EV_SET(&ev[count++], sockfd, EVFILT_WRITE, EV_DELETE, 0, 0, sock_info);
-
-    curl_multi_assign(wstate->curl_mhandle, sockfd, NULL);
+    EREPORT_MULTI(curl_multi_assign(wstate->curl_mhandle, sockfd, NULL));
     pfree(sock_info);
-  } else {
-    if (!sock_info) {
-      sock_info         = palloc(sizeof(SocketInfo));
-      sock_info->sockfd = sockfd;
-      sock_info->action = what;
-      curl_multi_assign(wstate->curl_mhandle, sockfd, sock_info);
-    }
-
-    if (what & CURL_POLL_IN) EV_SET(&ev[count++], sockfd, EVFILT_READ, EV_ADD, 0, 0, sock_info);
-
-    if (what & CURL_POLL_OUT) EV_SET(&ev[count++], sockfd, EVFILT_WRITE, EV_ADD, 0, 0, sock_info);
   }
 
   Assert(count <= 2);

@@ -24,6 +24,17 @@ typedef struct epoll_event event;
 #  include <sys/event.h>
 typedef struct kevent event;
 
+// Sets the correct filters in ev array by comparing the existing and desired actions.
+// Adds the filter if the desired action is set and the existing action is unset.
+// Removes the filter if the desired action is unset and the existing action is set.
+#  define UPDATE_FILTER(poll_bit, filter)                                                          \
+    do {                                                                                           \
+      if ((what & (poll_bit)) && !(sock_info->action & (poll_bit)))                                \
+        EV_SET(&ev[count++], sockfd, (filter), EV_ADD, 0, 0, sock_info);                           \
+      else if (!(what & (poll_bit)) && (sock_info->action & (poll_bit)))                           \
+        EV_SET(&ev[count++], sockfd, (filter), EV_DELETE, 0, 0, sock_info);                        \
+    } while (0)
+
 #endif
 
 int  wait_event(int fd, event *events, size_t maxevents, int wait_milliseconds);
