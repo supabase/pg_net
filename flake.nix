@@ -14,7 +14,7 @@
     # 2025-11-13
     nixpkgs.url = "github:NixOS/nixpkgs/91c9a64ce2a84e648d0cf9671274bb9c2fb9ba60";
     xpg = {
-      url = "github:steve-chavez/xpg/v2.1.0";
+      url = "github:steve-chavez/xpg/v2.4.0";
     };
   };
 
