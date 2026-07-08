@@ -1,5 +1,6 @@
 # the `-Wno`s quiet C90 warnings
 PG_CFLAGS = -std=c11 -Wextra -Wall -Werror \
+	-Wold-style-definition \
 	-Wno-declaration-after-statement \
 	-Wno-vla \
 	-Wno-long-long
