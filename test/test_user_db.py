@@ -11,20 +11,24 @@ def test_net_with_different_username_dbname(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.worker_restart()"))
     autocommit_sess.execute(text("select net.wait_until_running()"))
 
-    (username,datname) = sess.execute(
-        text(
-            """
-        select usename, datname from pg_stat_activity where backend_type ilike '%pg_net%';
-    """
-        )
-    ).fetchone()
-    assert username == 'pre_existing'
-    assert datname == 'pre_existing'
-
-    autocommit_sess.execute(text("alter system reset pg_net.username"))
-    autocommit_sess.execute(text("alter system reset pg_net.database_name"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+    try:
+        (username,datname) = sess.execute(
+            text(
+                """
+            select usename, datname from pg_stat_activity where backend_type ilike '%pg_net%';
+        """
+            )
+        ).fetchone()
+        assert username == 'pre_existing'
+        assert datname == 'pre_existing'
+    finally:
+        # Always restore username/database_name, even on assertion failure -
+        # they're set via ALTER SYSTEM, and a leaked value here would point the
+        # worker at the wrong database for every other test in the suite.
+        autocommit_sess.execute(text("alter system reset pg_net.username"))
+        autocommit_sess.execute(text("alter system reset pg_net.database_name"))
+        autocommit_sess.execute(text("select net.worker_restart()"))
+        autocommit_sess.execute(text("select net.wait_until_running()"))
 
 def test_net_appname(sess):
     """Check that pg_stat_activity has appname set"""

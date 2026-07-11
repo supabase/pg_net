@@ -1,10 +1,8 @@
-import time
-
 import pytest
 import re
 from sqlalchemy import text
 
-def test_http_get_timeout_reached(sess):
+def test_http_get_timeout_reached(sess, wait_until):
     """net.http_get with timeout errs on a slow reply"""
 
     (request_id,) = sess.execute(text(
@@ -16,16 +14,15 @@ def test_http_get_timeout_reached(sess):
     sess.commit()
 
     # wait for timeout
-    time.sleep(7)
-
-    (content_type, content, response,timed_out) = sess.execute(
-        text(
-            """
-        select content_type, content, error_msg, timed_out from net._http_response where id = :request_id;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    (content_type, content, response, timed_out) = wait_until(
+        fetch=lambda: sess.execute(
+            text("select content_type, content, error_msg, timed_out from net._http_response where id = :request_id"),
+            {"request_id": request_id},
+        ).fetchone(),
+        predicate=lambda r: r is not None,
+        timeout=10,
+        description=f"timeout response for request {request_id}",
+    )
 
     assert content_type == None
     assert content == None
@@ -33,7 +30,7 @@ def test_http_get_timeout_reached(sess):
     assert response.startswith("Timeout of 5000 ms reached")
 
 
-def test_http_detailed_timeout(sess):
+def test_http_detailed_timeout(sess, wait_until):
     """the timeout shows a detailed error msg"""
 
     pattern = r"""
@@ -67,16 +64,15 @@ def test_http_detailed_timeout(sess):
     sess.commit()
 
     # wait for timeout
-    time.sleep(2.1)
-
-    (content_type, content, response,timed_out) = sess.execute(
-        text(
-            """
-        select content_type, content, error_msg, timed_out from net._http_response where id = :request_id;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    (content_type, content, response, timed_out) = wait_until(
+        fetch=lambda: sess.execute(
+            text("select content_type, content, error_msg, timed_out from net._http_response where id = :request_id"),
+            {"request_id": request_id},
+        ).fetchone(),
+        predicate=lambda r: r is not None,
+        timeout=10,
+        description=f"timeout response for request {request_id}",
+    )
 
     match = regex.search(response)
 
@@ -93,7 +89,7 @@ def test_http_detailed_timeout(sess):
     assert tcp_ssl_time > 0
     assert http_time > 0
 
-def test_http_get_succeed_with_gt_timeout(sess):
+def test_http_get_succeed_with_gt_timeout(sess, wait_until):
     """net.http_get with timeout succeeds when the timeout is greater than the slow reply response time"""
 
     (request_id,) = sess.execute(text(
@@ -104,20 +100,19 @@ def test_http_get_succeed_with_gt_timeout(sess):
 
     sess.commit()
 
-    time.sleep(4.5)
-
-    (status_code,) = sess.execute(
-        text(
-            """
-        select status_code from net._http_response where id = :request_id;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    (status_code,) = wait_until(
+        fetch=lambda: sess.execute(
+            text("select status_code from net._http_response where id = :request_id"),
+            {"request_id": request_id},
+        ).fetchone(),
+        predicate=lambda r: r is not None,
+        timeout=10,
+        description=f"response for request {request_id}",
+    )
 
     assert status_code == 200
 
-def test_many_slow_mixed_with_fast(sess):
+def test_many_slow_mixed_with_fast(sess, wait_until):
     """many fast responses finish despite being mixed with slow responses, the fast responses will wait the timeout duration"""
 
     sess.execute(text(
@@ -133,17 +128,20 @@ def test_many_slow_mixed_with_fast(sess):
 
     sess.commit()
 
-    # wait for timeouts
-    time.sleep(3)
-
-    (request_successes, request_timeouts) = sess.execute(text(
-    """
-      select
-        count(*) filter (where error_msg is null and status_code = 200) as request_successes,
-        count(*) filter (where error_msg is not null and error_msg like 'Timeout of 1000 ms reached%') as request_timeouts
-      from net._http_response;
-    """
-    )).fetchone()
+    # wait for all 100 requests (successes + timeouts) to land
+    (request_successes, request_timeouts) = wait_until(
+        fetch=lambda: sess.execute(text(
+            """
+          select
+            count(*) filter (where error_msg is null and status_code = 200) as request_successes,
+            count(*) filter (where error_msg is not null and error_msg like 'Timeout of 1000 ms reached%') as request_timeouts
+          from net._http_response;
+        """
+        )).fetchone(),
+        predicate=lambda r: r[0] + r[1] == 100,
+        timeout=10,
+        description="100 mixed fast/slow responses in net._http_response",
+    )
 
     assert request_successes == 50
     assert request_timeouts == 50

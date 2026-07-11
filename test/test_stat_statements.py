@@ -17,47 +17,51 @@ def test_query_stat_statements(sess):
 
     sess.execute(text(
         """
-        create extension pg_stat_statements;
+        create extension if not exists pg_stat_statements;
     """
     ))
 
     sess.commit()
 
-    time.sleep(1)
+    try:
+        time.sleep(1)
 
-    (old_calls,) = sess.execute(text(
+        (old_calls,) = sess.execute(text(
+            """
+            select coalesce(sum(calls), 0)
+            from pg_stat_statements
+            where
+                query ilike '%DELETE FROM net._http_response r %' or
+                query ilike '%DELETE FROM net.http_request_queue%';
         """
-        select coalesce(sum(calls), 0)
-        from pg_stat_statements
-        where
-            query ilike '%DELETE FROM net._http_response r %' or
-            query ilike '%DELETE FROM net.http_request_queue%';
-    """
-    )).fetchone()
+        )).fetchone()
 
-    # sleep for some time to see if new queries arrive
-    time.sleep(3)
+        # sleep for some time to see if new queries arrive
+        time.sleep(3)
 
-    (new_calls,) = sess.execute(text(
+        (new_calls,) = sess.execute(text(
+            """
+            select coalesce(sum(calls), 0)
+            from pg_stat_statements
+            where
+                query ilike '%DELETE FROM net._http_response r %' or
+                query ilike '%DELETE FROM net.http_request_queue%';
         """
-        select coalesce(sum(calls), 0)
-        from pg_stat_statements
-        where
-            query ilike '%DELETE FROM net._http_response r %' or
-            query ilike '%DELETE FROM net.http_request_queue%';
-    """
-    )).fetchone()
+        )).fetchone()
 
-    assert new_calls == old_calls
-
-    sess.execute(text(
+        assert new_calls == old_calls
+    finally:
+        # Always drop the extension, even on assertion failure - otherwise the
+        # next test's unconditional `create extension pg_stat_statements;`
+        # fails outright with a duplicate-object error.
+        sess.execute(text(
+            """
+            select pg_stat_statements_reset();
+            drop extension if exists pg_stat_statements;
         """
-        select pg_stat_statements_reset();
-        drop extension pg_stat_statements;
-    """
-    ))
+        ))
 
-    sess.commit()
+        sess.commit()
 
 
 def test_wakes_at_commit_time(sess):
@@ -74,80 +78,83 @@ def test_wakes_at_commit_time(sess):
 
     sess.execute(text(
         """
-        create extension pg_stat_statements;
+        create extension if not exists pg_stat_statements;
     """
     ))
 
     sess.commit()
 
-    # wait for initial queries
-    time.sleep(1)
+    try:
+        # wait for initial queries
+        time.sleep(1)
 
-    (initial_calls,) = sess.execute(text(
+        (initial_calls,) = sess.execute(text(
+            """
+            select coalesce(sum(calls), 0)
+            from pg_stat_statements
+            where
+                query ilike '%DELETE FROM net._http_response r %' or
+                query ilike '%DELETE FROM net.http_request_queue%';
         """
-        select coalesce(sum(calls), 0)
-        from pg_stat_statements
-        where
-            query ilike '%DELETE FROM net._http_response r %' or
-            query ilike '%DELETE FROM net.http_request_queue%';
-    """
-    )).fetchone()
+        )).fetchone()
 
-    assert initial_calls >= 0
+        assert initial_calls >= 0
 
-    sess.execute(text(
+        sess.execute(text(
+            """
+            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
-    """
-    ))
+        ))
 
-    sess.commit()
+        sess.commit()
 
-    # wait for reqs
-    time.sleep(2)
+        # wait for reqs
+        time.sleep(2)
 
-    (commit_calls,) = sess.execute(text(
+        (commit_calls,) = sess.execute(text(
+            """
+            select coalesce(sum(calls), 0)
+            from pg_stat_statements
+            where
+                query ilike '%DELETE FROM net._http_response r %' or
+                query ilike '%DELETE FROM net.http_request_queue%';
         """
-        select coalesce(sum(calls), 0)
-        from pg_stat_statements
-        where
-            query ilike '%DELETE FROM net._http_response r %' or
-            query ilike '%DELETE FROM net.http_request_queue%';
-    """
-    )).fetchone()
+        )).fetchone()
 
-    assert commit_calls == initial_calls + 4 # only 4 queries should be made for the above requests
-                                             # 2 queries at wake, 2 extra to check if there are more rows to be processed
+        assert commit_calls == initial_calls + 4 # only 4 queries should be made for the above requests
+                                                 # 2 queries at wake, 2 extra to check if there are more rows to be processed
 
-    # if the new requests are rollbacked/aborted, then no new queries will be made by the bg worker
-    sess.execute(text(
+        # if the new requests are rollbacked/aborted, then no new queries will be made by the bg worker
+        sess.execute(text(
+            """
+            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
-    """
-    ))
+        ))
 
-    sess.rollback()
+        sess.rollback()
 
-    # wait for requests
-    time.sleep(2)
+        # wait for requests
+        time.sleep(2)
 
-    (rollback_calls,) = sess.execute(text(
+        (rollback_calls,) = sess.execute(text(
+            """
+            select coalesce(sum(calls), 0)
+            from pg_stat_statements
+            where
+                query ilike '%DELETE FROM net._http_response r %' or
+                query ilike '%DELETE FROM net.http_request_queue%';
         """
-        select coalesce(sum(calls), 0)
-        from pg_stat_statements
-        where
-            query ilike '%DELETE FROM net._http_response r %' or
-            query ilike '%DELETE FROM net.http_request_queue%';
-    """
-    )).fetchone()
+        )).fetchone()
 
-    assert rollback_calls == commit_calls
-
-    sess.execute(text(
+        assert rollback_calls == commit_calls
+    finally:
+        # Always drop the extension, even on assertion failure - otherwise it
+        # leaks into whatever test runs next.
+        sess.execute(text(
+            """
+            select pg_stat_statements_reset();
+            drop extension if exists pg_stat_statements;
         """
-        select pg_stat_statements_reset();
-        drop extension pg_stat_statements;
-    """
-    ))
+        ))
 
-    sess.commit()
+        sess.commit()
