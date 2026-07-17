@@ -317,7 +317,7 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
       elog(DEBUG1, "Deleted " UINT64_FORMAT " expired rows", expired_responses);
 
-      requests_consumed = consume_request_queue(guc_batch_size);
+      requests_consumed = consume_request_queue(guc_batch_size, ext_table_oids[0]);
 
       elog(DEBUG1, "Consumed " UINT64_FORMAT " request rows", requests_consumed);
 
