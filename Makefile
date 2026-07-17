@@ -33,7 +33,7 @@ else
 endif
 
 EXTENSION = pg_net
-EXTVERSION = 0.20.4
+EXTVERSION = 0.21.0
 
 DATA = $(wildcard sql/*--*.sql)
 
