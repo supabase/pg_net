@@ -49,6 +49,7 @@ If you are a repo member, you can skip building for hours and download packages 
 For testing locally, execute:
 
 ```bash
+# Open a development shell with all deps and tools present
 $ nix develop
 
 # test on latest pg
