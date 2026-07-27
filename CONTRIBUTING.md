@@ -5,15 +5,50 @@ pg_net is OSS. PR and issues are welcome.
 
 ## Development
 
-[Nix](https://nixos.org/download.html) is required to set up the environment and [Cachix](https://docs.cachix.org/installation) for cache usage.
+Nix with flakes is required.
 
+### Set up Nix
+
+First, [Install Nix](https://nixos.org/download.html).
+
+#### Enable flakes
+
+Edit `/etc/nix/nix.conf`, add:
+
+```nix.conf
+experimental-features = nix-command flakes
+```
+
+and restart the daemon, on macOS:
+
+```
+sudo launchctl kickstart -k system/org.nixos.nix-daemon
+```
+
+#### Use binary cache
+
+If you are a repo member, you can skip building for hours and download packages instead by configuring the `nxpg` binary cache.
+
+1. Go to https://app.cachix.org, log in with Github and create a **personal auth token**.
+
+2. Use auth token:
+  ```sh
+  nix run nixpkgs#cachix authtoken <token>
+  ```
+
+3. Use the cache:
+  ```sh
+  nix run nixpkgs#cachix use nxpg
+  ```
+
+> [!CAUTION]
+> DO NOT use `trusted-users` in `/etc/nix/nix.conf` as it [grants root without password](https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-trusted-users). Instead, add the binary cache to `extra-substituters` and `extra-trusted-public-keys`.
 
 ### Testing
 
 For testing locally, execute:
 
 ```bash
-# This will download all the dependencies from the cache (when prompted for trusting the nxpg cache answer yes)
 $ nix develop
 
 # test on latest pg

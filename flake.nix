@@ -1,9 +1,6 @@
 {
   description = "Development shell for pg_net";
 
-  # To skip hours of building and download packages instead, start using the
-  # binary cache: https://github.com/supabase/postgres/blob/develop/nix/docs/binary-cache.md
-
   inputs = {
     # 2025-11-13
     nixpkgs.url = "github:NixOS/nixpkgs/91c9a64ce2a84e648d0cf9671274bb9c2fb9ba60";
