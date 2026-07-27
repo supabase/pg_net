@@ -1,14 +1,8 @@
 {
   description = "Development shell for pg_net";
 
-  nixConfig = {
-    extra-substituters = [
-      "https://nxpg.cachix.org"
-    ];
-    extra-trusted-public-keys = [
-      "nxpg.cachix.org-1:6HKVOmmG/ptPEogBAJ+zR6kRji5F4uHTNx7EGt7WBh0="
-    ];
-  };
+  # To skip hours of building and download packages instead, start using the
+  # binary cache: https://github.com/supabase/postgres/blob/develop/nix/docs/binary-cache.md
 
   inputs = {
     # 2025-11-13
