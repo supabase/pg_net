@@ -26,6 +26,10 @@ typedef struct {
   int32         timeout_milliseconds;
   NullableDatum headersBin;
   NullableDatum bodyBin;
+  bool          use_callbacks;
+  NullableDatum onSuccessBin;
+  NullableDatum onErrorBin;
+  NullableDatum callingRoleBin;
 } RequestQueueRow;
 
 // The curl easy handle plus additional data, this acts for both the request and
@@ -38,12 +42,16 @@ typedef struct {
   char              *url;
   char              *req_body;
   char              *method;
+  bool               use_callbacks;
+  char              *on_success;
+  char              *on_error;
+  char              *calling_role;
   CURL              *ez_handle;
 } CurlHandle;
 
 uint64 delete_expired_responses(char *ttl, int batch_size);
 
-uint64 consume_request_queue(const int batch_size);
+uint64 consume_request_queue(const int batch_size, Oid queue_oid);
 
 RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdesc);
 

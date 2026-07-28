@@ -11,15 +11,22 @@
 #include "errors.h"
 #include "event.h"
 
-static SPIPlanPtr del_response_plan     = NULL;
-static SPIPlanPtr del_return_queue_plan = NULL;
-static SPIPlanPtr ins_response_plan     = NULL;
+static SPIPlanPtr del_response_plan            = NULL;
+static SPIPlanPtr del_return_queue_plan        = NULL;
+static SPIPlanPtr del_return_queue_plan_legacy = NULL;
+static SPIPlanPtr ins_response_plan            = NULL;
 
 static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   CurlHandle *handle   = (CurlHandle *)userp;
   size_t      realsize = size * nmemb;
   appendBinaryStringInfo(handle->body, (const char *)contents, (int)realsize);
   return realsize;
+}
+
+// discards the response body without buffering it, used when store_response is false
+static size_t discard_cb(__attribute__((unused)) void *contents, size_t size, size_t nmemb,
+                         __attribute__((unused)) void *userp) {
+  return size * nmemb;
 }
 
 static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_slist *headers) {
@@ -45,8 +52,19 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_s
 }
 
 void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
-  handle->id        = row.id;
-  handle->body      = makeStringInfo();
+  handle->id            = row.id;
+  handle->use_callbacks = row.use_callbacks;
+  handle->on_success =
+      !row.onSuccessBin.isnull ? TextDatumGetCString(row.onSuccessBin.value) : NULL;
+  handle->on_error = !row.onErrorBin.isnull ? TextDatumGetCString(row.onErrorBin.value) : NULL;
+  handle->calling_role =
+      !row.callingRoleBin.isnull ? TextDatumGetCString(row.callingRoleBin.value) : NULL;
+
+  // the body is only needed when it ends up in net._http_response or in the
+  // on_success callback, otherwise don't buffer it
+  bool body_needed = !handle->use_callbacks || handle->on_success != NULL;
+  handle->body     = body_needed ? makeStringInfo() : NULL;
+
   handle->ez_handle = curl_easy_init();
 
   handle->timeout_milliseconds = row.timeout_milliseconds;
@@ -96,8 +114,12 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
     }
   }
 
-  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
-  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEDATA, handle);
+  if (handle->body) {
+    EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
+    EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEDATA, handle);
+  } else {
+    EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEFUNCTION, discard_cb);
+  }
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HEADER, 0L);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_URL, handle->url);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HTTPHEADER, handle->request_headers);
@@ -157,9 +179,20 @@ uint64 delete_expired_responses(char *ttl, int batch_size) {
   return affected_rows;
 }
 
-uint64 consume_request_queue(const int batch_size) {
-  if (del_return_queue_plan == NULL) {
-    SPIPlanPtr tmp = SPI_prepare("\
+uint64 consume_request_queue(const int batch_size, Oid queue_oid) {
+  /*
+   * The callback columns only exist from extension version 0.21.0 onwards.
+   * The loaded binary can be newer than the installed extension version (the
+   * shared library is replaced on upgrade while `ALTER EXTENSION pg_net
+   * UPDATE` might not have been executed yet), so fall back to a query that
+   * doesn't reference the columns when they don't exist.
+   */
+  bool has_callbacks = get_attnum(queue_oid, "use_callbacks") != InvalidAttrNumber;
+
+  SPIPlanPtr *plan = has_callbacks ? &del_return_queue_plan : &del_return_queue_plan_legacy;
+
+  if (*plan == NULL) {
+    const char *query = has_callbacks ? "\
         WITH\
         rows AS (\
           SELECT id\
@@ -169,18 +202,29 @@ uint64 consume_request_queue(const int batch_size) {
         )\
         DELETE FROM net.http_request_queue q\
         USING rows WHERE q.id = rows.id\
-        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
-                                 1, (Oid[]){INT4OID});
+        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, q.use_callbacks, q.on_success, q.on_error, q.calling_role"
+                                      : "\
+        WITH\
+        rows AS (\
+          SELECT id\
+          FROM net.http_request_queue\
+          ORDER BY id\
+          LIMIT $1\
+        )\
+        DELETE FROM net.http_request_queue q\
+        USING rows WHERE q.id = rows.id\
+        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, false, null::text, null::text, null::text";
+
+    SPIPlanPtr tmp = SPI_prepare(query, 1, (Oid[]){INT4OID});
 
     if (tmp == NULL)
       ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
 
-    del_return_queue_plan = SPI_saveplan(tmp);
-    if (del_return_queue_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
+    *plan = SPI_saveplan(tmp);
+    if (*plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
   }
 
-  int ret_code =
-      SPI_execute_plan(del_return_queue_plan, (Datum[]){Int32GetDatum(batch_size)}, NULL, false, 0);
+  int ret_code = SPI_execute_plan(*plan, (Datum[]){Int32GetDatum(batch_size)}, NULL, false, 0);
 
   if (ret_code != SPI_OK_DELETE_RETURNING)
     ereport(ERROR,
@@ -213,7 +257,21 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
   NullableDatum bodyBin = {.value  = SPI_getbinval(spi_tupval, spi_tupdesc, 6, &tupIsNull),
                            .isnull = tupIsNull};
 
-  return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin};
+  bool use_callbacks = DatumGetBool(SPI_getbinval(spi_tupval, spi_tupdesc, 7, &tupIsNull));
+  EREPORT_NULL_ATTR(tupIsNull, use_callbacks);
+
+  NullableDatum onSuccessBin = {.value  = SPI_getbinval(spi_tupval, spi_tupdesc, 8, &tupIsNull),
+                                .isnull = tupIsNull};
+
+  NullableDatum onErrorBin = {.value  = SPI_getbinval(spi_tupval, spi_tupdesc, 9, &tupIsNull),
+                              .isnull = tupIsNull};
+
+  NullableDatum callingRoleBin = {.value  = SPI_getbinval(spi_tupval, spi_tupdesc, 10, &tupIsNull),
+                                  .isnull = tupIsNull};
+
+  return (RequestQueueRow){id,         method,        url,           timeout_milliseconds,
+                           headersBin, bodyBin,       use_callbacks, onSuccessBin,
+                           onErrorBin, callingRoleBin};
 }
 
 static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
@@ -234,7 +292,110 @@ static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
   return PG_JSONB_OBJECT_FINISH(headers);
 }
 
+/*
+ * Execute a callback command with SPI inside a subtransaction, as the role
+ * that enqueued the request. A failing callback is reported as a WARNING and
+ * doesn't abort the batch: the request is considered processed.
+ */
+static void exec_callback(CurlHandle *handle, const char *label, const char *command, int nargs,
+                          Oid *argtypes, Datum *values, const char *nulls) {
+  Oid roleid = handle->calling_role ? get_role_oid(handle->calling_role, true) : InvalidOid;
+
+  if (!OidIsValid(roleid)) {
+    ereport(WARNING, errmsg("pg_net: skipping %s callback of request id " INT64_FORMAT
+                            ": role \"%s\" does not exist",
+                            label, handle->id, handle->calling_role ? handle->calling_role : ""));
+    return;
+  }
+
+  Oid saved_userid;
+  int saved_sec_context;
+  GetUserIdAndSecContext(&saved_userid, &saved_sec_context);
+
+  MemoryContext oldcontext = CurrentMemoryContext;
+  ResourceOwner oldowner   = CurrentResourceOwner;
+
+  BeginInternalSubTransaction(NULL);
+
+  // run the callback as the enqueuing role, and prevent it from escalating
+  // via SET ROLE/SET SESSION AUTHORIZATION
+  SetUserIdAndSecContext(roleid, saved_sec_context | SECURITY_LOCAL_USERID_CHANGE |
+                                     SECURITY_RESTRICTED_OPERATION);
+
+  PG_TRY();
+  {
+    int rc = SPI_execute_with_args(command, nargs, argtypes, values, nulls, false, 0);
+    if (rc < 0)
+      ereport(ERROR, errmsg("SPI_execute_with_args failed: %s", SPI_result_code_string(rc)));
+
+    SetUserIdAndSecContext(saved_userid, saved_sec_context);
+    ReleaseCurrentSubTransaction();
+    MemoryContextSwitchTo(oldcontext);
+    CurrentResourceOwner = oldowner;
+  }
+  PG_CATCH();
+  {
+    SetUserIdAndSecContext(saved_userid, saved_sec_context);
+
+    MemoryContextSwitchTo(oldcontext);
+    ErrorData *edata = CopyErrorData();
+    FlushErrorState();
+
+    RollbackAndReleaseCurrentSubTransaction();
+    MemoryContextSwitchTo(oldcontext);
+    CurrentResourceOwner = oldowner;
+
+    ereport(WARNING, errmsg("pg_net: %s callback of request id " INT64_FORMAT " failed: %s", label,
+                            handle->id, edata->message));
+    FreeErrorData(edata);
+  }
+  PG_END_TRY();
+}
+
+static void exec_request_callbacks(CurlHandle *handle, CURLcode curl_return_code) {
+  if (curl_return_code == CURLE_OK) {
+    if (handle->on_success == NULL) return; // fire-and-forget, discard the response
+
+    long res_http_status_code = 0;
+    EREPORT_CURL_GETINFO(handle->ez_handle, CURLINFO_RESPONSE_CODE, &res_http_status_code);
+
+    Jsonb *jsonb_headers = jsonb_headers_from_curl_handle(handle->ez_handle);
+
+    bool body_is_empty = !handle->body || handle->body->data[0] == '\0';
+
+    Datum values[3] = {Int32GetDatum((int32)res_http_status_code), JsonbPGetDatum(jsonb_headers),
+                       body_is_empty ? (Datum)0 : CStringGetTextDatum(handle->body->data)};
+
+    exec_callback(handle, "on_success", handle->on_success, 3, (Oid[]){INT4OID, JSONBOID, TEXTOID},
+                  values, body_is_empty ? "  n" : "   ");
+  } else {
+    bool timed_out = curl_return_code == CURLE_OPERATION_TIMEDOUT;
+
+    curl_timeout_msg timeout_msg = {.msg = ""};
+    if (timed_out)
+      timeout_msg = detailed_timeout_strerror(handle->ez_handle, handle->timeout_milliseconds);
+
+    const char *error_msg = timed_out ? timeout_msg.msg : curl_easy_strerror(curl_return_code);
+
+    if (handle->on_error == NULL) {
+      ereport(LOG, errmsg("pg_net: request id " INT64_FORMAT " failed: %s", handle->id, error_msg));
+      return;
+    }
+
+    Datum values[2] = {CStringGetTextDatum(error_msg), BoolGetDatum(timed_out)};
+
+    exec_callback(handle, "on_error", handle->on_error, 2, (Oid[]){TEXTOID, BOOLOID}, values, "  ");
+  }
+}
+
 void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
+  // requests made through net.http_request() are handled by callbacks and
+  // never touch the net._http_response table
+  if (handle->use_callbacks) {
+    exec_request_callbacks(handle, curl_return_code);
+    return;
+  }
+
   enum { nparams = 7 }; // using an enum because const size_t nparams doesn't compile
   Datum vals[nparams];
   char  nulls[nparams];
@@ -317,6 +478,9 @@ void pfree_handle(CurlHandle *handle) {
   pfree(handle->url);
   pfree(handle->method);
   if (handle->req_body) pfree(handle->req_body);
+  if (handle->on_success) pfree(handle->on_success);
+  if (handle->on_error) pfree(handle->on_error);
+  if (handle->calling_role) pfree(handle->calling_role);
 
   if (handle->body) destroyStringInfo(handle->body);
 

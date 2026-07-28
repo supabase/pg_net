@@ -386,6 +386,75 @@ FROM selected_row
 
 ---
 
+## Callback requests (net.http_request)
+
+### net.http_request function signature
+
+```sql
+net.http_request(
+    -- http method (GET, POST or DELETE)
+    method net.http_method,
+    -- url for the request
+    url text,
+    -- key/value pairs to be url encoded and appended to the `url`
+    params jsonb default '{}'::jsonb,
+    -- key/values to be included in request headers
+    headers jsonb default '{}'::jsonb,
+    -- optional body of the request
+    body jsonb default null,
+    -- the maximum number of milliseconds the request may take before being cancelled
+    timeout_milliseconds int default 5000,
+    -- SQL command executed when an HTTP response arrives (any status code).
+    -- Parameters: $1 = status_code int, $2 = headers jsonb, $3 = body text.
+    -- When null, the response is discarded (fire-and-forget).
+    on_success text default null,
+    -- SQL command executed when the request fails without an HTTP response
+    -- (timeout, connection error). Parameters: $1 = error message text,
+    -- $2 = timed_out bool. When null, the failure is only logged.
+    on_error text default null
+)
+    returns void
+
+    volatile
+    parallel unsafe
+    language plpgsql
+```
+
+Unlike `http_get`/`http_post`/`http_delete`, requests made with `net.http_request` never touch the `net._http_response` table: the response is handed to the `on_success` callback, or discarded when no callback is given. This avoids the write-then-expire churn on `net._http_response` for callers that never read responses (see [#62](https://github.com/supabase/pg_net/issues/62)).
+
+- Every HTTP response — including 4xx/5xx — goes through `on_success`, with the status code as `$1`. Only failures without a response (timeouts, connection errors) go through `on_error`.
+- Callbacks are executed by the background worker **as the role that enqueued the request**, with `SET ROLE`/`SET SESSION AUTHORIZATION` blocked, so they can't do anything the enqueuing role couldn't.
+- A callback that raises an error is rolled back and reported as a `WARNING` in the database logs; the batch keeps processing and the request is considered handled.
+- Retry policies stay in user hands: an `on_error` (or `on_success` checking `$1`) callback can re-enqueue with `net.http_request(...)` again.
+
+### Examples:
+
+#### Fire-and-forget
+
+```sql
+SELECT net.http_request(
+  'POST',
+  'https://postman-echo.com/post',
+  headers := '{"Content-Type": "application/json"}'::JSONB,
+  body := '{"key": "value"}'::JSONB
+);
+```
+
+No response row is stored, and the response body is not even buffered in memory.
+
+#### Processing the response
+
+```sql
+CREATE TABLE webhook_results(status int, body jsonb);
+
+SELECT net.http_request(
+  'GET',
+  'https://postman-echo.com/get',
+  on_success := 'insert into webhook_results values ($1, $3::jsonb)',
+  on_error   := $$select pg_notify('webhook_failures', $1)$$
+);
+```
+
 # Practical Examples
 
 ## Syncing data with an external data source using triggers
