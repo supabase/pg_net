@@ -24,7 +24,7 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)

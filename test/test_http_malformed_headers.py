@@ -13,7 +13,7 @@ def test_http_header_missing_value(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
@@ -37,7 +37,7 @@ def test_http_header_injection(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
@@ -61,7 +61,7 @@ def test_http_header_spaces(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
@@ -85,7 +85,7 @@ def test_http_header_non_printable_chars(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)

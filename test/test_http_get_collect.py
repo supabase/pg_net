@@ -38,7 +38,7 @@ def test_http_get_collect_sync_success(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
@@ -60,7 +60,7 @@ def test_http_get_collect_sync_success(sess):
 #     """
 #     ).fetchone()
 
-#     # Commit so background worker can start
+#     # Commit to wakeup background worker
 #     sess.commit()
 
 #     # Collect the response, waiting as needed
@@ -143,7 +143,7 @@ def test_http_get_collect_with_redirect(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
@@ -162,7 +162,7 @@ def test_http_get_ipv6(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)

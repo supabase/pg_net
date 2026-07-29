@@ -17,7 +17,7 @@ def test_net_on_postgres_role(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
@@ -44,7 +44,7 @@ def test_net_on_pre_existing_role(sess):
     assert request_id == 1
     assert current_user == 'pre_existing'
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     # Confirm that the request was retrievable
@@ -77,7 +77,7 @@ def test_net_on_new_role(sess):
     assert request_id == 1
     assert current_user == 'another'
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     # Confirm that the request was retrievable

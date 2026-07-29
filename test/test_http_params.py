@@ -14,7 +14,7 @@ def test_http_get_url_params_set(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
@@ -36,7 +36,7 @@ def test_http_post_url_params_set(sess):
     """
     )).fetchone()
 
-    # Commit so background worker can start
+    # Commit to wakeup background worker
     sess.commit()
 
     response = collect_response_sync(sess, request_id)
