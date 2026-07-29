@@ -5,7 +5,7 @@ from common import collect_response_sync, http_request
 
 
 def test_http_get_returns_id(sess):
-    """Test net.http_get returns a bigint id"""
+    """Test net.http_get returns an id"""
 
     (request_id,) = sess.execute(text(
         """
@@ -17,7 +17,7 @@ def test_http_get_returns_id(sess):
 
 
 def test_http_get_works_with_ip(sess):
-    """Test net.http_get returns a bigint id when using an IP with port"""
+    """Test net.http_get returns an id when using an IP with port"""
 
     (request_id,) = sess.execute(text(
         """
@@ -31,7 +31,6 @@ def test_http_get_works_with_ip(sess):
 def test_http_get_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080');
@@ -50,7 +49,6 @@ def test_http_get_collect_sync_success(sess):
 # def test_http_get_collect_async_pending(sess):
 #     """Collect a response async before completed"""
 
-#     # Create a request
 #     (request_id,) = sess.execute(
 #         """
 #         select net.http_get('https://news.ycombinator.com');
@@ -130,7 +128,6 @@ def test_http_get_responses_have_different_created_times(sess):
 def test_http_get_collect_with_redirect(sess):
     """Test pg_net follows a redirect and collects a response"""
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/redirect_me');
@@ -146,7 +143,6 @@ def test_http_get_collect_with_redirect(sess):
 def test_http_get_ipv6(sess):
     """Test pg_net can resolve an ipv6 only server"""
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8888/');

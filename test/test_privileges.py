@@ -8,7 +8,6 @@ def test_net_on_postgres_role(sess):
     role = sess.execute(text("select current_user;")).fetchone()
     assert role[0] == "postgres"
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_get(
@@ -29,7 +28,6 @@ def test_net_on_pre_existing_role(sess):
     role = sess.execute(text("select current_user;")).fetchone()
     assert role[0] == "postgres"
 
-    # Create a request
     (request_id, current_user) = sess.execute(text(
         """
         set local role to pre_existing;
@@ -62,7 +60,6 @@ def test_net_on_new_role(sess):
         create role another;
     """))
 
-    # Create a request
     (request_id, current_user) = sess.execute(text(
         """
         set local role to another;

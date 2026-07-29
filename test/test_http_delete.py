@@ -49,6 +49,7 @@ def test_http_delete_positional_args(sess):
     This to ensure backwards compat when a new parameter is added to the function.
     """
 
+    # Delete call with url only
     (request_id,) = http_request(sess, text(
         """
         select net.http_delete(
@@ -63,6 +64,7 @@ def test_http_delete_positional_args(sess):
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
 
+    # Delete call with url and params
     (request_id,) = http_request(sess, text(
         """
         select net.http_delete(
@@ -78,6 +80,7 @@ def test_http_delete_positional_args(sess):
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
 
+    # Delete call with url, params, and headers
     (request_id,) = http_request(sess, text(
         """
         select net.http_delete(
@@ -94,6 +97,7 @@ def test_http_delete_positional_args(sess):
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
 
+    # Delete call with url, params, headers, and timeout
     (request_id,) = http_request(sess, text(
         """
         select net.http_delete(
@@ -115,7 +119,6 @@ def test_http_delete_positional_args(sess):
 def test_http_delete_with_body(sess):
     """Test delete with request body works"""
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_delete(

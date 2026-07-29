@@ -5,7 +5,7 @@ from common import collect_response_sync, http_request
 
 
 def test_http_post_returns_id(sess):
-    """Test net.http_post returns a bigint id"""
+    """Test net.http_post returns an id"""
 
     (request_id,) = sess.execute(text(
         """
@@ -20,7 +20,7 @@ def test_http_post_returns_id(sess):
 
 
 def test_http_post_special_chars_body(sess):
-    """Test net.http_post returns a bigint id"""
+    """Test net.http_post returns an id"""
 
     (request_id,) = sess.execute(text(
         """
@@ -37,7 +37,6 @@ def test_http_post_special_chars_body(sess):
 def test_http_post_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_post(
@@ -57,7 +56,6 @@ def test_http_post_collect_sync_success(sess):
 # def test_http_post_collect_async_pending(sess):
 #     """Collect a response async before completed"""
 
-#     # Create a request
 #     (request_id,) = sess.execute(
 #         """
 #         select net.http_post(
@@ -89,7 +87,6 @@ def test_http_post_collect_sync_success(sess):
 def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_post(
@@ -106,13 +103,7 @@ def test_http_post_collect_non_empty_body(sess):
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
     assert response["body"] is not None
-    assert json.loads(response["body"])["hello"] == "world"
-
     # Assert that response is json
-    response = collect_response_sync(sess, request_id)
-
-    assert response is not None
-    assert response["body"] is not None
     assert json.loads(response["body"])["hello"] == "world"
 
 
@@ -140,7 +131,6 @@ def test_http_post_wrong_header_exception(sess):
 def test_http_post_no_content_type_coerce(sess):
     """Confirm that a missing content type coerces to application/json"""
 
-    # Create a request
     request_id, = sess.execute(text(
         """
         select net.http_post(

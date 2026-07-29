@@ -9,7 +9,7 @@ def test_get_bad_url(sess):
     """Test net.http_get returns a descriptive errors for bad urls"""
 
     with pytest.raises(Exception) as execinfo:
-        res = sess.execute(text(
+        sess.execute(text(
             f"""
             select net.http_get('localhost:{wrong_port}');
         """
@@ -35,7 +35,7 @@ def test_bad_post(sess):
     """Test net.http_post with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
-        res = sess.execute(text(
+        sess.execute(text(
             """
             select net.http_post(null, '{"hello": "world"}');
         """
@@ -59,7 +59,7 @@ def test_bad_delete(sess):
     """Test net.http_delete with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
-        res = sess.execute(text(
+        sess.execute(text(
             """
             select net.http_delete(null);
         """

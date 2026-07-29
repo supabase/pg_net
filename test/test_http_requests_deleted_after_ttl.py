@@ -13,7 +13,6 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.worker_restart()"))
     autocommit_sess.execute(text("select net.wait_until_running()"))
 
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_get(

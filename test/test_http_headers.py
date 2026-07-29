@@ -4,7 +4,6 @@ from common import collect_response_sync, http_request
 
 def test_http_headers_set(sess):
     """Check that headers are being set"""
-    # Create a request
     (request_id,) = http_request(sess, text(
         """
         select net.http_get(
