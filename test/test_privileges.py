@@ -48,17 +48,11 @@ def test_net_on_pre_existing_role(sess):
     sess.commit()
 
     # Confirm that the request was retrievable
-    response = sess.execute(
-        text(
-            """
-        set local role to pre_existing;
-        select *, current_user from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert response[0] == "SUCCESS"
-    assert response[3] == 'pre_existing'  # current-user
+    sess.execute(text("set local role to pre_existing;"))
+    response = collect_response_sync(sess, request_id)
+    current_user = sess.execute(text("select current_user;")).scalar()
+    assert response["status"] == "SUCCESS"
+    assert current_user == 'pre_existing'
 
 
 def test_net_on_new_role(sess):
@@ -87,17 +81,11 @@ def test_net_on_new_role(sess):
     sess.commit()
 
     # Confirm that the request was retrievable
-    response = sess.execute(
-        text(
-            """
-        set local role to another;
-        select *, current_user from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert response[0] == "SUCCESS"
-    assert response[3] == 'another'  # current-user
+    sess.execute(text("set local role to another;"))
+    response = collect_response_sync(sess, request_id)
+    current_user = sess.execute(text("select current_user;")).scalar()
+    assert response["status"] == "SUCCESS"
+    assert current_user == 'another'
 
     # can use the net.worker_restart function
     (res, current_user) = sess.execute(

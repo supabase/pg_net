@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import text
 from common import collect_response_sync
 
@@ -97,7 +99,6 @@ def test_http_delete_positional_args(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
     response = collect_response_sync(sess, request_id)
 
     assert response is not None
@@ -118,7 +119,6 @@ def test_http_delete_positional_args(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
     response = collect_response_sync(sess, request_id)
 
     assert response is not None
@@ -142,17 +142,8 @@ def test_http_delete_with_body(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select
-            ((response).body)::jsonb body_json
-        from
-            net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).mappings().fetchone()
+    response = collect_response_sync(sess, request_id)
 
-    assert response["body_json"]["key"] == "val"
+    assert response is not None
+    assert response["body"] is not None
+    assert json.loads(response["body"])["key"] == "val"

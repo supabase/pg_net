@@ -114,20 +114,12 @@ def test_http_post_collect_non_empty_body(sess):
     assert response["body"] is not None
     assert json.loads(response["body"])["hello"] == "world"
 
-    # Make sure response is json
-    (response_json,) = sess.execute(
-        text(
-            """
-        select
-            ((x.response).body)::jsonb body_json
-        from
-            net._http_collect_response(:request_id, async:=false) x;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    # Assert that response is json
+    response = collect_response_sync(sess, request_id)
 
-    assert response_json["hello"] == "world"
+    assert response is not None
+    assert response["body"] is not None
+    assert json.loads(response["body"])["hello"] == "world"
 
 
 def test_http_post_wrong_header_exception(sess):
@@ -193,15 +185,7 @@ def test_http_post_empty_body(sess):
 
     sess.commit()
 
-    (body) = sess.execute(
-        text(
-            """
-        select
-            (x.response).body as body
-        from net._http_collect_response(:request_id, async:=false) x;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
-    assert 'POST' in str(body)
+    assert response is not None
+    assert response["body"] == "POST\n"
