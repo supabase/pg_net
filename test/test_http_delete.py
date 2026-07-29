@@ -31,22 +31,30 @@ def test_http_delete_collect_sync_success(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
+    # Collect the response, waiting as needed.
     response = sess.execute(
         text(
             """
-        select * from net._http_collect_response(:request_id, async:=false);
+        select
+            status,
+            message,
+            (response).status_code,
+            (response).headers,
+            (response).body
+        from net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
-        ).fetchone()
+    ).mappings().fetchone()
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
-    assert response[2] is not None
-    assert "X-Baz" in response[2]
-    assert "param-foo" in response[2]
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+
+    # /delete echoes the request headers and query string back in the response body
+    assert response["body"] is not None
+    assert "X-Baz" in response["body"]
+    assert "param-foo" in response["body"]
 
 
 def test_http_delete_positional_args(sess):
