@@ -53,37 +53,6 @@ def test_http_post_collect_sync_success(sess):
     assert response["body"] is not None
 
 
-# def test_http_post_collect_async_pending(sess):
-#     """Collect a response async before completed"""
-
-#     (request_id,) = sess.execute(
-#         """
-#         select net.http_post(
-#             url:='http://localhost:8080/post',
-#             body:='{}'::jsonb
-#         );
-#     """
-#     ).fetchone()
-
-#     # Commit to wakeup background worker
-#     sess.commit()
-
-#     # Collect the response, waiting as needed
-#     response = sess.execute(
-#         text(
-#             """
-#         select * from net._http_collect_response(:request_id, async:=true);
-#     """
-#         ),
-#         {"request_id": request_id},
-#     ).fetchone()
-
-#     assert response is not None
-#     assert response[0] == "PENDING"
-#     assert "pending" in response[1]
-#     assert response[2] is None
-
-
 def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
 

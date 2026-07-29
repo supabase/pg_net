@@ -46,34 +46,6 @@ def test_http_get_collect_sync_success(sess):
     assert response["status_code"] == 200
 
 
-# def test_http_get_collect_async_pending(sess):
-#     """Collect a response async before completed"""
-
-#     (request_id,) = sess.execute(
-#         """
-#         select net.http_get('https://news.ycombinator.com');
-#     """
-#     ).fetchone()
-
-#     # Commit to wakeup background worker
-#     sess.commit()
-
-#     # Collect the response, waiting as needed
-#     response = sess.execute(
-#         text(
-#             """
-#         select * from net._http_collect_response(:request_id, async:=true);
-#     """
-#         ),
-#         {"request_id": request_id},
-#     ).fetchone()
-
-#     assert response is not None
-#     assert response[0] == "PENDING"
-#     assert "pending" in response[1]
-#     assert response[2] is None
-
-
 def test_http_collect_response_async_does_not_exist(sess):
     """Collect a non-existent response with async true"""
 
