@@ -4,6 +4,7 @@ import pytest
 import re
 from sqlalchemy import text
 
+
 def test_http_get_timeout_reached(sess):
     """net.http_get with timeout errs on a slow reply"""
 
@@ -18,7 +19,7 @@ def test_http_get_timeout_reached(sess):
     # wait for timeout
     time.sleep(7)
 
-    (content_type, content, response,timed_out) = sess.execute(
+    (content_type, content, response, timed_out) = sess.execute(
         text(
             """
         select content_type, content, error_msg, timed_out from net._http_response where id = :request_id;
@@ -69,7 +70,7 @@ def test_http_detailed_timeout(sess):
     # wait for timeout
     time.sleep(2.1)
 
-    (content_type, content, response,timed_out) = sess.execute(
+    (content_type, content, response, timed_out) = sess.execute(
         text(
             """
         select content_type, content, error_msg, timed_out from net._http_response where id = :request_id;
@@ -80,10 +81,10 @@ def test_http_detailed_timeout(sess):
 
     match = regex.search(response)
 
-    total_time   = float(match.group('A'))
-    dns_time     = float(match.group('B'))
+    total_time = float(match.group('A'))
+    dns_time = float(match.group('B'))
     tcp_ssl_time = float(match.group('C'))
-    http_time    = float(match.group('D'))
+    http_time = float(match.group('D'))
 
     assert content_type == None
     assert content == None
@@ -92,6 +93,7 @@ def test_http_detailed_timeout(sess):
     assert dns_time > 0
     assert tcp_ssl_time > 0
     assert http_time > 0
+
 
 def test_http_get_succeed_with_gt_timeout(sess):
     """net.http_get with timeout succeeds when the timeout is greater than the slow reply response time"""
@@ -117,11 +119,12 @@ def test_http_get_succeed_with_gt_timeout(sess):
 
     assert status_code == 200
 
+
 def test_many_slow_mixed_with_fast(sess):
     """many fast responses finish despite being mixed with slow responses, the fast responses will wait the timeout duration"""
 
     sess.execute(text(
-    """
+        """
       select
         net.http_get(url := 'http://localhost:8080/pathological?status=200')
       , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2', timeout_milliseconds := 1000)
@@ -137,7 +140,7 @@ def test_many_slow_mixed_with_fast(sess):
     time.sleep(3)
 
     (request_successes, request_timeouts) = sess.execute(text(
-    """
+        """
       select
         count(*) filter (where error_msg is null and status_code = 200) as request_successes,
         count(*) filter (where error_msg is not null and error_msg like 'Timeout of 1000 ms reached%') as request_timeouts

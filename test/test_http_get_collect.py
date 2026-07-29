@@ -41,10 +41,10 @@ def test_http_get_collect_sync_success(sess):
 
     # Collect the response, waiting as needed
     response = sess.execute(text(
-            """
+        """
         select * from net._http_collect_response(:request_id, async:=false);
     """
-        ),
+    ),
         {"request_id": request_id},
     ).fetchone()
 
@@ -99,6 +99,7 @@ def test_http_collect_response_async_does_not_exist(sess):
     assert "not found" in response[1]
     assert response[2] is None
 
+
 def test_http_get_responses_have_different_created_times(sess):
     """Ensure the rows in net._http_response have different created times"""
 
@@ -130,12 +131,13 @@ def test_http_get_responses_have_different_created_times(sess):
     time.sleep(1)
 
     count = sess.execute(text(
-            """
+        """
         select count(distinct created) from net._http_response;
     """
     )).scalar()
 
     assert count == 3
+
 
 def test_http_get_collect_with_redirect(sess):
     """Follows a redirect and collects a response"""
@@ -152,15 +154,16 @@ def test_http_get_collect_with_redirect(sess):
 
     # Collect the response, waiting as needed
     response = sess.execute(text(
-            """
+        """
         select * from net._http_collect_response(:request_id, async:=false);
     """
-        ),
+    ),
         {"request_id": request_id},
     ).fetchone()
 
     assert response is not None
     assert "I got redirected" in response[2]
+
 
 def test_http_get_ipv6(sess):
     """Can resolve an ipv6 only server"""
@@ -177,10 +180,10 @@ def test_http_get_ipv6(sess):
 
     # Collect the response, waiting as needed
     response = sess.execute(text(
-            """
+        """
         select * from net._http_collect_response(:request_id, async:=false);
     """
-        ),
+    ),
         {"request_id": request_id},
     ).fetchone()
 

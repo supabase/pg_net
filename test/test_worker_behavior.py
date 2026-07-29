@@ -7,6 +7,7 @@ import time
 import subprocess
 import os
 
+
 def test_worker_will_not_block_drop_database(autocommit_sess):
     """the worker will not block a session doing drop database"""
 
@@ -87,7 +88,7 @@ def test_worker_will_process_queue_when_up(sess):
 
     # check requests where enqueued
     (count,) = sess.execute(text(
-    """
+        """
         select count(*) from net.http_request_queue;
     """
     )).fetchone()
@@ -117,15 +118,15 @@ def test_worker_will_process_queue_when_up(sess):
     time.sleep(1.1)
 
     (count,) = sess.execute(text(
-    """
+        """
         select count(*) from net.http_request_queue;
     """
     )).fetchone()
 
     assert count == 0
 
-    (status_code,count) = sess.execute(text(
-    """
+    (status_code, count) = sess.execute(text(
+        """
         select status_code, count(*) from net._http_response group by status_code;
     """
     )).fetchone()
@@ -266,22 +267,22 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
 
     time.sleep(0.1)
 
-    (status_code,count) = sess.execute(text(
-    """
+    (status_code, count) = sess.execute(text(
+        """
         select status_code, count(*) from net._http_response group by status_code;
     """
     )).fetchone()
 
     # at most 2 requests should have finished by now because of the low batch_size
     assert count <= 2
-    assert count > 0 # at least 1 request should be finished
+    assert count > 0  # at least 1 request should be finished
     assert status_code == 200
 
     # if we sleep for 4 seconds the whole 5 requests should be finished
     time.sleep(4)
 
-    (status_code,count) = sess.execute(text(
-    """
+    (status_code, count) = sess.execute(text(
+        """
         select status_code, count(*) from net._http_response group by status_code;
     """
     )).fetchone()
@@ -308,8 +309,8 @@ def test_new_requests_get_attended_asap(sess):
     # less than a second
     time.sleep(0.1)
 
-    (status_code,count) = sess.execute(text(
-    """
+    (status_code, count) = sess.execute(text(
+        """
         select status_code, count(*) from net._http_response group by status_code;
     """
     )).fetchone()
@@ -340,7 +341,7 @@ def test_direct_inserts_no_requests(sess):
 
     # no response
     (count,) = sess.execute(text(
-    """
+        """
         select count(*) from net._http_response;
     """
     )).fetchone()
@@ -349,7 +350,7 @@ def test_direct_inserts_no_requests(sess):
 
     # req still in queue
     (count,) = sess.execute(text(
-    """
+        """
         select count(*) from net.http_request_queue;
     """
     )).fetchone()
@@ -359,7 +360,7 @@ def test_direct_inserts_no_requests(sess):
     # an explicit wake will make it serve requests though
 
     sess.execute(text(
-    """
+        """
         select net.wake();
     """
     ))
@@ -370,7 +371,7 @@ def test_direct_inserts_no_requests(sess):
     time.sleep(0.1)
 
     (status_code, count) = sess.execute(text(
-    """
+        """
         select status_code, count(*) from net._http_response group by status_code;
     """
     )).fetchone()
@@ -399,7 +400,7 @@ def test_processing_survives_postmaster_crash():
     )).fetchone()
 
     (count,) = tmp_sess.execute(text(
-    """
+        """
         select count(*) from net.http_request_queue;
     """
     )).fetchone()
@@ -421,14 +422,14 @@ def test_processing_survives_postmaster_crash():
     time.sleep(1)
 
     (count,) = tmp_sess.execute(text(
-    """
+        """
         select count(*) from net.http_request_queue;
     """
     )).fetchone()
     assert count == 0
 
-    (status_code,count) = tmp_sess.execute(text(
-    """
+    (status_code, count) = tmp_sess.execute(text(
+        """
         select status_code, count(*) from net._http_response group by status_code;
     """
     )).fetchone()
@@ -526,7 +527,8 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     # already running on a 1s naptime by the time stats threshold is crossed.
     # autovacuum_naptime is PGC_SIGHUP (reloadable). Give the reload a moment
     # to propagate to the launcher.
-    autocommit_sess.execute(text("alter system set autovacuum_naptime = '1s';"))
+    autocommit_sess.execute(
+        text("alter system set autovacuum_naptime = '1s';"))
     autocommit_sess.execute(text("select pg_reload_conf();"))
     time.sleep(1)
 
@@ -638,7 +640,6 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
         "request. Without pgstat_report_activity(STATE_RUNNING, ...) the "
         "state column stays NULL."
     )
-
 
 
 def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_sess):

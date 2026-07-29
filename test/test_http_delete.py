@@ -68,7 +68,6 @@ def test_http_delete_positional_args(sess):
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
 
-
     (request_id,) = sess.execute(text(
         """
         select net.http_delete(
@@ -87,7 +86,6 @@ def test_http_delete_positional_args(sess):
     assert response is not None
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
-
 
     (request_id,) = sess.execute(text(
         """
@@ -108,7 +106,6 @@ def test_http_delete_positional_args(sess):
     assert response is not None
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
-
 
     (request_id,) = sess.execute(text(
         """
@@ -159,6 +156,6 @@ def test_http_delete_with_body(sess):
     """
         ),
         {"request_id": request_id},
-        ).mappings().fetchone()
+    ).mappings().fetchone()
 
     assert response["body_json"]["key"] == "val"

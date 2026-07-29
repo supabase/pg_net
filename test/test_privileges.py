@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import text
 
+
 def test_net_on_postgres_role(sess):
     """Check that the postgres role can use the net schema by default"""
 
@@ -63,7 +64,8 @@ def test_net_on_pre_existing_role(sess):
         {"request_id": request_id},
     ).fetchone()
     assert response[0] == "SUCCESS"
-    assert response[3] == 'pre_existing' # current-user
+    assert response[3] == 'pre_existing'  # current-user
+
 
 def test_net_on_new_role(sess):
     """Check that a newly created role can use the net schema"""
@@ -101,9 +103,9 @@ def test_net_on_new_role(sess):
         {"request_id": request_id},
     ).fetchone()
     assert response[0] == "SUCCESS"
-    assert response[3] == 'another' # current-user
+    assert response[3] == 'another'  # current-user
 
-    ## can use the net.worker_restart function
+    # can use the net.worker_restart function
     (res, current_user) = sess.execute(
         text(
             """

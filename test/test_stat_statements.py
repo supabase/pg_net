@@ -3,6 +3,7 @@ import time
 import pytest
 from sqlalchemy import text
 
+
 def test_query_stat_statements(sess):
     """Check that the background worker doesn't execute queries when no new requests arrive"""
 
@@ -13,7 +14,8 @@ def test_query_stat_statements(sess):
     )).fetchone()
 
     if int(pg_version) < 140000:
-        pytest.skip("Skipping fixture on pg version < 14. The query_id column on pg_stat_statements is only available on >= 14")
+        pytest.skip(
+            "Skipping fixture on pg version < 14. The query_id column on pg_stat_statements is only available on >= 14")
 
     sess.execute(text(
         """
@@ -70,7 +72,8 @@ def test_wakes_at_commit_time(sess):
     )).fetchone()
 
     if int(pg_version) < 140000:
-        pytest.skip("Skipping fixture on pg version < 14. The query_id column on pg_stat_statements is only available on >= 14")
+        pytest.skip(
+            "Skipping fixture on pg version < 14. The query_id column on pg_stat_statements is only available on >= 14")
 
     sess.execute(text(
         """
@@ -116,8 +119,9 @@ def test_wakes_at_commit_time(sess):
     """
     )).fetchone()
 
-    assert commit_calls == initial_calls + 4 # only 4 queries should be made for the above requests
-                                             # 2 queries at wake, 2 extra to check if there are more rows to be processed
+    # only 4 queries should be made for the above requests
+    assert commit_calls == initial_calls + 4
+    # 2 queries at wake, 2 extra to check if there are more rows to be processed
 
     # if the new requests are rollbacked/aborted, then no new queries will be made by the bg worker
     sess.execute(text(

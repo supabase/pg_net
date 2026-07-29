@@ -3,6 +3,7 @@ import time
 import pytest
 from sqlalchemy import text
 
+
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     """Check that http responses will be deleted when they reach their ttl, not immediately but when the worker wakes again"""
 
@@ -39,9 +40,9 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     # Wake the worker manually, under normal operation this will happen when new requests are received
     sess.execute(text("select net.wake()"))
 
-    sess.commit() # commit so worker  wakes
+    sess.commit()  # commit so worker  wakes
 
-    time.sleep(0.1) # wait for deletion
+    time.sleep(0.1)  # wait for deletion
 
     # Ensure the response is now empty
     (count,) = sess.execute(
@@ -78,7 +79,7 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
     """
         ),
         {"request_id": request_id},
-        ).fetchone()
+    ).fetchone()
     assert response is not None
     assert response[0] == "SUCCESS"
 
@@ -100,7 +101,7 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
 
     # Wake the worker manually, under normal operation this will happen when new requests are received
     sess.execute(text("select net.wake()"))
-    sess.commit() # commit so worker  wakes
+    sess.commit()  # commit so worker  wakes
 
     time.sleep(0.1)
 
@@ -149,7 +150,7 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
     """
         ),
         {"request_id": request_id},
-        ).fetchone()
+    ).fetchone()
     assert response is not None
     assert response[0] == "SUCCESS"
 

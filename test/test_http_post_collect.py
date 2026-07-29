@@ -176,7 +176,6 @@ def test_http_post_no_content_type_coerce(sess):
     """
     )).fetchone()
 
-
     headers, = sess.execute(text(
         """
         select

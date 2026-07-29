@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+
 @pytest.fixture(scope="function")
 def engine():
     engine = create_engine("postgresql:///postgres")

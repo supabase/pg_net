@@ -1,5 +1,6 @@
 from sqlalchemy import text
 
+
 def test_http_header_missing_value(sess):
     """Check that a `MissingValue: ` header is processed correctly"""
 

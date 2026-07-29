@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 wrong_port = 6666
 
+
 def test_get_bad_url(sess):
     """net.http_get returns a descriptive errors for bad urls"""
 
@@ -105,12 +106,12 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     """
         ),
         {"request_id": request_id},
-        ).fetchone()
+    ).fetchone()
     assert response is not None
     assert response[0] == "ERROR"
 
-    (error_msg,count) = sess.execute(text(
-    """
+    (error_msg, count) = sess.execute(text(
+        """
         select error_msg, count(*) from net._http_response where status_code is null group by error_msg;
     """
     )).fetchone()
@@ -141,6 +142,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     assert response[1] == "ok"
     assert response[2].startswith("(200")
 
+
 def test_it_keeps_working_after_server_returns_nothing(sess):
     """the worker doesn't crash on many failed responses with server returned nothing"""
 
@@ -159,12 +161,12 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     """
         ),
         {"request_id": request_id},
-        ).fetchone()
+    ).fetchone()
     assert response is not None
     assert response[0] == "ERROR"
 
-    (error_msg,count) = sess.execute(text(
-    """
+    (error_msg, count) = sess.execute(text(
+        """
         select error_msg, count(*) from net._http_response where status_code is null group by error_msg;
     """
     )).fetchone()
@@ -188,12 +190,12 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     """
         ),
         {"request_id": request_id},
-        ).fetchone()
+    ).fetchone()
     assert response is not None
     assert response[0] == "SUCCESS"
 
-    (status_code,count) = sess.execute(text(
-    """
+    (status_code, count) = sess.execute(text(
+        """
         select status_code, count(*) from net._http_response where status_code = 200 group by status_code;
     """
     )).fetchone()
