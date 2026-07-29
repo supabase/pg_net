@@ -9,7 +9,7 @@ import os
 
 
 def test_worker_will_not_block_drop_database(autocommit_sess):
-    """the worker will not block a session doing drop database"""
+    """Check that the worker will not block a session doing drop database"""
 
     autocommit_sess.execute(text("create database foo;"))
     autocommit_sess.execute(text("drop database foo;"))
@@ -53,7 +53,10 @@ def test_success_when_worker_is_up(sess):
 
 
 def test_worker_will_process_queue_when_up(sess):
-    """when pg background worker is down and requests arrive, it will process them once it wakes up"""
+    """
+    Check that when pg background worker is down and requests arrive,
+    it will process them once it wakes up
+    """
 
     # check worker up
     (up,) = sess.execute(text("""
@@ -136,7 +139,10 @@ def test_worker_will_process_queue_when_up(sess):
 
 
 def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
-    """user can delete the queue rows while the worker is processing them"""
+    """
+    Check that a user can delete the queue rows while the worker is
+    processing them
+    """
 
     autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
     autocommit_sess.execute(text("select net.worker_restart();"))
@@ -168,7 +174,10 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
 
 
 def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
-    """a truncate will not wait until the worker is done processing all requests"""
+    """
+    Check that a truncate will not wait until the worker
+    is done processing all requests
+    """
 
     # ensure the worker will be processing the queue 1 by 1 (slowly) so it doesn't clear the whole
     # net.http_request_queue in one go
@@ -204,7 +213,10 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
 
 
 def test_no_failure_on_drop_extension(sess):
-    """while waiting for a slow request, a drop extension should wait and not crash the worker"""
+    """
+    Check that while waiting for a slow request, a drop extension should
+    wait and not crash the worker
+    """
 
     (request_id,) = sess.execute(text("""
         select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2');
@@ -233,7 +245,10 @@ def test_no_failure_on_drop_extension(sess):
 
 
 def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess):
-    """when the background worker is restarted while working, it will pick up the remaining requests"""
+    """
+    Check that when the background worker is restarted while working,
+    it will pick up the remaining requests
+    """
 
     autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
     autocommit_sess.execute(text("select net.worker_restart();"))
@@ -296,7 +311,7 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
 
 
 def test_new_requests_get_attended_asap(sess):
-    """new requests get attended as soon as possible"""
+    """Check that new requests get attended as soon as possible"""
 
     sess.execute(text(
         """
@@ -320,7 +335,10 @@ def test_new_requests_get_attended_asap(sess):
 
 
 def test_direct_inserts_no_requests(sess):
-    """direct insertions to the net.http_request_queue doesn't trigger new requests"""
+    """
+    Check that direct insertions to the net.http_request_queue doesn't
+    trigger new requests
+    """
 
     sess.execute(text(
         """
@@ -381,7 +399,10 @@ def test_direct_inserts_no_requests(sess):
 
 
 def test_processing_survives_postmaster_crash():
-    """the queue will continue processing even when a postmaster crash or restart happens"""
+    """
+    Check that the queue will continue processing even when a postmaster
+    crash or restart happens
+    """
 
     engine = create_engine("postgresql:///postgres")
     ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
@@ -445,8 +466,9 @@ def test_processing_survives_postmaster_crash():
 
 
 def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
-    """the worker's INSERTs into net._http_response must be reflected in
-    pg_stat_user_tables. Without this, autovacuum/autoanalyze can never be
+    """
+    Check that the worker's INSERTs into net._http_response must be reflected
+    in pg_stat_user_tables. Without this, autovacuum/autoanalyze can never be
     scheduled and the table silently bloats.
     """
 
@@ -514,8 +536,9 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
 
 
 def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_sess):
-    """autoanalyze on net._http_response must fire after the worker writes
-    enough rows. Without working pgstat counters, autovacuum/autoanalyze
+    """
+    Check that autoanalyze on net._http_response must fire after the worker
+    writes enough rows. Without working pgstat counters, autovacuum/autoanalyze
     never get scheduled and the table bloats - this is the primary symptom
     seen on production (slow expiry DELETEs from a bloated index).
     """
@@ -592,8 +615,9 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
 
 
 def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
-    """the pg_net worker must call pgstat_report_activity() so its row in
-    pg_stat_activity has a valid state column.
+    """
+    Check that the pg_net worker must call pgstat_report_activity() so
+    its row in pg_stat_activity has a valid state column.
     """
 
     autocommit_sess.execute(text("select net.wait_until_running();"))
@@ -643,9 +667,11 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
 
 
 def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_sess):
-    """when a schema named "net" exists but the pg_net tables don't (e.g. another
-    extension installed into a schema named "net"), the worker should treat the
-    extension as not installed instead of crash looping"""
+    """
+    Check that when a schema named "net" exists but the pg_net tables don't
+    (e.g. another extension installed into a schema named "net"), the worker
+    should treat the extension as not installed instead of crash looping
+    """
 
     sess.execute(text("drop extension pg_net cascade;"))
     sess.execute(text("create schema net;"))

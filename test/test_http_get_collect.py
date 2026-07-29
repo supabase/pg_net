@@ -3,7 +3,7 @@ import time
 
 
 def test_http_get_returns_id(sess):
-    """net.http_get returns a bigint id"""
+    """Test net.http_get returns a bigint id"""
 
     (request_id,) = sess.execute(text(
         """
@@ -15,7 +15,7 @@ def test_http_get_returns_id(sess):
 
 
 def test_http_get_works_with_ip(sess):
-    """net.http_get returns a bigint id when using an IP with port"""
+    """Test net.http_get returns a bigint id when using an IP with port"""
 
     (request_id,) = sess.execute(text(
         """
@@ -140,7 +140,7 @@ def test_http_get_responses_have_different_created_times(sess):
 
 
 def test_http_get_collect_with_redirect(sess):
-    """Follows a redirect and collects a response"""
+    """Test pg_net follows a redirect and collects a response"""
 
     # Create a request
     (request_id,) = sess.execute(text(
@@ -166,7 +166,7 @@ def test_http_get_collect_with_redirect(sess):
 
 
 def test_http_get_ipv6(sess):
-    """Can resolve an ipv6 only server"""
+    """Test pg_net can resolve an ipv6 only server"""
 
     # Create a request
     (request_id,) = sess.execute(text(
@@ -192,7 +192,7 @@ def test_http_get_ipv6(sess):
 
 
 def test_http_get_null_headers(sess):
-    """net.http_get can have null headers"""
+    """Test net.http_get can have null headers"""
 
     (request_id,) = sess.execute(text(
         """

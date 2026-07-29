@@ -7,7 +7,7 @@ wrong_port = 6666
 
 
 def test_get_bad_url(sess):
-    """net.http_get returns a descriptive errors for bad urls"""
+    """Test net.http_get returns a descriptive errors for bad urls"""
 
     with pytest.raises(Exception) as execinfo:
         res = sess.execute(text(
@@ -20,7 +20,7 @@ def test_get_bad_url(sess):
 
 
 def test_http_get_rejects_relative_url(sess):
-    """net.http_get with a correct error when given a relative url"""
+    """Test net.http_get with a correct error when given a relative url"""
 
     with pytest.raises(Exception) as execinfo:
         sess.execute(text(
@@ -33,7 +33,7 @@ def test_http_get_rejects_relative_url(sess):
 
 
 def test_bad_post(sess):
-    """net.http_post with an empty url + body returns an error"""
+    """Test net.http_post with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
         res = sess.execute(text(
@@ -45,7 +45,7 @@ def test_bad_post(sess):
 
 
 def test_bad_get(sess):
-    """net.http_get with an empty url + body returns an error"""
+    """Test net.http_get with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
         res = sess.execute(text(
@@ -57,7 +57,7 @@ def test_bad_get(sess):
 
 
 def test_bad_delete(sess):
-    """net.http_delete with an empty url + body returns an error"""
+    """Test net.http_delete with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
         res = sess.execute(text(
@@ -69,7 +69,7 @@ def test_bad_delete(sess):
 
 
 def test_bad_utils(sess):
-    """util functions of pg_net return null"""
+    """Test util functions of pg_net return null"""
 
     res = sess.execute(text(
         """
@@ -89,7 +89,10 @@ def test_bad_utils(sess):
 
 
 def test_it_keeps_working_after_many_connection_refused(sess):
-    """the worker doesn't crash on many failed responses with connection refused"""
+    """
+    Test the worker doesn't crash on many failed responses
+    with connection refused
+    """
 
     (request_id,) = sess.execute(text(
         f"""
@@ -144,7 +147,10 @@ def test_it_keeps_working_after_many_connection_refused(sess):
 
 
 def test_it_keeps_working_after_server_returns_nothing(sess):
-    """the worker doesn't crash on many failed responses with server returned nothing"""
+    """
+    Test the worker doesn't crash on many failed responses
+    with server returned nothing
+    """
 
     (request_id,) = sess.execute(text(
         """

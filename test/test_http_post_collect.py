@@ -2,7 +2,7 @@ from sqlalchemy import text
 
 
 def test_http_post_returns_id(sess):
-    """net.http_post returns a bigint id"""
+    """Test net.http_post returns a bigint id"""
 
     (request_id,) = sess.execute(text(
         """
@@ -17,7 +17,7 @@ def test_http_post_returns_id(sess):
 
 
 def test_http_post_special_chars_body(sess):
-    """net.http_post returns a bigint id"""
+    """Test net.http_post returns a bigint id"""
 
     (request_id,) = sess.execute(text(
         """
@@ -192,7 +192,7 @@ def test_http_post_no_content_type_coerce(sess):
 
 
 def test_http_post_empty_body(sess):
-    """net.http_post can post a null body"""
+    """Test net.http_post can post a null body"""
 
     (request_id,) = sess.execute(text(
         """

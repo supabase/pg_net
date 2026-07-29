@@ -5,7 +5,10 @@ from sqlalchemy import text
 
 
 def test_query_stat_statements(sess):
-    """Check that the background worker doesn't execute queries when no new requests arrive"""
+    """
+    Check that the background worker doesn't execute
+    queries when no new requests arrive
+    """
 
     (pg_version,) = sess.execute(text(
         """
@@ -63,7 +66,10 @@ def test_query_stat_statements(sess):
 
 
 def test_wakes_at_commit_time(sess):
-    """Check that the background worker only does one wake at commit time, avoiding unnecessary wakes and work"""
+    """
+    Check that the background worker only does one wake at
+    commit time, avoiding unnecessary wakes and work
+    """
 
     (pg_version,) = sess.execute(text(
         """

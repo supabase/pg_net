@@ -5,7 +5,10 @@ from sqlalchemy import text
 
 
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
-    """Check that http responses will be deleted when they reach their ttl, not immediately but when the worker wakes again"""
+    """
+    Check that http responses will be deleted when they reach their ttl,
+    not immediately but when the worker wakes again
+    """
 
     autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second'"))
     autocommit_sess.execute(text("select net.worker_restart()"))
@@ -61,7 +64,10 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
 
 
 def test_http_responses_will_complete_deletion(sess, autocommit_sess):
-    """Check that http responses will keep being deleted until completion despite no new requests coming"""
+    """
+    Check that http responses will keep being deleted
+    until completion despite no new requests coming
+    """
 
     (request_id,) = sess.execute(text(
         """
@@ -132,7 +138,10 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
 
 
 def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
-    """Check that http responses will keep being despite no new requests coming" and despite restart"""
+    """
+    Check that http responses will keep being despite no
+    new requests coming" and despite restart
+    """
 
     (request_id,) = sess.execute(text(
         """

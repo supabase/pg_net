@@ -30,7 +30,10 @@ def test_http_header_missing_value(sess):
 
 
 def test_http_header_injection(sess):
-    """Check that a `HeaderInjection Injected-Header: This header contains an injection` header fails without crashing"""
+    """
+    Check that a `HeaderInjection Injected-Header: This header
+    contains an injection` header fails without crashing
+    """
 
     (request_id,) = sess.execute(text(
         """
@@ -58,7 +61,10 @@ def test_http_header_injection(sess):
 
 
 def test_http_header_spaces(sess):
-    """Check that a `Spaces In Header Name: This header name contains spaces` header is processed correctly"""
+    """
+    Check that a `Spaces In Header Name: This header name contains spaces`
+    header is processed correctly
+    """
 
     (request_id,) = sess.execute(text(
         """
@@ -86,7 +92,10 @@ def test_http_header_spaces(sess):
 
 
 def test_http_header_non_printable_chars(sess):
-    """Check that a `NonPrintableChars: NonPrintableChars\\u0001\\u0002` header is processed correctly"""
+    """
+    Check that a `NonPrintableChars: NonPrintableChars\\u0001\\u0002`
+    header is processed correctly
+    """
 
     (request_id,) = sess.execute(text(
         """

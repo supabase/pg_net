@@ -6,7 +6,7 @@ from sqlalchemy import text
 
 
 def test_http_get_timeout_reached(sess):
-    """net.http_get with timeout errs on a slow reply"""
+    """Test net.http_get with timeout errs on a slow reply"""
 
     (request_id,) = sess.execute(text(
         """
@@ -35,7 +35,7 @@ def test_http_get_timeout_reached(sess):
 
 
 def test_http_detailed_timeout(sess):
-    """the timeout shows a detailed error msg"""
+    """Test the timeout shows a detailed error msg"""
 
     pattern = r"""
         Total\stime:\s*                     # Match 'Total time:' with optional spaces
@@ -96,7 +96,10 @@ def test_http_detailed_timeout(sess):
 
 
 def test_http_get_succeed_with_gt_timeout(sess):
-    """net.http_get with timeout succeeds when the timeout is greater than the slow reply response time"""
+    """
+    Test net.http_get with timeout succeeds when the timeout
+    is greater than the slow reply response time
+    """
 
     (request_id,) = sess.execute(text(
         """
@@ -121,7 +124,10 @@ def test_http_get_succeed_with_gt_timeout(sess):
 
 
 def test_many_slow_mixed_with_fast(sess):
-    """many fast responses finish despite being mixed with slow responses, the fast responses will wait the timeout duration"""
+    """
+    Test many fast responses finish despite being mixed with slow responses,
+    the fast responses will wait the timeout duration
+    """
 
     sess.execute(text(
         """

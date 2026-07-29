@@ -3,7 +3,7 @@ from common import collect_response_sync
 
 
 def test_http_delete_returns_id(sess):
-    """net.http_delete returns a bigint id"""
+    """Test net.http_delete returns an id"""
 
     (request_id,) = sess.execute(text(
         """
@@ -17,7 +17,7 @@ def test_http_delete_returns_id(sess):
 
 
 def test_http_delete_collect_sync_success(sess):
-    """test net.http_delete works"""
+    """Test net.http_delete works"""
 
     # Create a request
     (request_id,) = sess.execute(text(
@@ -130,7 +130,7 @@ def test_http_delete_positional_args(sess):
 
 
 def test_http_delete_with_body(sess):
-    """delete with request body works"""
+    """Test delete with request body works"""
 
     # Create a request
     (request_id,) = sess.execute(text(

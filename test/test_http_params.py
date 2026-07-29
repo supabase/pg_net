@@ -2,8 +2,7 @@ from sqlalchemy import text
 
 
 def test_http_get_url_params_set(sess):
-    """Check that params are being set on GET
-    """
+    """Check that params are being set on GET"""
     # Create a request
     (request_id,) = sess.execute(text(
         """
@@ -33,8 +32,7 @@ def test_http_get_url_params_set(sess):
 
 
 def test_http_post_url_params_set(sess):
-    """Check that params are being set on POST
-    """
+    """Check that params are being set on POST"""
     # Create a request
     (request_id,) = sess.execute(text(
         """
