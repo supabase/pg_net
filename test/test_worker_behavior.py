@@ -456,7 +456,7 @@ def test_processing_survives_postmaster_crash():
     engine.dispose()
 
 
-def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
+def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess, wait_until):
     """
     Check that the worker's INSERTs into net._http_response must be reflected
     in pg_stat_user_tables. Without this, autovacuum/autoanalyze can never be
@@ -501,17 +501,16 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     # worker's first flush attempt is normally a hit (last_flush is far in
     # the past after a long idle), but we allow generous slack here so an
     # off-by-a-tick scheduling doesn't flake the suite.
-    deadline = time.time() + 30.0
-    resp_ins = 0
-    resp_mod = 0
-    while time.time() < deadline:
-        (resp_ins, resp_mod) = autocommit_sess.execute(text("""
+    (resp_ins, resp_mod) = wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
             select n_tup_ins, n_mod_since_analyze
             from pg_stat_user_tables where relname='_http_response';
-        """)).fetchone()
-        if resp_ins > 0:
-            break
-        time.sleep(0.5)
+        """)).fetchone(),
+        predicate=lambda result: result[0] > 0,
+        timeout=30,
+        sleep_interval=0.5,
+        description="net._http_response pgstat counters to reflect worker INSERTs",
+    )
 
     assert resp_ins > 0, (
         f"net._http_response.n_tup_ins is still 0 after 30s. "
@@ -525,7 +524,7 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     )
 
 
-def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_sess):
+def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_sess, wait_until):
     """
     Check that autoanalyze on net._http_response must fire after the worker
     writes enough rows. Without working pgstat counters, autovacuum/autoanalyze
@@ -572,16 +571,16 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     # autoanalyze worker spawn + ANALYZE on a tiny table (sub-second).
     # Real wall time on a clean rig is typically ~2-5s; the slack is to
     # absorb test-rig load and not flake.
-    deadline = time.time() + 30.0
-    autoanalyze_count = 0
-    while time.time() < deadline:
-        (autoanalyze_count,) = autocommit_sess.execute(text("""
+    (autoanalyze_count,) = wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
             select autoanalyze_count
             from pg_stat_user_tables where relname='_http_response';
-        """)).fetchone()
-        if autoanalyze_count > 0:
-            break
-        time.sleep(0.5)
+        """)).fetchone(),
+        predicate=lambda result: result[0] > 0,
+        timeout=30,
+        sleep_interval=0.5,
+        description="autoanalyze to fire on net._http_response",
+    )
 
     assert autoanalyze_count > 0, (
         "autoanalyze never fired on net._http_response within 30s. "
@@ -603,7 +602,7 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     autocommit_sess.execute(text("select pg_reload_conf();"))
 
 
-def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
+def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess, wait_until):
     """
     Check that the pg_net worker must call pgstat_report_activity() so
     its row in pg_stat_activity has a valid state column.
@@ -614,15 +613,16 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     # Wait for the worker to drain any leftover work from previous tests
     # and settle into idle. Polling makes this robust regardless of what
     # ran before.
-    deadline = time.time() + 5.0
-    state = None
-    while time.time() < deadline:
-        (state,) = autocommit_sess.execute(text(
-            "select state from pg_stat_activity where backend_type ilike '%pg_net%';"
-        )).fetchone()
-        if state == 'idle':
-            break
-        time.sleep(0.1)
+    (state,) = wait_until(
+        fetch=lambda: autocommit_sess.execute(text(
+            "select state from pg_stat_activity where backend_type ilike '%pg_net%'"
+        )).fetchone(),
+        predicate=lambda result: result[0] == 'idle',
+        timeout=5,
+        sleep_interval=0.1,
+        description="pg_net worker to settle into idle",
+    )
+
     assert state == 'idle', (
         f"pg_net worker state expected 'idle' at rest, got {state!r}. "
         "Without pgstat_report_activity(STATE_IDLE, ...) the state column "
@@ -636,16 +636,20 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
 
     # Poll for 'active' for up to 5s. The slow request keeps the worker
     # busy for ~2s, so we have a wide observation window.
-    deadline = time.time() + 5.0
     saw_active = False
-    while time.time() < deadline:
-        (state,) = autocommit_sess.execute(text(
-            "select state from pg_stat_activity where backend_type ilike '%pg_net%';"
-        )).fetchone()
-        if state == 'active':
-            saw_active = True
-            break
-        time.sleep(0.1)
+    try:
+        wait_until(
+            fetch=lambda: autocommit_sess.execute(text(
+                "select state from pg_stat_activity where backend_type ilike '%pg_net%'"
+            )).fetchone(),
+            predicate=lambda result: result[0] == 'active',
+            timeout=5,
+            sleep_interval=0.1,
+            description="pg_net worker to be observed as active",
+        )
+        saw_active = True
+    except AssertionError:
+        pass
 
     assert saw_active, (
         "pg_net worker state was never observed as 'active' during a slow "
@@ -654,7 +658,7 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     )
 
 
-def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_sess):
+def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_sess, wait_until):
     """
     Check that when a schema named "net" exists but the pg_net tables don't
     (e.g. another extension installed into a schema named "net"), the worker
@@ -669,16 +673,16 @@ def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_
     autocommit_sess.execute(text("select kill_worker();"))
 
     # wait for the worker to come back up (bgw_restart_time is 1 second)
-    pid = None
-    deadline = time.time() + 5.0
-    while time.time() < deadline:
-        row = autocommit_sess.execute(text(
+    (pid,) = wait_until(
+        fetch=lambda: autocommit_sess.execute(text(
             "select pid from pg_stat_activity where backend_type ilike '%pg_net%';"
-        )).fetchone()
-        if row:
-            pid = row[0]
-            break
-        time.sleep(0.1)
+        )).fetchone(),
+        predicate=lambda result: result,
+        timeout=5,
+        sleep_interval=0.1,
+        description="pg_net worker to to be back up",
+    )
+
     assert pid is not None, "pg_net worker did not come back up after restart"
 
     # wait several restart cycles; a crash loop would respawn the worker with a new pid
