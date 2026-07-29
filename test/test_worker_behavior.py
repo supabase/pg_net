@@ -2,10 +2,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import sqlalchemy as sa
-import pytest
 import time
 import subprocess
 import os
+
+from common import http_request
 
 
 def test_worker_will_not_block_drop_database(autocommit_sess):
@@ -81,13 +82,11 @@ def test_worker_will_process_queue_when_up(sess):
     assert up is not None
     assert up == False
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     # check requests where enqueued
     (count,) = sess.execute(text(
@@ -148,13 +147,11 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.worker_restart();"))
     autocommit_sess.execute(text("select net.wait_until_running();"))
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     ))
-
-    sess.commit()
 
     # leave time for some processing
     time.sleep(0.1)
@@ -185,12 +182,11 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.worker_restart();"))
     autocommit_sess.execute(text("select net.wait_until_running();"))
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     ))
-    sess.commit()
 
     # truncate succeeds fast, despite the worker still processing the queue 1 by 1
     sess.execute(text(
@@ -218,12 +214,11 @@ def test_no_failure_on_drop_extension(sess):
     wait and not crash the worker
     """
 
-    (request_id,) = sess.execute(text("""
+    (request_id,) = http_request(sess, text("""
         select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2');
-    """)).fetchone()
-    assert request_id == 1
+    """))
 
-    sess.commit()
+    assert request_id == 1
 
     # wait until processing
     time.sleep(1)
@@ -254,13 +249,11 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
     autocommit_sess.execute(text("select net.worker_restart();"))
     autocommit_sess.execute(text("select net.wait_until_running();"))
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,5);
     """
     ))
-
-    sess.commit()
 
     # one restart will likely keep the worker awake since the wake signal could still be on, so do two restarts
     # to ensure the wake signal is cleared
@@ -313,13 +306,11 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
 def test_new_requests_get_attended_asap(sess):
     """Check that new requests get attended as soon as possible"""
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     ))
-
-    sess.commit()
 
     # less than a second
     time.sleep(0.1)
@@ -482,11 +473,10 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     ))
 
     # Drive a batch of requests through the worker.
-    sess.execute(text("""
+    http_request(sess, text("""
         select net.http_get('http://localhost:8080/pathological?status=200')
         from generate_series(1,30);
     """))
-    sess.commit()
 
     # Wait until the worker has actually drained the queue and written all
     # responses to net._http_response. Don't assume "30 rows" - the worker
@@ -571,11 +561,10 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     ))
 
     # Drive 30 inserts through the worker. 30 is well above the threshold (10).
-    sess.execute(text("""
+    http_request(sess, text("""
         select net.http_get('http://localhost:8080/pathological?status=200')
         from generate_series(1,30);
     """))
-    sess.commit()
 
     # 30s budget covers worst-case worker pgstat flush (PGSTAT_MIN_INTERVAL
     # = 1s slack) + worst-case launcher cycle (autovacuum_max_workers=3,
@@ -641,10 +630,9 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     )
 
     # Fire a slow request so the worker stays active long enough to observe.
-    sess.execute(text("""
+    http_request(sess, text("""
         select net.http_get('http://localhost:8080/pathological?status=200&delay=2');
     """))
-    sess.commit()
 
     # Poll for 'active' for up to 5s. The slow request keeps the worker
     # busy for ~2s, so we have a wide observation window.

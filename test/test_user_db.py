@@ -1,6 +1,3 @@
-import time
-
-import pytest
 from sqlalchemy import text
 
 

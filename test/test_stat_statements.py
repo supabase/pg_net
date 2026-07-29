@@ -2,6 +2,7 @@ import time
 
 import pytest
 from sqlalchemy import text
+from common import http_request
 
 
 def test_query_stat_statements(sess):
@@ -104,13 +105,11 @@ def test_wakes_at_commit_time(sess):
 
     assert initial_calls >= 0
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
     """
     ))
-
-    sess.commit()
 
     # wait for reqs
     time.sleep(2)

@@ -1,20 +1,18 @@
 import time
 
-import pytest
 import re
 from sqlalchemy import text
+from common import http_request
 
 
 def test_http_get_timeout_reached(sess):
     """Test net.http_get with timeout errs on a slow reply"""
 
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=6');
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     # wait for timeout
     time.sleep(7)
@@ -59,13 +57,11 @@ def test_http_detailed_timeout(sess):
     # select net.http_get(url := 'http://localhost:8080/pathological', timeout_milliseconds := 1000);
 
     # Timeout at the HTTP step
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get(url := 'http://localhost:8080/pathological?delay=1', timeout_milliseconds := 1000)
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     # wait for timeout
     time.sleep(2.1)
@@ -101,13 +97,11 @@ def test_http_get_succeed_with_gt_timeout(sess):
     is greater than the slow reply response time
     """
 
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get(url := 'http://localhost:8080?status=200&delay=3', timeout_milliseconds := 3500);
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     time.sleep(4.5)
 

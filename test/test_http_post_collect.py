@@ -1,7 +1,7 @@
 import json
 
 from sqlalchemy import text
-from common import collect_response_sync
+from common import collect_response_sync, http_request
 
 
 def test_http_post_returns_id(sess):
@@ -38,16 +38,13 @@ def test_http_post_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
     # Create a request
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post'
         );
     """
-    )).fetchone()
-
-    # Commit to wakeup background worker
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
@@ -93,7 +90,7 @@ def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
 
     # Create a request
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
@@ -101,10 +98,7 @@ def test_http_post_collect_non_empty_body(sess):
             headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
         );
     """
-    )).fetchone()
-
-    # Commit to wakeup background worker
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
@@ -174,16 +168,14 @@ def test_http_post_no_content_type_coerce(sess):
 def test_http_post_empty_body(sess):
     """Test net.http_post can post a null body"""
 
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/echo-method',
             body:=null
         );
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 

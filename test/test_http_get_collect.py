@@ -1,7 +1,7 @@
 from sqlalchemy import text
 import time
 
-from common import collect_response_sync
+from common import collect_response_sync, http_request
 
 
 def test_http_get_returns_id(sess):
@@ -32,14 +32,11 @@ def test_http_get_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
     # Create a request
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080');
     """
-    )).fetchone()
-
-    # Commit to wakeup background worker
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
@@ -97,30 +94,27 @@ def test_http_collect_response_async_does_not_exist(sess):
 def test_http_get_responses_have_different_created_times(sess):
     """Ensure the rows in net._http_response have different created times"""
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/echo-method')
     """
     ))
-    sess.commit()
 
     time.sleep(1)
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/echo-method')
     """
     ))
-    sess.commit()
 
     time.sleep(1)
 
-    sess.execute(text(
+    http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/echo-method')
     """
     ))
-    sess.commit()
 
     time.sleep(1)
 
@@ -137,14 +131,11 @@ def test_http_get_collect_with_redirect(sess):
     """Test pg_net follows a redirect and collects a response"""
 
     # Create a request
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/redirect_me');
     """
-    )).fetchone()
-
-    # Commit to wakeup background worker
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
@@ -156,14 +147,11 @@ def test_http_get_ipv6(sess):
     """Test pg_net can resolve an ipv6 only server"""
 
     # Create a request
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8888/');
     """
-    )).fetchone()
-
-    # Commit to wakeup background worker
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
@@ -174,13 +162,11 @@ def test_http_get_ipv6(sess):
 def test_http_get_null_headers(sess):
     """Test net.http_get can have null headers"""
 
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080', null::jsonb, null::jsonb, 100);
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 

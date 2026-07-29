@@ -1,8 +1,6 @@
 import time
-
-import pytest
 from sqlalchemy import text
-from common import collect_response_sync
+from common import collect_response_sync, http_request
 
 
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
@@ -16,16 +14,13 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     autocommit_sess.execute(text("select net.wait_until_running()"))
 
     # Create a request
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get(
             'http://localhost:8080/anything'
         );
     """
-    )).fetchone()
-
-    # Commit to wakeup background worker
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
@@ -64,13 +59,11 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
     until completion despite no new requests coming
     """
 
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
@@ -131,13 +124,11 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
     new requests coming" and despite restart
     """
 
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    )).fetchone()
-
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 

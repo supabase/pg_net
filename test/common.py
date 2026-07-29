@@ -1,6 +1,16 @@
 from sqlalchemy import text
 
 
+def http_request(sess, query):
+    """
+    Execute query and commit to wake up the background worker.
+    """
+    result = sess.execute(query).fetchone()
+    # Commit to wakeup background worker
+    sess.commit()
+    return result
+
+
 def collect_response_sync(sess, request_id):
     """
     Wait for request with request_id to complete and return its response.

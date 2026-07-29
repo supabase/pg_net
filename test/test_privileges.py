@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from common import collect_response_sync
+from common import collect_response_sync, http_request
 
 
 def test_net_on_postgres_role(sess):
@@ -9,16 +9,13 @@ def test_net_on_postgres_role(sess):
     assert role[0] == "postgres"
 
     # Create a request
-    (request_id,) = sess.execute(text(
+    (request_id,) = http_request(sess, text(
         """
         select net.http_get(
             'http://localhost:8080/anything'
         );
     """
-    )).fetchone()
-
-    # Commit to wakeup background worker
-    sess.commit()
+    ))
 
     response = collect_response_sync(sess, request_id)
 
