@@ -1,6 +1,8 @@
 from sqlalchemy import text
 import time
 
+from common import collect_response_sync
+
 
 def test_http_get_returns_id(sess):
     """Test net.http_get returns a bigint id"""
@@ -39,21 +41,13 @@ def test_http_get_collect_sync_success(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(text(
-        """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-    ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
-    assert response[2] is not None
-    # psycopg2 does not deserialize nested composites
-    assert response[2].startswith("(200")
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+    assert response["body"] is not None
+    assert response["status_code"] == 200
 
 
 # def test_http_get_collect_async_pending(sess):
@@ -152,17 +146,10 @@ def test_http_get_collect_with_redirect(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(text(
-        """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-    ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert "I got redirected" in response[2]
+    assert response["body"] == "I got redirected\n"
 
 
 def test_http_get_ipv6(sess):
@@ -178,17 +165,10 @@ def test_http_get_ipv6(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(text(
-        """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-    ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert "Hello ipv6 only" in response[2]
+    assert response["body"] == "Hello ipv6 only\n"
 
 
 def test_http_get_null_headers(sess):
@@ -202,14 +182,7 @@ def test_http_get_null_headers(sess):
 
     sess.commit()
 
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert "Hello world" in response[2]
+    assert response["body"] == "Hello world\n"

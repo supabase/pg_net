@@ -33,7 +33,6 @@ def test_http_delete_collect_sync_success(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
     response = collect_response_sync(sess, request_id)
 
     assert response is not None
@@ -61,7 +60,6 @@ def test_http_delete_positional_args(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
     response = collect_response_sync(sess, request_id)
 
     assert response is not None
@@ -80,7 +78,6 @@ def test_http_delete_positional_args(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
     response = collect_response_sync(sess, request_id)
 
     assert response is not None

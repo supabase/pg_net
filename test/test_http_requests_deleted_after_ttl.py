@@ -2,6 +2,7 @@ import time
 
 import pytest
 from sqlalchemy import text
+from common import collect_response_sync
 
 
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
@@ -26,16 +27,10 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Confirm that the request was retrievable
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert response[0] == "SUCCESS"
+    response = collect_response_sync(sess, request_id)
+
+    assert response is not None
+    assert response["status"] == "SUCCESS"
 
     # Sleep until after request should have been deleted
     time.sleep(1.1)
@@ -77,17 +72,10 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
 
     sess.commit()
 
-    # Collect the last response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
+
     assert response is not None
-    assert response[0] == "SUCCESS"
+    assert response["status"] == "SUCCESS"
 
     (count,) = sess.execute(
         text(
@@ -151,17 +139,10 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
 
     sess.commit()
 
-    # Collect the last response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
+
     assert response is not None
-    assert response[0] == "SUCCESS"
+    assert response["status"] == "SUCCESS"
 
     (count,) = sess.execute(
         text(

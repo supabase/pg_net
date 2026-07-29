@@ -2,6 +2,7 @@ import time
 
 import pytest
 from sqlalchemy import text
+from common import collect_response_sync
 
 wrong_port = 6666
 
@@ -101,17 +102,10 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     )).fetchone()
     sess.commit()
 
-    # Collect the last response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
+
     assert response is not None
-    assert response[0] == "ERROR"
+    assert response["status"] == "ERROR"
 
     (error_msg, count) = sess.execute(text(
         """
@@ -132,18 +126,11 @@ def test_it_keeps_working_after_many_connection_refused(sess):
 
     sess.commit()
 
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
-    assert response[2].startswith("(200")
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+    assert response["status_code"] == 200
 
 
 def test_it_keeps_working_after_server_returns_nothing(sess):
@@ -159,17 +146,10 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     )).fetchone()
     sess.commit()
 
-    # Collect the last response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
+
     assert response is not None
-    assert response[0] == "ERROR"
+    assert response["status"] == "ERROR"
 
     (error_msg, count) = sess.execute(text(
         """
@@ -188,17 +168,9 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
 
     sess.commit()
 
-    # Collect the last response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert response is not None
-    assert response[0] == "SUCCESS"
+    response = collect_response_sync(sess, request_id)
+
+    assert response["status"] == "SUCCESS"
 
     (status_code, count) = sess.execute(text(
         """

@@ -1,5 +1,5 @@
-import pytest
 from sqlalchemy import text
+from common import collect_response_sync
 
 
 def test_net_on_postgres_role(sess):
@@ -20,16 +20,10 @@ def test_net_on_postgres_role(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Confirm that the request was retrievable
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert response[0] == "SUCCESS"
+    response = collect_response_sync(sess, request_id)
+
+    assert response is not None
+    assert response["status"] == "SUCCESS"
 
 
 def test_net_on_pre_existing_role(sess):

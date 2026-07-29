@@ -1,4 +1,5 @@
 from sqlalchemy import text
+from common import collect_response_sync
 
 
 def test_http_get_url_params_set(sess):
@@ -16,19 +17,11 @@ def test_http_get_url_params_set(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    print(response)
+    response = collect_response_sync(sess, request_id)
+
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert "?hello=world" in response[2]
+    assert response["status"] == "SUCCESS"
+    assert "?hello=world" in response["body"]
 
 
 def test_http_post_url_params_set(sess):
@@ -46,16 +39,8 @@ def test_http_post_url_params_set(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    print(response)
+    response = collect_response_sync(sess, request_id)
+
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert "?hello=world" in response[2]
+    assert response["status"] == "SUCCESS"
+    assert "?hello=world" in response["body"]

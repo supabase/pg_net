@@ -1,4 +1,7 @@
+import json
+
 from sqlalchemy import text
+from common import collect_response_sync
 
 
 def test_http_post_returns_id(sess):
@@ -46,20 +49,12 @@ def test_http_post_collect_sync_success(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
-    assert response[2] is not None
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+    assert response["body"] is not None
 
 
 # def test_http_post_collect_async_pending(sess):
@@ -111,20 +106,13 @@ def test_http_post_collect_non_empty_body(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
+
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert "ok" in response[1]
-    assert "hello" in response[2]
-    assert "world" in response[2]
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+    assert response["body"] is not None
+    assert json.loads(response["body"])["hello"] == "world"
 
     # Make sure response is json
     (response_json,) = sess.execute(
