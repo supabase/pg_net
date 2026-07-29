@@ -64,6 +64,15 @@ $ xpg -v 13 test
 
 This will spawn a local db and an nginx server for testing.
 
+To run a single test , set `PYTEST_ARGS` to `-k test_function_name`. For example:
+
+```bash
+$ nix develop
+$ PYTEST_ARGS="-k test_connect" xpg test
+```
+
+Will run the `test_connect` test only. `PYTEST_ARGS` is passed through to pytest, so you can pass other arguments to pytest as well.
+
 ### Debugging
 
 You can turn on logging level to see curl traces with

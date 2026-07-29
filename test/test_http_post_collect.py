@@ -1,32 +1,34 @@
+import json
 from sqlalchemy import text
+from common import collect_response_sync, http_request
 
 
 def test_http_post_returns_id(sess):
-    """net.http_post returns a bigint id"""
+    """Test net.http_post returns an id"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:='{}'::jsonb
         );
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
 
 def test_http_post_special_chars_body(sess):
-    """net.http_post returns a bigint id"""
+    """Test net.http_post returns an id"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:=json_build_object('foo', 'ba"r')::jsonb
         );
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
@@ -34,71 +36,26 @@ def test_http_post_special_chars_body(sess):
 def test_http_post_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
-    # Create a request
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post'
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
-
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
-    assert response[2] is not None
-
-
-# def test_http_post_collect_async_pending(sess):
-#     """Collect a response async before completed"""
-
-#     # Create a request
-#     (request_id,) = sess.execute(
-#         """
-#         select net.http_post(
-#             url:='http://localhost:8080/post',
-#             body:='{}'::jsonb
-#         );
-#     """
-#     ).fetchone()
-
-#     # Commit so background worker can start
-#     sess.commit()
-
-#     # Collect the response, waiting as needed
-#     response = sess.execute(
-#         text(
-#             """
-#         select * from net._http_collect_response(:request_id, async:=true);
-#     """
-#         ),
-#         {"request_id": request_id},
-#     ).fetchone()
-
-#     assert response is not None
-#     assert response[0] == "PENDING"
-#     assert "pending" in response[1]
-#     assert response[2] is None
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+    assert response["body"] is not None
 
 
 def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
 
-    # Create a request
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
@@ -106,40 +63,16 @@ def test_http_post_collect_non_empty_body(sess):
             headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
+    response = collect_response_sync(sess, request_id)
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert "ok" in response[1]
-    assert "hello" in response[2]
-    assert "world" in response[2]
-
-    # Make sure response is json
-    (response_json,) = sess.execute(
-        text(
-            """
-        select
-            ((x.response).body)::jsonb body_json
-        from
-            net._http_collect_response(:request_id, async:=false) x;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-
-    assert response_json["hello"] == "world"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+    assert response["body"] is not None
+    # Assert that response is json
+    assert json.loads(response["body"])["hello"] == "world"
 
 
 def test_http_post_wrong_header_exception(sess):
@@ -166,7 +99,6 @@ def test_http_post_wrong_header_exception(sess):
 def test_http_post_no_content_type_coerce(sess):
     """Confirm that a missing content type coerces to application/json"""
 
-    # Create a request
     request_id, = sess.execute(text(
         """
         select net.http_post(
@@ -175,7 +107,6 @@ def test_http_post_no_content_type_coerce(sess):
         );
     """
     )).fetchone()
-
 
     headers, = sess.execute(text(
         """
@@ -193,28 +124,18 @@ def test_http_post_no_content_type_coerce(sess):
 
 
 def test_http_post_empty_body(sess):
-    """net.http_post can post a null body"""
+    """Test net.http_post can post a null body"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/echo-method',
             body:=null
         );
     """
-    )).fetchone()
+    ))
 
-    sess.commit()
+    response = collect_response_sync(sess, request_id)
 
-    (body) = sess.execute(
-        text(
-            """
-        select
-            (x.response).body as body
-        from net._http_collect_response(:request_id, async:=false) x;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-
-    assert 'POST' in str(body)
+    assert response is not None
+    assert response["body"] == "POST\n"

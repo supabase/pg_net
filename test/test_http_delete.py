@@ -1,24 +1,26 @@
+import json
 from sqlalchemy import text
+from common import collect_response_sync, http_request
+
 
 def test_http_delete_returns_id(sess):
-    """net.http_delete returns a bigint id"""
+    """Test net.http_delete returns an id"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/delete'
         );
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
 
 def test_http_delete_collect_sync_success(sess):
-    """test net.http_delete works"""
+    """Test net.http_delete works"""
 
-    # Create a request
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             url:='http://localhost:8080/delete'
@@ -26,86 +28,59 @@ def test_http_delete_collect_sync_success(sess):
         ,   headers:= '{"X-Baz": "foo"}'
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
-
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
-    assert response[2] is not None
-    assert "X-Baz" in response[2]
-    assert "param-foo" in response[2]
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
+
+    # /delete endpoint returns params and headers in the response body
+    assert response["body"] is not None
+    assert "X-Baz" in response["body"]
+    assert "param-foo" in response["body"]
 
 
 def test_http_delete_positional_args(sess):
-    """test net.http_delete works with positional arguments. This to ensure backwards compat when a new parameter is added to the function."""
+    """
+    Test net.http_delete works with positional arguments.
+    This to ensure backwards compat when a new parameter is added to the function.
+    """
 
-    (request_id,) = sess.execute(text(
+    # Delete call with url only
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete'
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
-
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
-
-    (request_id,) = sess.execute(text(
+    # Delete call with url and params
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete',
             '{"param-foo": "bar"}'
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
-
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
-
-    (request_id,) = sess.execute(text(
+    # Delete call with url, params, and headers
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete',
@@ -113,27 +88,16 @@ def test_http_delete_positional_args(sess):
             '{"X-Baz": "foo"}'
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
-
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
-
-    (request_id,) = sess.execute(text(
+    # Delete call with url, params, headers, and timeout
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete',
@@ -142,53 +106,29 @@ def test_http_delete_positional_args(sess):
             5000
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
-
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
 
 def test_http_delete_with_body(sess):
-    """delete with request body works"""
+    """Test delete with request body works"""
 
-    # Create a request
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             url  :='http://localhost:8080/delete_w_body'
         ,   body := '{"key": "val"}'
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
+    response = collect_response_sync(sess, request_id)
 
-    # Collect the response, waiting as needed
-    (response_json,) = sess.execute(
-        text(
-            """
-        select
-            ((x.response).body)::jsonb body_json
-        from
-            net._http_collect_response(:request_id, async:=false) x;
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
-
-    assert response_json["key"] == "val"
+    assert response is not None
+    assert response["body"] is not None
+    assert json.loads(response["body"])["key"] == "val"

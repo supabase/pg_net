@@ -1,63 +1,38 @@
 from sqlalchemy import text
+from common import collect_response_sync, http_request
 
 
 def test_http_get_url_params_set(sess):
-    """Check that params are being set on GET
-    """
-    # Create a request
-    (request_id,) = sess.execute(text(
+    """Check that params are being set on GET"""
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/anything',
             params:='{"hello": "world"}'::jsonb
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
+    response = collect_response_sync(sess, request_id)
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    print(response)
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert "?hello=world" in response[2]
+    assert response["status"] == "SUCCESS"
+    assert "?hello=world" in response["body"]
 
 
 def test_http_post_url_params_set(sess):
-    """Check that params are being set on POST
-    """
-    # Create a request
-    (request_id,) = sess.execute(text(
+    """Check that params are being set on POST"""
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/anything',
             params:='{"hello": "world"}'::jsonb
         );
     """
-    )).fetchone()
+    ))
 
-    # Commit so background worker can start
-    sess.commit()
+    response = collect_response_sync(sess, request_id)
 
-    # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    print(response)
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert "?hello=world" in response[2]
+    assert response["status"] == "SUCCESS"
+    assert "?hello=world" in response["body"]
