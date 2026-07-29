@@ -1,187 +1,127 @@
 import time
-
-import pytest
 from sqlalchemy import text
+from common import collect_response_sync, http_request, http_requests, restart_worker
+from common import wait_for_response_count, wakeup_worker
+
 
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
-    """Check that http responses will be deleted when they reach their ttl, not immediately but when the worker wakes again"""
+    """
+    Check that http responses will be deleted when they reach their ttl,
+    not immediately but when the worker wakes again
+    """
 
-    autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second'"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+    try:
+        autocommit_sess.execute(
+            text("alter system set pg_net.ttl to '1 second'"))
+        restart_worker(autocommit_sess)
 
-    # Create a request
-    (request_id,) = sess.execute(text(
+        request_id = http_request(sess, text(
+            """
+            select net.http_get(
+                'http://localhost:8080/anything'
+            );
         """
-        select net.http_get(
-            'http://localhost:8080/anything'
-        );
-    """
-    )).fetchone()
+        ))
 
-    # Commit so background worker can start
-    sess.commit()
+        response = collect_response_sync(sess, request_id)
 
-    # Confirm that the request was retrievable
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert response[0] == "SUCCESS"
+        assert response is not None
+        assert response["status"] == "SUCCESS"
 
-    # Sleep until after request should have been deleted
-    time.sleep(1.1)
+        # Sleep a little more than ttl so that the request expires
+        time.sleep(1.1)
 
-    # Wake the worker manually, under normal operation this will happen when new requests are received
-    sess.execute(text("select net.wake()"))
+        wakeup_worker(sess)
 
-    sess.commit() # commit so worker  wakes
+        # Check that the worker deleted the expired response
+        wait_for_response_count(autocommit_sess, 0)
 
-    time.sleep(0.1) # wait for deletion
-
-    # Ensure the response is now empty
-    (count,) = sess.execute(
-        text(
-            """
-        select count(*) from net._http_response where id = :request_id;
-    """
-        ),
-        {"request_id": request_id},
-    ).fetchone()
-    assert count == 0
-
-    autocommit_sess.execute(text("alter system reset pg_net.ttl"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+    finally:
+        autocommit_sess.execute(text("alter system reset pg_net.ttl"))
+        restart_worker(autocommit_sess)
 
 
 def test_http_responses_will_complete_deletion(sess, autocommit_sess):
-    """Check that http responses will keep being deleted until completion despite no new requests coming"""
+    """
+    Check that http responses will keep being deleted
+    until completion despite no new requests coming
+    """
 
-    (request_id,) = sess.execute(text(
+    request_id = http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    )).fetchone()
+    ))
 
-    sess.commit()
+    response = collect_response_sync(sess, request_id)
 
-    # Collect the last response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
     assert response is not None
-    assert response[0] == "SUCCESS"
+    assert response["status"] == "SUCCESS"
 
-    (count,) = sess.execute(
-        text(
-            """
-        select count(*) from net._http_response
-    """
-        )
-    ).fetchone()
-    assert count == 4
+    wait_for_response_count(autocommit_sess, 4)
 
-    autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second';"))
-    autocommit_sess.execute(text("alter system set pg_net.batch_size to 2;"))
-    autocommit_sess.execute(text("select pg_reload_conf();"))
+    try:
+        autocommit_sess.execute(
+            text("alter system set pg_net.ttl to '1 second';"))
+        autocommit_sess.execute(
+            text("alter system set pg_net.batch_size to 2;"))
+        autocommit_sess.execute(text("select pg_reload_conf();"))
 
-    # wait for ttl
-    time.sleep(1)
+        # Wait for ttl so that when we wakeup the worker it has
+        # some expired responses to delete
+        time.sleep(1)
 
-    # Wake the worker manually, under normal operation this will happen when new requests are received
-    sess.execute(text("select net.wake()"))
-    sess.commit() # commit so worker  wakes
+        wakeup_worker(sess)
 
-    time.sleep(0.1)
+        # In one inner loop, the worker will delete batch size
+        # worth of responses
+        wait_for_response_count(autocommit_sess, 2)
 
-    (count,) = sess.execute(
-        text(
-            """
-        select count(*) from net._http_response
-    """
-        )
-    ).fetchone()
-    assert count == 2
+        # But it will keep going as long as it had deleted
+        # some responses. So after a wait of 1 second it
+        # will delete another batch before going back to sleep
+        wait_for_response_count(autocommit_sess, 0)
 
-    # wait for another batch
-    time.sleep(1.1)
-
-    (count,) = sess.execute(
-        text(
-            """
-        select count(*) from net._http_response
-    """
-        )
-    ).fetchone()
-    assert count == 0
-
-    autocommit_sess.execute(text("alter system reset pg_net.ttl"))
-    autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-    autocommit_sess.execute(text("select pg_reload_conf();"))
+    finally:
+        autocommit_sess.execute(text("alter system reset pg_net.ttl"))
+        autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
+        autocommit_sess.execute(text("select pg_reload_conf();"))
 
 
 def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
-    """Check that http responses will keep being despite no new requests coming" and despite restart"""
+    """
+    Check that http responses will keep being deleted despite no
+    new requests coming and despite worker restart
+    """
 
-    (request_id,) = sess.execute(text(
+    request_id = http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    )).fetchone()
+    ))
 
-    sess.commit()
+    response = collect_response_sync(sess, request_id)
 
-    # Collect the last response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
     assert response is not None
-    assert response[0] == "SUCCESS"
+    assert response["status"] == "SUCCESS"
 
-    (count,) = sess.execute(
-        text(
-            """
-        select count(*) from net._http_response
-    """
-        )
-    ).fetchone()
-    assert count == 4
+    wait_for_response_count(autocommit_sess, 4)
 
-    # restart
-    autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second';"))
-    autocommit_sess.execute(text("alter system set pg_net.batch_size to 2;"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+    try:
+        # Restart the worker
+        autocommit_sess.execute(
+            text("alter system set pg_net.ttl to '1 second';"))
+        autocommit_sess.execute(
+            text("alter system set pg_net.batch_size to 2;"))
+        restart_worker(autocommit_sess)
 
-    # wait for ttl
-    time.sleep(1.1)
+        # Wait for ttl so that the requests expire
+        time.sleep(1.1)
 
-    (count,) = sess.execute(
-        text(
-            """
-        select count(*) from net._http_response
-    """
-        )
-    ).fetchone()
-    assert count == 0
+        wait_for_response_count(autocommit_sess, 0)
 
-    # reset
-    autocommit_sess.execute(text("alter system reset pg_net.ttl"))
-    autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-    autocommit_sess.execute(text("select net.worker_restart()"))
-    autocommit_sess.execute(text("select net.wait_until_running()"))
+    finally:
+        # reset
+        autocommit_sess.execute(text("alter system reset pg_net.ttl"))
+        autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
+        restart_worker(autocommit_sess)
