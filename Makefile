@@ -85,4 +85,4 @@ include $(PGXS)
 
 .PHONY: test
 test:
-	net-with-nginx python -m pytest -s -vv
+	net-with-nginx python -m pytest -s -vv $(PYTEST_ARGS)
