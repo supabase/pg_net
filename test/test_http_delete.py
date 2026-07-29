@@ -1,4 +1,6 @@
 from sqlalchemy import text
+from common import collect_response_sync
+
 
 def test_http_delete_returns_id(sess):
     """net.http_delete returns a bigint id"""
@@ -31,27 +33,12 @@ def test_http_delete_collect_sync_success(sess):
     # Commit so background worker can start
     sess.commit()
 
-    # Collect the response, waiting as needed.
-    response = sess.execute(
-        text(
-            """
-        select
-            status,
-            message,
-            (response).status_code,
-            (response).headers,
-            (response).body
-        from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-    ).mappings().fetchone()
+    # Collect the response, waiting as needed
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
     assert response["status"] == "SUCCESS"
     assert response["message"] == "ok"
-
-    # /delete echoes the request headers and query string back in the response body
     assert response["body"] is not None
     assert "X-Baz" in response["body"]
     assert "param-foo" in response["body"]
