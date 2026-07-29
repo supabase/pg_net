@@ -2,7 +2,8 @@ from sqlalchemy import text
 
 
 def collect_response_sync(sess, request_id):
-    """Wait for request with request_id to complete and return its response.
+    """
+    Wait for request with request_id to complete and return its response.
 
     Flattens net._http_collect_response's nested composite return type
     (status, message, response(status_code, headers, body)) into a single

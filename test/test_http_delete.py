@@ -45,7 +45,10 @@ def test_http_delete_collect_sync_success(sess):
 
 
 def test_http_delete_positional_args(sess):
-    """test net.http_delete works with positional arguments. This to ensure backwards compat when a new parameter is added to the function."""
+    """
+    Test net.http_delete works with positional arguments.
+    This to ensure backwards compat when a new parameter is added to the function.
+    """
 
     (request_id,) = sess.execute(text(
         """
@@ -59,18 +62,11 @@ def test_http_delete_positional_args(sess):
     sess.commit()
 
     # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
 
     (request_id,) = sess.execute(text(
@@ -86,18 +82,11 @@ def test_http_delete_positional_args(sess):
     sess.commit()
 
     # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
 
     (request_id,) = sess.execute(text(
@@ -114,18 +103,11 @@ def test_http_delete_positional_args(sess):
     sess.commit()
 
     # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
 
     (request_id,) = sess.execute(text(
@@ -143,18 +125,11 @@ def test_http_delete_positional_args(sess):
     sess.commit()
 
     # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
-        select * from net._http_collect_response(:request_id, async:=false);
-    """
-        ),
-        {"request_id": request_id},
-        ).fetchone()
+    response = collect_response_sync(sess, request_id)
 
     assert response is not None
-    assert response[0] == "SUCCESS"
-    assert response[1] == "ok"
+    assert response["status"] == "SUCCESS"
+    assert response["message"] == "ok"
 
 
 def test_http_delete_with_body(sess):
@@ -174,16 +149,16 @@ def test_http_delete_with_body(sess):
     sess.commit()
 
     # Collect the response, waiting as needed
-    (response_json,) = sess.execute(
+    response = sess.execute(
         text(
             """
         select
-            ((x.response).body)::jsonb body_json
+            ((response).body)::jsonb body_json
         from
-            net._http_collect_response(:request_id, async:=false) x;
+            net._http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
-        ).fetchone()
+        ).mappings().fetchone()
 
-    assert response_json["key"] == "val"
+    assert response["body_json"]["key"] == "val"
