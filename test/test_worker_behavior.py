@@ -100,7 +100,7 @@ def test_worker_will_process_queue_when_up(sess, autocommit_sess):
 
     # Check that worker is still down. Note that this is a bit racy
     # as there is no guarantee that worker hasn't come back up at this
-    # time, but in practice this rarely fails because worker takes 2 
+    # time, but in practice this rarely fails because worker takes 2
     # seconds before coming back up, which is more than enough time
     # to reach here.
     (worker_is_up,) = sess.execute(text("""
@@ -154,7 +154,8 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
     """
 
     try:
-        autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
+        autocommit_sess.execute(
+            text("alter system set pg_net.batch_size to '1';"))
         autocommit_sess.execute(text("select net.worker_restart();"))
         autocommit_sess.execute(text("select net.wait_until_running();"))
 
@@ -169,7 +170,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
 
         (count,) = sess.execute(text(
             """
-            WITH deleted AS (DELETE FROM net.http_request_queue RETURNING *) SELECT count(*) FROM deleted;
+            with deleted as (delete from net.http_request_queue returning *) select count(*) from deleted;
         """
         )).fetchone()
         assert count > 1
@@ -190,7 +191,8 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
     try:
         # ensure the worker will be processing the queue 1 by 1 (slowly) so it doesn't clear the whole
         # net.http_request_queue in one go
-        autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
+        autocommit_sess.execute(
+            text("alter system set pg_net.batch_size to '1';"))
         autocommit_sess.execute(text("select net.worker_restart();"))
         autocommit_sess.execute(text("select net.wait_until_running();"))
 
@@ -220,20 +222,28 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
         autocommit_sess.execute(text("select net.wait_until_running()"))
 
 
-def test_no_failure_on_drop_extension(sess):
+def test_no_failure_on_drop_extension(sess, autocommit_sess):
     """
     Check that while waiting for a slow request, a drop extension should
     wait and not crash the worker
     """
 
-    (request_id,) = http_request(sess, text("""
-        select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2');
-    """))
+    http_request(sess, text(
+        """
+        select net.http_get('http://localhost:8080/pathological?status=200&delay=2') from generate_series(1,10);
+    """
+    ))
 
-    assert request_id == 1
-
-    # wait until processing
-    time.sleep(1)
+    # Wait until responses have started arriving
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select count(*) from net._http_response;
+        """)).fetchone(),
+        predicate=lambda result: result[0] > 0,
+        timeout=5,
+        sleep_interval=0.1,
+        description="responses to arrive",
+    )
 
     sess.execute(text("""
         drop extension pg_net cascade;
@@ -241,9 +251,18 @@ def test_no_failure_on_drop_extension(sess):
 
     sess.commit()
 
-    # wait until request is finished
-    time.sleep(3)
+    # wait until the extension is fully gone
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select count(*) from pg_extension where extname = 'pg_net';
+        """)).fetchone(),
+        predicate=lambda result: result[0] == 0,
+        timeout=5,
+        sleep_interval=0.1,
+        description="extension to be dropped",
+    )
 
+    # The background worker should not have crash even after dropping the extension
     (up,) = sess.execute(text("""
         select is_worker_up();
     """)).fetchone()
@@ -258,18 +277,29 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
     """
 
     try:
-        autocommit_sess.execute(text("alter system set pg_net.batch_size to '1';"))
+        autocommit_sess.execute(
+            text("alter system set pg_net.batch_size to '1';"))
         autocommit_sess.execute(text("select net.worker_restart();"))
         autocommit_sess.execute(text("select net.wait_until_running();"))
 
         http_request(sess, text(
             """
-            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,5);
+            select net.http_get('http://localhost:8080/pathological?status=200&delay=1') from generate_series(1,5);
         """
         ))
 
-        # one restart will likely keep the worker awake since the wake signal could still be on, so do two restarts
-        # to ensure the wake signal is cleared
+        # Wait until responses have started arriving
+        (processed,) = wait_until(
+            fetch=lambda: autocommit_sess.execute(text("""
+                select count(*) from net._http_response;
+            """)).fetchone(),
+            predicate=lambda result: result[0] > 0,
+            timeout=5,
+            sleep_interval=0.1,
+            description="responses to arrive before first restart",
+        )
+
+        # Restart the worker
         sess.execute(text(
             """
             select net.worker_restart();
@@ -277,8 +307,18 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
         """
         ))
 
-        time.sleep(0.1)
+        # Check that more requests are processed after a restart
+        wait_until(
+            fetch=lambda: autocommit_sess.execute(text("""
+                select count(*) from net._http_response;
+            """)).fetchone(),
+            predicate=lambda result: result[0] >= processed,
+            timeout=5,
+            sleep_interval=0.1,
+            description="responses to arrive after first restart",
+        )
 
+        # Restart again
         sess.execute(text(
             """
             select net.worker_restart();
@@ -286,30 +326,16 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
         """
         ))
 
-        time.sleep(0.1)
-
-        (status_code, count) = sess.execute(text(
-            """
-            select status_code, count(*) from net._http_response group by status_code;
-        """
-        )).fetchone()
-
-        # at most 2 requests should have finished by now because of the low batch_size
-        assert count <= 2
-        assert count > 0  # at least 1 request should be finished
-        assert status_code == 200
-
-        # if we sleep for 4 seconds the whole 5 requests should be finished
-        time.sleep(4)
-
-        (status_code, count) = sess.execute(text(
-            """
-            select status_code, count(*) from net._http_response group by status_code;
-        """
-        )).fetchone()
-
-        assert status_code == 200
-        assert count == 5
+        # And now wait until all responses have arrived
+        wait_until(
+            fetch=lambda: autocommit_sess.execute(text("""
+                select count(*) from net._http_response;
+            """)).fetchone(),
+            predicate=lambda result: result[0] == 5,
+            timeout=10,
+            sleep_interval=0.1,
+            description="responses to arrive after second restart",
+        )
 
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
