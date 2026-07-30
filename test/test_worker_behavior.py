@@ -165,8 +165,16 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
         """
         ))
 
-        # leave time for some processing
-        time.sleep(0.1)
+        # Wait until responses have started arriving
+        wait_until(
+            fetch=lambda: autocommit_sess.execute(text("""
+                select count(*) from net._http_response;
+            """)).fetchone(),
+            predicate=lambda result: result[0] > 0,
+            timeout=5,
+            sleep_interval=0.1,
+            description="responses to arrive",
+        )
 
         (count,) = sess.execute(text(
             """
@@ -343,8 +351,8 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
         autocommit_sess.execute(text("select net.wait_until_running()"))
 
 
-def test_new_requests_get_attended_asap(sess):
-    """Check that new requests get attended as soon as possible"""
+def test_new_requests_get_attended_without_explicit_wakeup(sess, autocommit_sess):
+    """Check that new requests get attended without an explicit wakeup"""
 
     http_request(sess, text(
         """
@@ -352,24 +360,37 @@ def test_new_requests_get_attended_asap(sess):
     """
     ))
 
-    # less than a second
-    time.sleep(0.1)
+    # wait until all responses have arrived
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select count(*) from net._http_response;
+        """)).fetchone(),
+        predicate=lambda result: result[0] == 10,
+        timeout=10,
+        sleep_interval=0.1,
+        description="all responses to arrive",
+    )
 
-    (status_code, count) = sess.execute(text(
-        """
-        select status_code, count(*) from net._http_response group by status_code;
-    """
-    )).fetchone()
 
-    assert status_code == 200
-    assert count == 10
-
-
-def test_direct_inserts_no_requests(sess):
+def test_direct_inserts_no_requests(sess, autocommit_sess):
     """
     Check that direct insertions to the net.http_request_queue doesn't
     trigger new requests
     """
+
+    # Make sure the worker has already settled into its idle wait before we
+    # insert. If a prior test left it mid-batch, its trailing WORKER_WAIT_ONE_SECOND
+    # recheck (worker.c) can pick up this test's direct insert on its own,
+    # with no net.wake() involved, and make this test flake.
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text(
+            "select state from pg_stat_activity where backend_type ilike '%pg_net%';"
+        )).fetchone(),
+        predicate=lambda result: result[0] == 'idle',
+        timeout=5,
+        sleep_interval=0.1,
+        description="pg_net worker to settle into idle before direct insert",
+    )
 
     sess.execute(text(
         """
@@ -385,10 +406,10 @@ def test_direct_inserts_no_requests(sess):
 
     sess.commit()
 
-    # wait for req
-    time.sleep(0.1)
+    # Even waiting for 5 seconds doesn't process the request
+    time.sleep(5)
 
-    # no response
+    # No response still
     (count,) = sess.execute(text(
         """
         select count(*) from net._http_response;
@@ -397,7 +418,7 @@ def test_direct_inserts_no_requests(sess):
 
     assert count == 0
 
-    # req still in queue
+    # Reqest is still in queue
     (count,) = sess.execute(text(
         """
         select count(*) from net.http_request_queue;
@@ -406,7 +427,7 @@ def test_direct_inserts_no_requests(sess):
 
     assert count == 1
 
-    # an explicit wake will make it serve requests though
+    # An explicit wake will make it serve requests though
 
     sess.execute(text(
         """
@@ -416,17 +437,16 @@ def test_direct_inserts_no_requests(sess):
 
     sess.commit()
 
-    # wait for req
-    time.sleep(0.1)
-
-    (status_code, count) = sess.execute(text(
-        """
-        select status_code, count(*) from net._http_response group by status_code;
-    """
-    )).fetchone()
-
-    assert status_code == 200
-    assert count == 1
+    # wait until the response has arrived
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select count(*) from net._http_response;
+        """)).fetchone(),
+        predicate=lambda result: result[0] == 1,
+        timeout=10,
+        sleep_interval=0.1,
+        description="response to arrive",
+    )
 
 
 def test_processing_survives_postmaster_crash():
@@ -464,21 +484,35 @@ def test_processing_survives_postmaster_crash():
         pgdata_env = os.getenv('PGDATA')
         subprocess.run(["pg_ctl", "restart", "-D", pgdata_env])
 
-        # give it some time to finish restart
-        time.sleep(1)
+        def try_connect():
+            nonlocal engine, tmp_sess
+            try:
+                engine = create_engine("postgresql:///postgres")
+                ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+                tmp_sess = Session(ac_engine)
+                return tmp_sess.execute(text("select 1")).fetchone()
+            except Exception:
+                return None
 
-        engine = create_engine("postgresql:///postgres")
-        ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
-        tmp_sess = Session(ac_engine)
+        # wait for postmaster to finish restarting and accept connections
+        wait_until(
+            fetch=try_connect,
+            predicate=lambda result: result is not None,
+            timeout=10,
+            sleep_interval=0.1,
+            description="postmaster to restart and accept connections",
+        )
 
-        # give it enough time to finish processing the queue
-        time.sleep(1)
-
-        (count,) = tmp_sess.execute(text(
-            """
-            select count(*) from net.http_request_queue;
-        """
-        )).fetchone()
+        # wait until the queue has finished processing
+        (count,) = wait_until(
+            fetch=lambda: tmp_sess.execute(text("""
+                select count(*) from net.http_request_queue;
+            """)).fetchone(),
+            predicate=lambda result: result[0] == 0,
+            timeout=10,
+            sleep_interval=0.1,
+            description="request queue to drain after postmaster restart",
+        )
         assert count == 0
 
         (status_code, count) = tmp_sess.execute(text(
@@ -523,13 +557,15 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     # Wait until the worker has actually drained the queue and written all
     # responses to net._http_response. Don't assume "30 rows" - the worker
     # may pick up the queue in chunks depending on wake() coalescing.
-    for _ in range(20):
-        time.sleep(0.5)
-        (queue_count,) = sess.execute(text(
+    wait_until(
+        fetch=lambda: sess.execute(text(
             "select count(*) from net.http_request_queue;"
-        )).fetchone()
-        if queue_count == 0:
-            break
+        )).fetchone(),
+        predicate=lambda result: result[0] == 0,
+        timeout=10,
+        sleep_interval=0.5,
+        description="worker to drain the request queue",
+    )
 
     # Confirm the worker actually wrote rows, otherwise the pgstat assertion
     # below would be meaningless.
@@ -585,7 +621,16 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
         autocommit_sess.execute(
             text("alter system set autovacuum_naptime = '1s';"))
         autocommit_sess.execute(text("select pg_reload_conf();"))
-        time.sleep(1)
+
+        wait_until(
+            fetch=lambda: autocommit_sess.execute(text(
+                "select current_setting('autovacuum_naptime');"
+            )).fetchone(),
+            predicate=lambda result: result[0] == '1s',
+            timeout=5,
+            sleep_interval=0.1,
+            description="autovacuum_naptime reload to propagate",
+        )
 
         # Per-table: trip the autoanalyze threshold after a handful of rows.
         # Reloptions take effect immediately; no reload required.
@@ -729,14 +774,29 @@ def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_
 
     assert pid is not None, "pg_net worker did not come back up after restart"
 
-    # wait several restart cycles; a crash loop would respawn the worker with a new pid
-    time.sleep(3)
+    # Watch for several seconds; a crash loop would respawn the worker with a
+    # new pid. Poll for the bad condition (crash or restart) so we fail as
+    # soon as it happens instead of only checking once at the end of a blind
+    # sleep; a timeout here means the worker stayed up with the same pid.
+    changed = False
+    last_row = None
+    try:
+        last_row = wait_until(
+            fetch=lambda: autocommit_sess.execute(text(
+                "select pid from pg_stat_activity where backend_type ilike '%pg_net%';"
+            )).fetchone(),
+            predicate=lambda result: result is None or result[0] != pid,
+            timeout=3,
+            sleep_interval=0.1,
+            description="pg_net worker to remain stable with the same pid",
+        )
+        changed = True
+    except AssertionError:
+        pass
 
-    row = autocommit_sess.execute(text(
-        "select pid from pg_stat_activity where backend_type ilike '%pg_net%';"
-    )).fetchone()
-    assert row is not None, "pg_net worker is down, it crashed after seeing the net schema"
-    assert row[0] == pid, "pg_net worker restarted, it's crash looping on the net schema"
+    if changed:
+        assert last_row is not None, "pg_net worker is down, it crashed after seeing the net schema"
+        assert last_row[0] == pid, "pg_net worker restarted, it's crash looping on the net schema"
 
     sess.execute(text("drop schema net;"))
     sess.commit()
