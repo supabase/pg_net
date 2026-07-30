@@ -6,7 +6,7 @@ import time
 import subprocess
 import os
 
-from common import http_request
+from common import http_request, wait_until
 
 
 def test_worker_will_not_block_drop_database(autocommit_sess):
@@ -53,88 +53,98 @@ def test_success_when_worker_is_up(sess):
     assert result == ''
 
 
-def test_worker_will_process_queue_when_up(sess):
+def test_worker_will_process_queue_when_up(sess, autocommit_sess):
     """
     Check that when pg background worker is down and requests arrive,
     it will process them once it wakes up
     """
 
-    # check worker up
-    (up,) = sess.execute(text("""
+    # Assert that background worker is worker up
+    (worker_is_up,) = sess.execute(text("""
         select is_worker_up();
     """)).fetchone()
-    assert up is not None
-    assert up == True
+    assert worker_is_up
 
-    # restart it
-    (restarted,) = sess.execute(text("""
+    # kill background worker
+    (killed,) = sess.execute(text("""
         select public.kill_worker();
     """)).fetchone()
-    assert restarted is not None
-    assert restarted == True
+    assert killed is not None
+    assert killed == True
 
-    time.sleep(0.1)
+    # Wait for background worker to go down
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select is_worker_up();
+        """)).fetchone(),
+        predicate=lambda result: not result[0],
+        timeout=5,
+        sleep_interval=0.1,
+        description="background worker to be down",
+    )
 
-    # check worker down
-    (up,) = sess.execute(text("""
-        select is_worker_up();
-    """)).fetchone()
-    assert up is not None
-    assert up == False
-
+    # Make a request while the worker is down
     http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     ))
 
-    # check requests where enqueued
+    # Check that requests were enqueued
     (count,) = sess.execute(text(
         """
         select count(*) from net.http_request_queue;
     """
     )).fetchone()
-
     assert count == 10
 
-    # check worker is still down
-    (up,) = sess.execute(text("""
+    # Check that worker is still down. Note that this is a bit racy
+    # as there is no guarantee that worker hasn't come back up at this
+    # time, but in practice this rarely fails because worker takes 2 
+    # seconds before coming back up, which is more than enough time
+    # to reach here.
+    (worker_is_up,) = sess.execute(text("""
         select is_worker_up();
     """)).fetchone()
-    assert up is not None
-    assert up == False
+    assert not worker_is_up
 
     sess.commit()
 
-    # wait until up
-    time.sleep(2.1)
+    # Wait for background worker to come back up
+    # It's critical to use autocommit_sess to see a new snapshot
+    # on each retry in wait_until, otherwise it might keep reading
+    # stale data and fail with a timeout.
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select is_worker_up();
+        """)).fetchone(),
+        predicate=lambda result: result[0],
+        timeout=5,
+        sleep_interval=0.1,
+        description="background worker to be up",
+    )
 
-    # check worker up
-    (up,) = sess.execute(text("""
-        select is_worker_up();
-    """)).fetchone()
-    assert up is not None
-    assert up == True
+    # Wait until new requests are in flight
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select count(*) from net.http_request_queue;
+        """)).fetchone(),
+        predicate=lambda result: result[0] == 0,
+        timeout=5,
+        sleep_interval=0.1,
+        description="request queue to drain",
+    )
 
-    # wait until new requests are done
-    time.sleep(1.1)
-
-    (count,) = sess.execute(text(
-        """
-        select count(*) from net.http_request_queue;
-    """
-    )).fetchone()
-
-    assert count == 0
-
-    (status_code, count) = sess.execute(text(
-        """
-        select status_code, count(*) from net._http_response group by status_code;
-    """
-    )).fetchone()
-
-    assert status_code == 200
-    assert count == 10
+    # Wait until all responses have arrived
+    wait_until(
+        fetch=lambda: autocommit_sess.execute(text("""
+            select status_code, count(*) from net._http_response group by status_code;
+        """)).fetchone(),
+        predicate=lambda result: result[0] == 200 and result[1] == 10,
+        timeout=5,
+        sleep_interval=0.1,
+        description="request queue to drain",
+    )
 
 
 def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
@@ -456,7 +466,7 @@ def test_processing_survives_postmaster_crash():
     engine.dispose()
 
 
-def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess, wait_until):
+def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     """
     Check that the worker's INSERTs into net._http_response must be reflected
     in pg_stat_user_tables. Without this, autovacuum/autoanalyze can never be
@@ -524,7 +534,7 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess, wait_unt
     )
 
 
-def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_sess, wait_until):
+def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_sess):
     """
     Check that autoanalyze on net._http_response must fire after the worker
     writes enough rows. Without working pgstat counters, autovacuum/autoanalyze
@@ -602,7 +612,7 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     autocommit_sess.execute(text("select pg_reload_conf();"))
 
 
-def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess, wait_until):
+def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     """
     Check that the pg_net worker must call pgstat_report_activity() so
     its row in pg_stat_activity has a valid state column.
@@ -658,7 +668,7 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess, wait
     )
 
 
-def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_sess, wait_until):
+def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_sess):
     """
     Check that when a schema named "net" exists but the pg_net tables don't
     (e.g. another extension installed into a schema named "net"), the worker

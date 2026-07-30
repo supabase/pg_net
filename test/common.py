@@ -1,3 +1,4 @@
+import time
 from sqlalchemy import text
 
 
@@ -34,3 +35,15 @@ def collect_response_sync(sess, request_id):
         ),
         {"request_id": request_id},
     ).mappings().fetchone()
+
+def wait_until(fetch, predicate, timeout=10, sleep_interval=0.1, description="condition"):
+    deadline = time.time() + timeout
+    result = None
+    while time.time() < deadline:
+        result = fetch()
+        if predicate(result):
+            return result
+        time.sleep(sleep_interval)
+    raise AssertionError(
+        f"Timed out after {timeout}s waiting for {description} (last value: {result!r})"
+    )
