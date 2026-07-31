@@ -266,3 +266,46 @@ def wakeup_worker(sess):
 
     sess.execute(text("select net.wake()"))
     sess.commit()  # commit so worker  wakes
+
+def restart_worker(sess):
+    """
+    Restarts the worker and waits for it to come back up
+
+    You'd think that the following implementation should
+    restart the worker and wait for it to come back up:
+
+    sess.execute(text("select net.worker_restart()"))
+    sess.execute(text("select net.wait_until_running()"))
+
+    But it has a race condition in which this function might
+    return before the worker has restarted. This happens because
+    net.worker_restart() returns immediately after setting a flag
+    to indicate to the core worker loop to restart. Then the
+    net.wait_until_running() function waits for the worker state to
+    become WS_RUNNING. But it can read the state from either the worker
+    before the restart or after. In the first case it returns before
+    the worker has restarted properly, and in the second case it
+    behaves correctly.
+
+    Instead we compare the pids of the workers before and after the
+    restart which guarantees that the worker has restarted. After the
+    restart we still run net.wait_until_running() for it to be
+    intialized properly.
+    """
+
+    def fetch_worker_pid():
+        return sess.execute(text("""
+            select pid from pg_stat_activity where backend_type ilike '%pg_net%';
+        """)).scalar()
+
+    old_pid = fetch_worker_pid()
+    sess.execute(text("select net.worker_restart()"))
+    wait_until(
+        fetch_worker_pid,
+        lambda pid: pid is not None and pid != old_pid,
+        description="background worker to restart with a new pid",
+    )
+    # the new worker's pg_stat_activity row appears slightly before it
+    # publishes WS_RUNNING, so also wait for it to be fully up
+    sess.execute(text("select net.wait_until_running()"))
+    

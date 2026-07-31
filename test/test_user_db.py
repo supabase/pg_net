@@ -1,4 +1,5 @@
 from sqlalchemy import text
+from common import restart_worker
 
 
 def test_net_with_different_username_dbname(sess, autocommit_sess):
@@ -26,8 +27,7 @@ def test_net_with_different_username_dbname(sess, autocommit_sess):
         autocommit_sess.execute(text("alter system reset pg_net.username"))
         autocommit_sess.execute(
             text("alter system reset pg_net.database_name"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
 
 def test_net_appname(sess):
