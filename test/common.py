@@ -6,8 +6,25 @@ from sqlalchemy.orm import Session
 def http_request(sess, query):
     """
     Execute query and commit to wake up the background worker.
+
+    The query should return a single row with a single column
+    containing the request id of the request. Returns the request
+    id
     """
-    (request_id,) = sess.execute(query).fetchone()
+    request_id = sess.execute(query).scalar_one()
+    # Commit to wakeup background worker
+    sess.commit()
+    return request_id
+
+
+def http_requests(sess, query):
+    """
+    Execute query and commit to wake up the background worker.
+
+    The query usually contains multiple http requests. Returns
+    the reqeust id of the first request in the query
+    """
+    (request_id,) = sess.execute(query).first()
     # Commit to wakeup background worker
     sess.commit()
     return request_id
@@ -259,6 +276,7 @@ def wait_until(fetch, predicate, timeout=10, sleep_interval=0.1, description="co
         f"Timed out after {timeout}s waiting for {description} (last value: {result!r})"
     )
 
+
 def wakeup_worker(sess):
     """
     Wakes up the worker manually by calling net.wake() and committing
@@ -266,6 +284,7 @@ def wakeup_worker(sess):
 
     sess.execute(text("select net.wake()"))
     sess.commit()  # commit so worker  wakes
+
 
 def restart_worker(sess):
     """
@@ -308,4 +327,3 @@ def restart_worker(sess):
     # the new worker's pg_stat_activity row appears slightly before it
     # publishes WS_RUNNING, so also wait for it to be fully up
     sess.execute(text("select net.wait_until_running()"))
-    

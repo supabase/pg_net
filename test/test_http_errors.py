@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy import text
-from common import collect_response_sync, http_request
+from common import collect_response_sync, http_request, http_requests
 
 wrong_port = 6666
 
@@ -93,7 +93,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     with connection refused
     """
 
-    request_id = http_request(sess, text(
+    request_id = http_requests(sess, text(
         f"""
         select net.http_get('http://localhost:{wrong_port}') from generate_series(1,10) offset 9;
     """
@@ -134,7 +134,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     with server returned nothing
     """
 
-    request_id = http_request(sess, text(
+    request_id = http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?disconnect=true') from generate_series(1,10) offset 9;
     """
@@ -154,7 +154,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     assert error_msg == "Server returned nothing (no headers, no data)"
     assert count == 10
 
-    request_id = http_request(sess, text(
+    request_id = http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10) offset 9;
     """

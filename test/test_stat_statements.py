@@ -1,7 +1,7 @@
 import time
 import pytest
 from sqlalchemy import text
-from common import http_request
+from common import http_requests
 
 
 def skip_test_if_pg_is_old(sess):
@@ -90,7 +90,7 @@ def test_wakes_at_commit_time(sess):
 
     assert initial_calls >= 0
 
-    http_request(sess, text(
+    http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
     """

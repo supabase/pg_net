@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import time
 import subprocess
 import os
-from common import http_request, restart_worker, wait_for_any_response
+from common import http_request, http_requests, restart_worker, wait_for_any_response
 from common import wait_for_extension_drop, wait_for_postgres_ready
 from common import wait_for_queue_drain, wait_for_response_count
 from common import wait_for_worker_down, wait_for_worker_state
@@ -77,7 +77,7 @@ def test_worker_will_process_queue_when_up(sess, autocommit_sess):
     wait_for_worker_down(autocommit_sess)
 
     # Make a request while the worker is down
-    http_request(sess, text(
+    http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
@@ -127,7 +127,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
             text("alter system set pg_net.batch_size to '1';"))
         restart_worker(autocommit_sess)
 
-        http_request(sess, text(
+        http_requests(sess, text(
             """
             select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
@@ -162,7 +162,7 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
             text("alter system set pg_net.batch_size to '1';"))
         restart_worker(autocommit_sess)
 
-        http_request(sess, text(
+        http_requests(sess, text(
             """
             select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
@@ -193,7 +193,7 @@ def test_no_failure_on_drop_extension(sess, autocommit_sess):
     wait and not crash the worker
     """
 
-    http_request(sess, text(
+    http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200&delay=2') from generate_series(1,10);
     """
@@ -230,7 +230,7 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
             text("alter system set pg_net.batch_size to '1';"))
         restart_worker(autocommit_sess)
 
-        http_request(sess, text(
+        http_requests(sess, text(
             """
             select net.http_get('http://localhost:8080/pathological?status=200&delay=1') from generate_series(1,5);
         """
@@ -273,7 +273,7 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
 def test_new_requests_get_attended_without_explicit_wakeup(sess, autocommit_sess):
     """Check that new requests get attended without an explicit wakeup"""
 
-    http_request(sess, text(
+    http_requests(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
@@ -415,7 +415,7 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     ))
 
     # Drive a batch of requests through the worker.
-    http_request(sess, text("""
+    http_requests(sess, text("""
         select net.http_get('http://localhost:8080/pathological?status=200')
         from generate_series(1,30);
     """))
@@ -514,7 +514,7 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
         ))
 
         # Drive 30 inserts through the worker. 30 is well above the threshold (10).
-        http_request(sess, text("""
+        http_requests(sess, text("""
             select net.http_get('http://localhost:8080/pathological?status=200')
             from generate_series(1,30);
         """))
@@ -571,7 +571,7 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     wait_for_worker_state(autocommit_sess, 'idle')
 
     # Fire a slow request so the worker stays active long enough to observe.
-    http_request(sess, text("""
+    http_requests(sess, text("""
         select net.http_get('http://localhost:8080/pathological?status=200&delay=2');
     """))
 
