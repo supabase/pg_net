@@ -258,3 +258,11 @@ def wait_until(fetch, predicate, timeout=10, sleep_interval=0.1, description="co
     raise AssertionError(
         f"Timed out after {timeout}s waiting for {description} (last value: {result!r})"
     )
+
+def wakeup_worker(sess):
+    """
+    Wakes up the worker manually by calling net.wake() and committing
+    """
+
+    sess.execute(text("select net.wake()"))
+    sess.commit()  # commit so worker  wakes

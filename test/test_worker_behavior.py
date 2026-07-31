@@ -6,7 +6,7 @@ import time
 import subprocess
 import os
 
-from common import http_request, is_worker_up, wait_for_any_response, wait_for_extension_drop, wait_for_postgres_ready, wait_for_queue_drain, wait_for_response_count, wait_for_worker_down, wait_for_worker_state, wait_for_worker_up, wait_until
+from common import http_request, is_worker_up, wait_for_any_response, wait_for_extension_drop, wait_for_postgres_ready, wait_for_queue_drain, wait_for_response_count, wait_for_worker_down, wait_for_worker_state, wait_for_worker_up, wait_until, wakeup_worker
 
 
 def test_worker_will_not_block_drop_database(autocommit_sess):
@@ -348,14 +348,7 @@ def test_direct_inserts_no_requests(sess, autocommit_sess):
     assert count == 1
 
     # An explicit wake will make it serve requests though
-
-    sess.execute(text(
-        """
-        select net.wake();
-    """
-    ))
-
-    sess.commit()
+    wakeup_worker(sess)
 
     # wait until the response has arrived
     wait_for_response_count(autocommit_sess, 1)
