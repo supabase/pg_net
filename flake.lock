@@ -43,11 +43,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1782266378,
-        "narHash": "sha256-moRjdGvymGEyREU4++qpNzDuUN+nVC69CUYjhuY4Yzs=",
-        "owner": "steve-chavez",
+        "lastModified": 1785519554,
+        "narHash": "sha256-DDIeJCHRtmvB7yocWTo1MISIGf0DsUmyLw6ISuEV4e0=",
+        "owner": "imor",
         "repo": "xpg",
-        "rev": "d81725666a193c644fe0db96a988ece66edf460c",
+        "rev": "c59ee9337c0b036a0be3ff4184626c344a818f4a",
         "type": "github"
       },
       "original": {
