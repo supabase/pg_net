@@ -10,8 +10,7 @@ def test_net_with_different_username_dbname(sess, autocommit_sess):
             text("alter system set pg_net.username to 'pre_existing'"))
         autocommit_sess.execute(
             text("alter system set pg_net.database_name to 'pre_existing'"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
         (username, datname) = sess.execute(
             text(

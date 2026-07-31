@@ -6,7 +6,11 @@ import time
 import subprocess
 import os
 
-from common import http_request, is_worker_up, wait_for_any_response, wait_for_extension_drop, wait_for_postgres_ready, wait_for_queue_drain, wait_for_response_count, wait_for_worker_down, wait_for_worker_state, wait_for_worker_up, wait_until, wakeup_worker
+from common import http_request, restart_worker, wait_for_any_response
+from common import wait_for_extension_drop, wait_for_postgres_ready
+from common import wait_for_queue_drain, wait_for_response_count
+from common import wait_for_worker_down, wait_for_worker_state
+from common import wait_for_worker_up, wait_until, wakeup_worker
 
 
 def test_worker_will_not_block_drop_database(autocommit_sess):
@@ -124,8 +128,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
     try:
         autocommit_sess.execute(
             text("alter system set pg_net.batch_size to '1';"))
-        autocommit_sess.execute(text("select net.worker_restart();"))
-        autocommit_sess.execute(text("select net.wait_until_running();"))
+        restart_worker(autocommit_sess)
 
         http_request(sess, text(
             """
@@ -146,8 +149,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
         sess.commit()
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
 
 def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
@@ -161,8 +163,7 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
         # net.http_request_queue in one go
         autocommit_sess.execute(
             text("alter system set pg_net.batch_size to '1';"))
-        autocommit_sess.execute(text("select net.worker_restart();"))
-        autocommit_sess.execute(text("select net.wait_until_running();"))
+        restart_worker(autocommit_sess)
 
         http_request(sess, text(
             """
@@ -186,8 +187,7 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
         assert count == 0
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
 
 def test_no_failure_on_drop_extension(sess, autocommit_sess):
@@ -231,8 +231,7 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
     try:
         autocommit_sess.execute(
             text("alter system set pg_net.batch_size to '1';"))
-        autocommit_sess.execute(text("select net.worker_restart();"))
-        autocommit_sess.execute(text("select net.wait_until_running();"))
+        restart_worker(autocommit_sess)
 
         http_request(sess, text(
             """
@@ -251,13 +250,7 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
             description="responses to arrive before first restart",
         )
 
-        # Restart the worker
-        sess.execute(text(
-            """
-            select net.worker_restart();
-            select net.wait_until_running();
-        """
-        ))
+        restart_worker(autocommit_sess)
 
         # Check that more requests are processed after a restart
         wait_until(
@@ -270,21 +263,14 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
             description="responses to arrive after first restart",
         )
 
-        # Restart again
-        sess.execute(text(
-            """
-            select net.worker_restart();
-            select net.wait_until_running();
-        """
-        ))
+        restart_worker(autocommit_sess)
 
         # And now wait until all responses have arrived
         wait_for_response_count(autocommit_sess, 5)
 
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
 
 def test_new_requests_get_attended_without_explicit_wakeup(sess, autocommit_sess):
@@ -368,8 +354,7 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
         tmp_sess.execute(text("create extension if not exists pg_net;"))
 
         tmp_sess.execute(text("alter system set pg_net.batch_size to '5';"))
-        tmp_sess.execute(text("select net.worker_restart();"))
-        tmp_sess.execute(text("select net.wait_until_running();"))
+        restart_worker(tmp_sess)
 
         tmp_sess.execute(text(
             """
@@ -411,8 +396,7 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
 
     finally:
         tmp_sess.execute(text("alter system reset pg_net.batch_size"))
-        tmp_sess.execute(text("select net.worker_restart()"))
-        tmp_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
         engine.dispose()
 

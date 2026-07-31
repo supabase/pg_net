@@ -1,6 +1,6 @@
 import time
 from sqlalchemy import text
-from common import collect_response_sync, http_request, wait_for_response_count, wait_until, wakeup_worker
+from common import collect_response_sync, http_request, restart_worker, wait_for_response_count, wakeup_worker
 
 
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
@@ -12,8 +12,7 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     try:
         autocommit_sess.execute(
             text("alter system set pg_net.ttl to '1 second'"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
         (request_id,) = http_request(sess, text(
             """
@@ -38,8 +37,7 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
 
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.ttl"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
 
 def test_http_responses_will_complete_deletion(sess, autocommit_sess):
@@ -114,8 +112,7 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
             text("alter system set pg_net.ttl to '1 second';"))
         autocommit_sess.execute(
             text("alter system set pg_net.batch_size to 2;"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
 
         # Wait for ttl so that the requests expire
         time.sleep(1.1)
@@ -126,5 +123,4 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
         # reset
         autocommit_sess.execute(text("alter system reset pg_net.ttl"))
         autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
-        autocommit_sess.execute(text("select net.worker_restart()"))
-        autocommit_sess.execute(text("select net.wait_until_running()"))
+        restart_worker(autocommit_sess)
