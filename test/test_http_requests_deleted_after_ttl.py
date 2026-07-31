@@ -1,6 +1,7 @@
 import time
 from sqlalchemy import text
-from common import collect_response_sync, http_request, restart_worker, wait_for_response_count, wakeup_worker
+from common import collect_response_sync, http_request, restart_worker
+from common import wait_for_response_count, wakeup_worker
 
 
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
@@ -14,7 +15,7 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
             text("alter system set pg_net.ttl to '1 second'"))
         restart_worker(autocommit_sess)
 
-        (request_id,) = http_request(sess, text(
+        request_id = http_request(sess, text(
             """
             select net.http_get(
                 'http://localhost:8080/anything'
@@ -46,7 +47,7 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
     until completion despite no new requests coming
     """
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
@@ -93,7 +94,7 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
     new requests coming and despite worker restart
     """
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """

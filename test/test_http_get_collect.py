@@ -7,11 +7,11 @@ from common import collect_response_sync, http_request
 def test_http_get_returns_id(sess):
     """Test net.http_get returns an id"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080');
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
@@ -19,11 +19,11 @@ def test_http_get_returns_id(sess):
 def test_http_get_works_with_ip(sess):
     """Test net.http_get returns an id when using an IP with port"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://127.0.0.1:8080');
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
@@ -31,7 +31,7 @@ def test_http_get_works_with_ip(sess):
 def test_http_get_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080');
     """
@@ -100,7 +100,7 @@ def test_http_get_responses_have_different_created_times(sess):
 def test_http_get_collect_with_redirect(sess):
     """Test pg_net follows a redirect and collects a response"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/redirect_me');
     """
@@ -115,7 +115,7 @@ def test_http_get_collect_with_redirect(sess):
 def test_http_get_ipv6(sess):
     """Test pg_net can resolve an ipv6 only server"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8888/');
     """
@@ -130,7 +130,7 @@ def test_http_get_ipv6(sess):
 def test_http_get_null_headers(sess):
     """Test net.http_get can have null headers"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080', null::jsonb, null::jsonb, 100);
     """

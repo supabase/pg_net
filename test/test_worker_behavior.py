@@ -1,11 +1,8 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
-from sqlalchemy import text
-import sqlalchemy as sa
 import time
 import subprocess
 import os
-
 from common import http_request, restart_worker, wait_for_any_response
 from common import wait_for_extension_drop, wait_for_postgres_ready
 from common import wait_for_queue_drain, wait_for_response_count

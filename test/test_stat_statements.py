@@ -1,5 +1,4 @@
 import time
-
 import pytest
 from sqlalchemy import text
 from common import http_request

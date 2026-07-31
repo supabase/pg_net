@@ -5,7 +5,7 @@ from common import collect_response_sync, http_request
 def test_http_header_missing_value(sess):
     """Check that a `MissingValue: ` header is processed correctly"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/pathological?malformed-header=missing-value'
@@ -26,7 +26,7 @@ def test_http_header_injection(sess):
     contains an injection` header fails without crashing
     """
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/pathological?malformed-header=header-injection'
@@ -47,7 +47,7 @@ def test_http_header_spaces(sess):
     header is processed correctly
     """
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/pathological?malformed-header=spaces-in-header-name'
@@ -68,7 +68,7 @@ def test_http_header_non_printable_chars(sess):
     header is processed correctly
     """
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/pathological?malformed-header=non-printable-chars'

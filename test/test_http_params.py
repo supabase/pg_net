@@ -4,7 +4,7 @@ from common import collect_response_sync, http_request
 
 def test_http_get_url_params_set(sess):
     """Check that params are being set on GET"""
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/anything',
@@ -22,7 +22,7 @@ def test_http_get_url_params_set(sess):
 
 def test_http_post_url_params_set(sess):
     """Check that params are being set on POST"""
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/anything',

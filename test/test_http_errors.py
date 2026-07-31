@@ -93,7 +93,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     with connection refused
     """
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         f"""
         select net.http_get('http://localhost:{wrong_port}') from generate_series(1,10) offset 9;
     """
@@ -115,7 +115,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
     assert error_msg in expected
     assert count == 10
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200');
     """
@@ -134,7 +134,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     with server returned nothing
     """
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?disconnect=true') from generate_series(1,10) offset 9;
     """
@@ -154,7 +154,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
     assert error_msg == "Server returned nothing (no headers, no data)"
     assert count == 10
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10) offset 9;
     """

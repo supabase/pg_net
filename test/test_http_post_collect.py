@@ -1,5 +1,4 @@
 import json
-
 from sqlalchemy import text
 from common import collect_response_sync, http_request
 
@@ -7,14 +6,14 @@ from common import collect_response_sync, http_request
 def test_http_post_returns_id(sess):
     """Test net.http_post returns an id"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:='{}'::jsonb
         );
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
@@ -22,14 +21,14 @@ def test_http_post_returns_id(sess):
 def test_http_post_special_chars_body(sess):
     """Test net.http_post returns an id"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:=json_build_object('foo', 'ba"r')::jsonb
         );
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
@@ -37,7 +36,7 @@ def test_http_post_special_chars_body(sess):
 def test_http_post_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post'
@@ -56,7 +55,7 @@ def test_http_post_collect_sync_success(sess):
 def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/post',
@@ -127,7 +126,7 @@ def test_http_post_no_content_type_coerce(sess):
 def test_http_post_empty_body(sess):
     """Test net.http_post can post a null body"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_post(
             url:='http://localhost:8080/echo-method',

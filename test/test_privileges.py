@@ -8,7 +8,7 @@ def test_net_on_postgres_role(sess):
     role = sess.execute(text("select current_user;")).fetchone()
     assert role[0] == "postgres"
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             'http://localhost:8080/anything'

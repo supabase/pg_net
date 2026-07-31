@@ -7,10 +7,10 @@ def http_request(sess, query):
     """
     Execute query and commit to wake up the background worker.
     """
-    result = sess.execute(query).fetchone()
+    (request_id,) = sess.execute(query).fetchone()
     # Commit to wakeup background worker
     sess.commit()
-    return result
+    return request_id
 
 
 def collect_response_sync(sess, request_id):

@@ -1,5 +1,4 @@
 import json
-
 from sqlalchemy import text
 from common import collect_response_sync, http_request
 
@@ -7,13 +6,13 @@ from common import collect_response_sync, http_request
 def test_http_delete_returns_id(sess):
     """Test net.http_delete returns an id"""
 
-    (request_id,) = sess.execute(text(
+    request_id = http_request(sess, text(
         """
         select net.http_get(
             url:='http://localhost:8080/delete'
         );
     """
-    )).fetchone()
+    ))
 
     assert request_id == 1
 
@@ -21,7 +20,7 @@ def test_http_delete_returns_id(sess):
 def test_http_delete_collect_sync_success(sess):
     """Test net.http_delete works"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             url:='http://localhost:8080/delete'
@@ -50,7 +49,7 @@ def test_http_delete_positional_args(sess):
     """
 
     # Delete call with url only
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete'
@@ -65,7 +64,7 @@ def test_http_delete_positional_args(sess):
     assert response["message"] == "ok"
 
     # Delete call with url and params
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete',
@@ -81,7 +80,7 @@ def test_http_delete_positional_args(sess):
     assert response["message"] == "ok"
 
     # Delete call with url, params, and headers
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete',
@@ -98,7 +97,7 @@ def test_http_delete_positional_args(sess):
     assert response["message"] == "ok"
 
     # Delete call with url, params, headers, and timeout
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             'http://localhost:8080/delete',
@@ -119,7 +118,7 @@ def test_http_delete_positional_args(sess):
 def test_http_delete_with_body(sess):
     """Test delete with request body works"""
 
-    (request_id,) = http_request(sess, text(
+    request_id = http_request(sess, text(
         """
         select net.http_delete(
             url  :='http://localhost:8080/delete_w_body'
