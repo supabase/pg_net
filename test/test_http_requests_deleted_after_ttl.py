@@ -1,6 +1,6 @@
 import time
 from sqlalchemy import text
-from common import collect_response_sync, http_request, wait_until
+from common import collect_response_sync, http_request, wait_for_response_count, wait_until
 
 
 def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
@@ -37,22 +37,7 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
         sess.commit()  # commit so worker  wakes
 
         # Ensure the response is now empty
-        def get_count():
-            (count,) = sess.execute(
-                text(
-                    """
-                select count(*) from net._http_response where id = :request_id;
-            """
-                ),
-                {"request_id": request_id},
-            ).fetchone()
-            return count
-
-        wait_until(
-            get_count,
-            lambda count: count == 0,
-            description="response to be deleted after ttl",
-        )
+        wait_for_response_count(autocommit_sess, 0)
 
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.ttl"))

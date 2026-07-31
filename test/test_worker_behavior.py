@@ -6,7 +6,7 @@ import time
 import subprocess
 import os
 
-from common import http_request, wait_until
+from common import http_request, is_worker_up, wait_for_any_response, wait_for_extension_drop, wait_for_postgres_ready, wait_for_queue_drain, wait_for_response_count, wait_for_worker_down, wait_for_worker_state, wait_for_worker_up, wait_until
 
 
 def test_worker_will_not_block_drop_database(autocommit_sess):
@@ -73,15 +73,7 @@ def test_worker_will_process_queue_when_up(sess, autocommit_sess):
     assert killed == True
 
     # Wait for background worker to go down
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select is_worker_up();
-        """)).fetchone(),
-        predicate=lambda result: not result[0],
-        timeout=5,
-        sleep_interval=0.1,
-        description="background worker to go down",
-    )
+    wait_for_worker_down(autocommit_sess)
 
     # Make a request while the worker is down
     http_request(sess, text(
@@ -114,37 +106,13 @@ def test_worker_will_process_queue_when_up(sess, autocommit_sess):
     # It's critical to use autocommit_sess to see a new snapshot
     # on each retry in wait_until, otherwise it might keep reading
     # stale data and fail with a timeout.
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select is_worker_up();
-        """)).fetchone(),
-        predicate=lambda result: result[0],
-        timeout=5,
-        sleep_interval=0.1,
-        description="background worker to be up",
-    )
+    wait_for_worker_up(autocommit_sess)
 
-    # Wait until new requests are in flight
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select count(*) from net.http_request_queue;
-        """)).fetchone(),
-        predicate=lambda result: result[0] == 0,
-        timeout=5,
-        sleep_interval=0.1,
-        description="request queue to drain",
-    )
+    # Wait for request queue to drain
+    wait_for_queue_drain(autocommit_sess)
 
     # Wait until all responses have arrived
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select status_code, count(*) from net._http_response group by status_code;
-        """)).fetchone(),
-        predicate=lambda result: result[0] == 200 and result[1] == 10,
-        timeout=5,
-        sleep_interval=0.1,
-        description="responses to arrive",
-    )
+    wait_for_response_count(autocommit_sess, 10)
 
 
 def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
@@ -166,15 +134,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
         ))
 
         # Wait until responses have started arriving
-        wait_until(
-            fetch=lambda: autocommit_sess.execute(text("""
-                select count(*) from net._http_response;
-            """)).fetchone(),
-            predicate=lambda result: result[0] > 0,
-            timeout=5,
-            sleep_interval=0.1,
-            description="responses to arrive",
-        )
+        wait_for_any_response(autocommit_sess)
 
         (count,) = sess.execute(text(
             """
@@ -243,15 +203,7 @@ def test_no_failure_on_drop_extension(sess, autocommit_sess):
     ))
 
     # Wait until responses have started arriving
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select count(*) from net._http_response;
-        """)).fetchone(),
-        predicate=lambda result: result[0] > 0,
-        timeout=5,
-        sleep_interval=0.1,
-        description="responses to arrive",
-    )
+    wait_for_any_response(autocommit_sess)
 
     sess.execute(text("""
         drop extension pg_net cascade;
@@ -260,15 +212,7 @@ def test_no_failure_on_drop_extension(sess, autocommit_sess):
     sess.commit()
 
     # wait until the extension is fully gone
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select count(*) from pg_extension where extname = 'pg_net';
-        """)).fetchone(),
-        predicate=lambda result: result[0] == 0,
-        timeout=5,
-        sleep_interval=0.1,
-        description="extension to be dropped",
-    )
+    wait_for_extension_drop(autocommit_sess)
 
     # The background worker should not have crash even after dropping the extension
     (up,) = sess.execute(text("""
@@ -335,15 +279,7 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
         ))
 
         # And now wait until all responses have arrived
-        wait_until(
-            fetch=lambda: autocommit_sess.execute(text("""
-                select count(*) from net._http_response;
-            """)).fetchone(),
-            predicate=lambda result: result[0] == 5,
-            timeout=10,
-            sleep_interval=0.1,
-            description="responses to arrive after second restart",
-        )
+        wait_for_response_count(autocommit_sess, 5)
 
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.batch_size"))
@@ -361,15 +297,7 @@ def test_new_requests_get_attended_without_explicit_wakeup(sess, autocommit_sess
     ))
 
     # wait until all responses have arrived
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select count(*) from net._http_response;
-        """)).fetchone(),
-        predicate=lambda result: result[0] == 10,
-        timeout=10,
-        sleep_interval=0.1,
-        description="all responses to arrive",
-    )
+    wait_for_response_count(autocommit_sess, 10)
 
 
 def test_direct_inserts_no_requests(sess, autocommit_sess):
@@ -382,15 +310,7 @@ def test_direct_inserts_no_requests(sess, autocommit_sess):
     # insert. If a prior test left it mid-batch, its trailing WORKER_WAIT_ONE_SECOND
     # recheck (worker.c) can pick up this test's direct insert on its own,
     # with no net.wake() involved, and make this test flake.
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text(
-            "select state from pg_stat_activity where backend_type ilike '%pg_net%';"
-        )).fetchone(),
-        predicate=lambda result: result[0] == 'idle',
-        timeout=5,
-        sleep_interval=0.1,
-        description="pg_net worker to settle into idle before direct insert",
-    )
+    wait_for_worker_state(autocommit_sess, 'idle')
 
     sess.execute(text(
         """
@@ -438,18 +358,10 @@ def test_direct_inserts_no_requests(sess, autocommit_sess):
     sess.commit()
 
     # wait until the response has arrived
-    wait_until(
-        fetch=lambda: autocommit_sess.execute(text("""
-            select count(*) from net._http_response;
-        """)).fetchone(),
-        predicate=lambda result: result[0] == 1,
-        timeout=10,
-        sleep_interval=0.1,
-        description="response to arrive",
-    )
+    wait_for_response_count(autocommit_sess, 1)
 
 
-def test_processing_survives_postmaster_crash():
+def test_processing_survives_postmaster_crash(autocommit_sess):
     """
     Check that the queue will continue processing even when a postmaster
     crash or restart happens
@@ -484,36 +396,16 @@ def test_processing_survives_postmaster_crash():
         pgdata_env = os.getenv('PGDATA')
         subprocess.run(["pg_ctl", "restart", "-D", pgdata_env])
 
-        def try_connect():
-            nonlocal engine, tmp_sess
-            try:
-                engine = create_engine("postgresql:///postgres")
-                ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
-                tmp_sess = Session(ac_engine)
-                return tmp_sess.execute(text("select 1")).fetchone()
-            except Exception:
-                return None
-
         # wait for postmaster to finish restarting and accept connections
-        wait_until(
-            fetch=try_connect,
-            predicate=lambda result: result is not None,
-            timeout=10,
-            sleep_interval=0.1,
-            description="postmaster to restart and accept connections",
-        )
+        wait_for_postgres_ready(engine, tmp_sess)
+
+        # Recreate engine and session after restart
+        engine = create_engine("postgresql:///postgres")
+        ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+        tmp_sess = Session(ac_engine)
 
         # wait until the queue has finished processing
-        (count,) = wait_until(
-            fetch=lambda: tmp_sess.execute(text("""
-                select count(*) from net.http_request_queue;
-            """)).fetchone(),
-            predicate=lambda result: result[0] == 0,
-            timeout=10,
-            sleep_interval=0.1,
-            description="request queue to drain after postmaster restart",
-        )
-        assert count == 0
+        wait_for_queue_drain(autocommit_sess)
 
         (status_code, count) = tmp_sess.execute(text(
             """
@@ -702,21 +594,7 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     # Wait for the worker to drain any leftover work from previous tests
     # and settle into idle. Polling makes this robust regardless of what
     # ran before.
-    (state,) = wait_until(
-        fetch=lambda: autocommit_sess.execute(text(
-            "select state from pg_stat_activity where backend_type ilike '%pg_net%'"
-        )).fetchone(),
-        predicate=lambda result: result[0] == 'idle',
-        timeout=5,
-        sleep_interval=0.1,
-        description="pg_net worker to settle into idle",
-    )
-
-    assert state == 'idle', (
-        f"pg_net worker state expected 'idle' at rest, got {state!r}. "
-        "Without pgstat_report_activity(STATE_IDLE, ...) the state column "
-        "stays NULL."
-    )
+    wait_for_worker_state(autocommit_sess, 'idle')
 
     # Fire a slow request so the worker stays active long enough to observe.
     http_request(sess, text("""
@@ -727,15 +605,7 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     # busy for ~2s, so we have a wide observation window.
     saw_active = False
     try:
-        wait_until(
-            fetch=lambda: autocommit_sess.execute(text(
-                "select state from pg_stat_activity where backend_type ilike '%pg_net%'"
-            )).fetchone(),
-            predicate=lambda result: result[0] == 'active',
-            timeout=5,
-            sleep_interval=0.1,
-            description="pg_net worker to be observed as active",
-        )
+        wait_for_worker_state(autocommit_sess, 'active')
         saw_active = True
     except AssertionError:
         pass
