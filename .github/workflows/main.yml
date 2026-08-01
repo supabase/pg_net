@@ -1,14 +1,16 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches: [master]
 
 jobs:
-
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pg-version: ['12', '13', '14', '15', '16', '17', '18', '19']
+        pg-version: ["12", "13", "14", "15", "16", "17", "18", "19"]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -23,16 +25,16 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} build"
 
       - name: Run tests
-        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} test"
 
   test-on-macos:
     runs-on: macos-15
     strategy:
       matrix:
-        pg-version: ['17']
+        pg-version: ["17"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -48,16 +50,21 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} build"
 
       - name: Run tests
-        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} test"
 
   loadtest:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        params: [ {reqs: 10000, batch: 200}, {reqs: 20000, batch: 400}, {reqs: 40000, batch: 800} ]
+        params:
+          [
+            { reqs: 10000, batch: 200 },
+            { reqs: 20000, batch: 400 },
+            { reqs: 40000, batch: 800 },
+          ]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -71,19 +78,18 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --run "xpg build"
+        run: nix-shell --argstr pgVersion "17" --arg cassert false --run "xpg build"
 
       - name: Run load test
         run: |
-          nix-shell --run "net-loadtest ${{ matrix.params.reqs }} ${{ matrix.params.batch }}" >> "$GITHUB_STEP_SUMMARY"
+          nix-shell --argstr pgVersion "17" --arg cassert false --run "net-loadtest ${{ matrix.params.reqs }} ${{ matrix.params.batch }}" >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
-
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        pg-version: ['17']
+        pg-version: ["17"]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -98,7 +104,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Coverage
-        run: nix-shell --run "xpg -v ${{ matrix.pg-version }} coverage"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} coverage"
 
       - name: Send coverage to Coveralls
         uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
@@ -107,7 +113,6 @@ jobs:
           files: ./build-${{ matrix.pg-version }}/coverage.info
 
   style:
-
     runs-on: ubuntu-latest
 
     steps:

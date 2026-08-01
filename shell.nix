@@ -14,6 +14,8 @@ in
     inherit (xpgLock) owner repo rev;
     sha256 = xpgLock.narHash;
   })
+, pgVersion ? null
+, cassert ? true
 }:
 let
   nginxCustom = pkgs.callPackage ./nix/nginxCustom.nix {};
@@ -36,7 +38,7 @@ in
 pkgs.mkShell {
   buildInputs =
     [
-      xpgPkgs.xpg
+      (if pgVersion == null then xpgPkgs.xpg else xpgPkgs.xpg.forVersions { versions = [ pgVersion ]; inherit cassert; })
       pythonDeps
       nginxCustom.nginxScript
       pkgs.curlWithGnuTls
