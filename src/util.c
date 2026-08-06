@@ -14,11 +14,19 @@ Datum _urlencode_string(PG_FUNCTION_ARGS) {
   char *str            = text_to_cstring(PG_GETARG_TEXT_P(0));
   char *urlencoded_str = NULL;
 
-  urlencoded_str = curl_escape(str, strlen(str));
+  urlencoded_str = curl_easy_escape(NULL, str, strlen(str));
+
+  if (urlencoded_str == NULL) {
+    PG_RETURN_NULL();
+  }
 
   pfree(str);
 
-  PG_RETURN_TEXT_P(cstring_to_text(urlencoded_str));
+  text *result = cstring_to_text(urlencoded_str);
+
+  curl_free(urlencoded_str);
+
+  PG_RETURN_TEXT_P(result);
 }
 
 Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
@@ -52,5 +60,9 @@ Datum _encode_url_with_params_array(PG_FUNCTION_ARGS) {
   pfree(url);
   curl_url_cleanup(h);
 
-  PG_RETURN_TEXT_P(cstring_to_text(full_url));
+  text *result = cstring_to_text(full_url);
+
+  curl_free(full_url);
+
+  PG_RETURN_TEXT_P(result);
 }
