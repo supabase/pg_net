@@ -165,6 +165,19 @@ static void publish_state(WorkerStatus s) {
   ConditionVariableBroadcast(&worker_state->cv);
 }
 
+// How far *this* process got through startup. worker_state lives in shared memory, so its epfd
+// and curl_mhandle outlive the process that created them: a worker that exits before creating
+// its own - while BackgroundWorkerInitializeConnection() fails, for instance - would otherwise
+// close a file descriptor number and free a heap pointer belonging to a previous worker.
+typedef enum {
+  WORKER_INIT_NONE = 0,
+  WORKER_INIT_CURL_GLOBAL,
+  WORKER_INIT_EV_MONITOR,
+  WORKER_INIT_CURL_MHANDLE,
+} WorkerInitStage;
+
+static WorkerInitStage worker_init_stage = WORKER_INIT_NONE;
+
 static void net_on_exit(__attribute__((unused)) int code, __attribute__((unused)) Datum arg) {
   worker_should_restart = false;
   pg_atomic_write_u32(&worker_state->should_wake,
@@ -172,10 +185,21 @@ static void net_on_exit(__attribute__((unused)) int code, __attribute__((unused)
 
   worker_state->shared_latch = NULL;
 
-  ev_monitor_close(worker_state);
+  if (worker_init_stage >= WORKER_INIT_EV_MONITOR) {
+    ev_monitor_close(worker_state);
+    worker_state->epfd = -1;
+  }
 
-  curl_multi_cleanup(worker_state->curl_mhandle);
-  curl_global_cleanup();
+  if (worker_init_stage >= WORKER_INIT_CURL_MHANDLE) {
+    curl_multi_cleanup(worker_state->curl_mhandle);
+    worker_state->curl_mhandle = NULL;
+  }
+
+  if (worker_init_stage >= WORKER_INIT_CURL_GLOBAL) {
+    curl_global_cleanup();
+  }
+
+  worker_init_stage = WORKER_INIT_NONE;
 }
 
 // wait according to the wait type while ensuring interrupts are processed while waiting
@@ -266,15 +290,18 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
   int curl_ret = curl_global_init(CURL_GLOBAL_ALL);
   if (curl_ret != CURLE_OK)
     ereport(ERROR, errmsg("curl_global_init() returned %s\n", curl_easy_strerror(curl_ret)));
+  worker_init_stage = WORKER_INIT_CURL_GLOBAL;
 
   worker_state->epfd = event_monitor();
 
   if (worker_state->epfd < 0) {
     ereport(ERROR, errmsg("Failed to create event monitor file descriptor"));
   }
+  worker_init_stage = WORKER_INIT_EV_MONITOR;
 
   worker_state->curl_mhandle = curl_multi_init();
   if (!worker_state->curl_mhandle) ereport(ERROR, errmsg("curl_multi_init()"));
+  worker_init_stage = WORKER_INIT_CURL_MHANDLE;
 
   set_curl_mhandle(worker_state);
 
