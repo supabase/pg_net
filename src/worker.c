@@ -436,6 +436,47 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
   proc_exit(EXIT_FAILURE);
 }
 
+// GUC check hook for pg_net.ttl. The value is parsed with interval_in so that an invalid value is
+// rejected at SET/ALTER SYSTEM/config-reload time instead of making the worker fail when it tries
+// to delete expired responses. Negative intervals are rejected too since they'd expire every
+// response immediately.
+static bool check_ttl(char **newval, __attribute__((unused)) void **extra,
+                      __attribute__((unused)) GucSource source) {
+  if (*newval == NULL) return true;
+
+  MemoryContext ccxt      = CurrentMemoryContext;
+  Datum         ttl_datum = (Datum)0;
+  bool          parsed    = false;
+
+  PG_TRY();
+  {
+    ttl_datum = DirectFunctionCall3(interval_in, CStringGetDatum(*newval),
+                                    ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
+    parsed    = true;
+  }
+  PG_CATCH();
+  {
+    MemoryContextSwitchTo(ccxt);
+    ErrorData *edata = CopyErrorData();
+    FlushErrorState();
+    GUC_check_errdetail("%s", edata->message);
+    FreeErrorData(edata);
+  }
+  PG_END_TRY();
+
+  if (!parsed) return false;
+
+  Datum zero = DirectFunctionCall3(interval_in, CStringGetDatum("0"), ObjectIdGetDatum(InvalidOid),
+                                   Int32GetDatum(-1));
+
+  if (DatumGetInt32(DirectFunctionCall2(interval_cmp, ttl_datum, zero)) < 0) {
+    GUC_check_errdetail("\"%s\" is a negative interval", *newval);
+    return false;
+  }
+
+  return true;
+}
+
 static Size net_memsize(void) {
   return MAXALIGN(sizeof(WorkerState));
 }
@@ -502,8 +543,8 @@ void _PG_init(void) {
   shmem_startup_hook      = net_shmem_startup;
 
   DefineCustomStringVariable("pg_net.ttl", "time to live for request/response rows",
-                             "should be a valid interval type", &guc_ttl, "6 hours", PGC_SIGHUP, 0,
-                             NULL, NULL, NULL);
+                             "should be a valid, non-negative interval", &guc_ttl, "6 hours",
+                             PGC_SIGHUP, 0, check_ttl, NULL, NULL);
 
   DefineCustomIntVariable(
       "pg_net.batch_size", "number of requests executed in one iteration of the background worker",
