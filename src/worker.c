@@ -36,6 +36,7 @@ static const int    curl_handle_event_timeout_ms = 1000;
 static const int    net_worker_restart_time_sec  = 1;
 static const long   no_timeout                   = -1L;
 static bool         wake_commit_cb_active        = false;
+static bool         wake_commit_cb_registered    = false;
 static bool         worker_should_restart        = false;
 static const size_t total_extension_tables       = 2;
 
@@ -123,10 +124,17 @@ static void wake_at_commit(XactEvent event, __attribute__((unused)) void *arg) {
 
 PG_FUNCTION_INFO_V1(wake);
 Datum wake(__attribute__((unused)) PG_FUNCTION_ARGS) {
-  if (!wake_commit_cb_active) { // register only one callback per transaction
+  // RegisterXactCallback appends a new entry to a backend-wide list on every call and never
+  // deduplicates, so it must be called at most once per backend. Otherwise every transaction that
+  // calls wake() leaks one entry in TopMemoryContext and CallXactCallbacks gets slower on every
+  // transaction of this backend for the rest of its life. `wake_commit_cb_active` is the
+  // per-transaction gate that decides whether the callback does anything at commit.
+  if (!wake_commit_cb_registered) {
     RegisterXactCallback(wake_at_commit, NULL);
-    wake_commit_cb_active = true;
+    wake_commit_cb_registered = true;
   }
+
+  wake_commit_cb_active = true;
 
   PG_RETURN_VOID();
 }
