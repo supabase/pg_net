@@ -55,11 +55,11 @@ $ nix develop
 # test on latest pg
 $ xpg test
 
-# test on pg 12
-$ xpg -v 12 test
+# test on pg 14
+$ xpg -v 14 test
 
-# test on pg 13
-$ xpg -v 13 test
+# test on pg 15
+$ xpg -v 15 test
 ```
 
 This will spawn a local db and an nginx server for testing.

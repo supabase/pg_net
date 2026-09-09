@@ -1,9 +1,9 @@
 # PG_NET
 *A PostgreSQL extension that enables asynchronous (non-blocking) HTTP/HTTPS requests with SQL*.
 
-Requires libcurl >= 7.83. Compatible with PostgreSQL > = 12.
+Requires libcurl >= 7.83. Compatible with PostgreSQL > = 14.
 
-![PostgreSQL version](https://img.shields.io/badge/postgresql-12+-blue.svg)
+![PostgreSQL version](https://img.shields.io/badge/postgresql-14+-blue.svg)
 [![License](https://img.shields.io/pypi/l/markdown-subtemplate.svg)](https://github.com/supabase/pg_net/blob/master/LICENSE)
 [![Coverage Status](https://coveralls.io/repos/github/supabase/pg_net/badge.svg)](https://coveralls.io/github/supabase/pg_net)
 [![Tests](https://github.com/supabase/pg_net/actions/workflows/main.yml/badge.svg)](https://github.com/supabase/pg_net/actions)
