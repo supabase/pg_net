@@ -34,6 +34,19 @@ let
       ${pkgs.clang-tools}/bin/clang-format -i src/*
       ${pkgs.git}/bin/git diff-index --exit-code HEAD -- '*.c'
     '';
+  curl_versions = {
+    latest = pkgs.curlWithGnuTls;
+    "7.76.1" = pkgs.curlWithGnuTls.overrideAttrs ({
+      version = "7.76.1";
+      src = pkgs.fetchurl {
+        urls = [
+          "https://curl.haxx.se/download/curl-7.76.1.tar.xz"
+          "https://github.com/curl/curl/releases/download/curl-7_76_1/curl-7.76.1.tar.xz"
+    ];
+    hash = "sha256-ZLtSiMOfCEDAfQd+MNkFLhy7n6bC3FJSOCTMhZ5nkUU=";
+  };
+    });
+  };
 in
 pkgs.mkShell {
   buildInputs =
@@ -41,7 +54,7 @@ pkgs.mkShell {
       (if pgVersion == null then xpgPkgs.xpg else xpgPkgs.xpg.forVersions { versions = [ pgVersion ]; inherit cassert; })
       pythonDeps
       nginxCustom.nginxScript
-      pkgs.curlWithGnuTls
+      curl_versions."7.76.1"
       loadtest
       style
       styleCheck
