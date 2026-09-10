@@ -112,6 +112,23 @@ def test_http_get_collect_with_redirect(sess):
     assert response["body"] == "I got redirected\n"
 
 
+def test_http_get_collect_redirect_headers_from_final_response(sess):
+    """Response headers must come from the final hop, not the redirect"""
+
+    request_id = http_request(sess, text(
+        """
+        select net.http_get('http://localhost:8080/redirect_me');
+    """
+    ))
+
+    response = collect_response_sync(sess, request_id)
+
+    assert response is not None
+    assert response["status_code"] == 200
+    assert "X-Final-Hop" in response["headers"]
+    assert "X-Redirect-Hop" not in response["headers"]
+
+
 def test_http_get_ipv6(sess):
     """Test pg_net can resolve an ipv6 only server"""
 
