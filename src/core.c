@@ -221,7 +221,7 @@ static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
   PG_JSONB_INIT_STATE(headers);
   (void)PG_JSONB_PUSH(headers, WJB_BEGIN_OBJECT, NULL);
 
-  while ((header = curl_easy_nextheader(ez_handle, CURLH_HEADER, 0, prev))) {
+  while ((header = curl_easy_nextheader(ez_handle, CURLH_HEADER, -1, prev))) {
     JsonbValue key   = {.type = jbvString,
                         .val  = {.string = {.val = header->name, .len = strlen(header->name)}}};
     JsonbValue value = {.type = jbvString,
