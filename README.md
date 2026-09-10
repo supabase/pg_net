@@ -340,6 +340,7 @@ net.http_delete(
     parallel safe
     language plpgsql
     security definer
+```
 
 ### Examples:
 The following examples use the [Dummy Rest API](https://dummy.restapiexample.com/employees).
