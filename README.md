@@ -91,8 +91,8 @@ When any of the three request functions (`http_get`, `http_post`, `http_delete`)
 Once a response is received, it gets stored in the `_http_response` table. By monitoring this table, you can keep track of response statuses and messages.
 
 > [!IMPORTANT]
-> Inserting directly into the `net.http_request_queue` won't cause the worker to process requests, you must use the request functions.
-> We do it this way to avoid polling the `net.http_request_queue` table, which would pollute `pg_stat_statements` and cause unnecesssary activity from the worker.
+> Inserting directly into `net.http_request_queue` won't wake the worker, you must use the request functions. Rows inserted directly are only processed the next time the worker wakes up.
+> We do it this way to avoid polling the `net.http_request_queue` table, which would pollute `pg_stat_statements` and cause unnecessary activity from the worker.
 
 The extension employs C's [libcurl](https://curl.se/libcurl/c/) library within a PostgreSQL [background worker](https://www.postgresql.org/docs/current/bgworker.html) to manage HTTP requests.
 This background worker sleeps until it receives a signal from the request functions, which awakes it and prompts it to read the `net.http_request_queue` table and execute the requests on it.
