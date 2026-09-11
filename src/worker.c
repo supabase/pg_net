@@ -36,6 +36,7 @@ static const int    curl_handle_event_timeout_ms = 1000;
 static const int    net_worker_restart_time_sec  = 1;
 static const long   no_timeout                   = -1L;
 static bool         wake_commit_cb_active        = false;
+static bool         wake_commit_cb_registered    = false;
 static bool         worker_should_restart        = false;
 static const size_t total_extension_tables       = 2;
 
@@ -123,10 +124,17 @@ static void wake_at_commit(XactEvent event, __attribute__((unused)) void *arg) {
 
 PG_FUNCTION_INFO_V1(wake);
 Datum wake(__attribute__((unused)) PG_FUNCTION_ARGS) {
-  if (!wake_commit_cb_active) { // register only one callback per transaction
+  // RegisterXactCallback appends a new entry to a backend-wide list on every call and never
+  // deduplicates, so it must be called at most once per backend. Otherwise every transaction that
+  // calls wake() leaks one entry in TopMemoryContext and CallXactCallbacks gets slower on every
+  // transaction of this backend for the rest of its life. `wake_commit_cb_active` is the
+  // per-transaction gate that decides whether the callback does anything at commit.
+  if (!wake_commit_cb_registered) {
     RegisterXactCallback(wake_at_commit, NULL);
-    wake_commit_cb_active = true;
+    wake_commit_cb_registered = true;
   }
+
+  wake_commit_cb_active = true;
 
   PG_RETURN_VOID();
 }
@@ -428,6 +436,47 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
   proc_exit(EXIT_FAILURE);
 }
 
+// GUC check hook for pg_net.ttl. The value is parsed with interval_in so that an invalid value is
+// rejected at SET/ALTER SYSTEM/config-reload time instead of making the worker fail when it tries
+// to delete expired responses. Negative intervals are rejected too since they'd expire every
+// response immediately.
+static bool check_ttl(char **newval, __attribute__((unused)) void **extra,
+                      __attribute__((unused)) GucSource source) {
+  if (*newval == NULL) return true;
+
+  MemoryContext ccxt      = CurrentMemoryContext;
+  Datum         ttl_datum = (Datum)0;
+  bool          parsed    = false;
+
+  PG_TRY();
+  {
+    ttl_datum = DirectFunctionCall3(interval_in, CStringGetDatum(*newval),
+                                    ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
+    parsed    = true;
+  }
+  PG_CATCH();
+  {
+    MemoryContextSwitchTo(ccxt);
+    ErrorData *edata = CopyErrorData();
+    FlushErrorState();
+    GUC_check_errdetail("%s", edata->message);
+    FreeErrorData(edata);
+  }
+  PG_END_TRY();
+
+  if (!parsed) return false;
+
+  Datum zero = DirectFunctionCall3(interval_in, CStringGetDatum("0"), ObjectIdGetDatum(InvalidOid),
+                                   Int32GetDatum(-1));
+
+  if (DatumGetInt32(DirectFunctionCall2(interval_cmp, ttl_datum, zero)) < 0) {
+    GUC_check_errdetail("\"%s\" is a negative interval", *newval);
+    return false;
+  }
+
+  return true;
+}
+
 static Size net_memsize(void) {
   return MAXALIGN(sizeof(WorkerState));
 }
@@ -494,8 +543,8 @@ void _PG_init(void) {
   shmem_startup_hook      = net_shmem_startup;
 
   DefineCustomStringVariable("pg_net.ttl", "time to live for request/response rows",
-                             "should be a valid interval type", &guc_ttl, "6 hours", PGC_SIGHUP, 0,
-                             NULL, NULL, NULL);
+                             "should be a valid, non-negative interval", &guc_ttl, "6 hours",
+                             PGC_SIGHUP, 0, check_ttl, NULL, NULL);
 
   DefineCustomIntVariable(
       "pg_net.batch_size", "number of requests executed in one iteration of the background worker",
