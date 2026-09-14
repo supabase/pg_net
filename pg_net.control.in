@@ -2,3 +2,4 @@ comment = 'Async HTTP'
 default_version = '@EXTVERSION@'
 relocatable = false
 module_pathname = '$libdir/pg_net'
+schema = pg_catalog
