@@ -29,6 +29,10 @@
           default = import ./shell.nix {
             inherit pkgs xpgPkgs;
           };
+          curl_7_76_1 = import ./shell.nix {
+            inherit pkgs xpgPkgs;
+	    curlVersion = "7.76.1";
+          };
         });
     };
 }

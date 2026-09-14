@@ -16,6 +16,7 @@ in
   })
 , pgVersion ? null
 , cassert ? true
+, curlVersion ? "latest"
 }:
 let
   nginxCustom = pkgs.callPackage ./nix/nginxCustom.nix {};
