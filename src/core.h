@@ -55,4 +55,5 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row);
 
 void pfree_handle(CurlHandle *handle);
 
+
 #endif

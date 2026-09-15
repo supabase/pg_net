@@ -2,8 +2,11 @@
 #include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
-
 #include "pg_prelude.h"
+
+#include "utils/fmgroids.h"
+#include "access/table.h"
+#include <commands/extension.h>
 
 #include "curl_prelude.h"
 
@@ -11,9 +14,14 @@
 #include "errors.h"
 #include "event.h"
 
+bool pg_net_get_extension_schema_name(void);
+
+static Oid pg_net_get_extension_schema(Oid ext_oid);
+
 static SPIPlanPtr del_response_plan     = NULL;
 static SPIPlanPtr del_return_queue_plan = NULL;
 static SPIPlanPtr ins_response_plan     = NULL;
+char   *extension_schema_name		= NULL;
 
 static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   CurlHandle *handle   = (CurlHandle *)userp;
@@ -121,17 +129,23 @@ void set_curl_mhandle(WorkerState *wstate) {
 
 uint64 delete_expired_responses(char *ttl, int batch_size) {
   if (del_response_plan == NULL) {
-    SPIPlanPtr tmp = SPI_prepare("\
+    if (extension_schema_name == NULL)
+      pg_net_get_extension_schema_name();
+    char rendered_query[1000];
+    char *query_template = "\
         WITH\
         rows AS (\
           SELECT ctid\
-          FROM net._http_response\
+          FROM %s._http_response\
           WHERE created < now() - $1\
           ORDER BY created\
           LIMIT $2\
         )\
-        DELETE FROM net._http_response r\
-        USING rows WHERE r.ctid = rows.ctid",
+        DELETE FROM %s._http_response r\
+        USING rows WHERE r.ctid = rows.ctid";
+    sprintf(rendered_query, query_template, extension_schema_name, extension_schema_name);
+
+    SPIPlanPtr tmp = SPI_prepare(rendered_query,
                                  2, (Oid[]){INTERVALOID, INT4OID});
     if (tmp == NULL)
       ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
@@ -159,17 +173,23 @@ uint64 delete_expired_responses(char *ttl, int batch_size) {
 
 uint64 consume_request_queue(const int batch_size) {
   if (del_return_queue_plan == NULL) {
-    SPIPlanPtr tmp = SPI_prepare("\
+    char rendered_query[1000];
+    if (extension_schema_name == NULL)
+      pg_net_get_extension_schema_name();
+    char *query_template = "\
         WITH\
         rows AS (\
           SELECT id\
-          FROM net.http_request_queue\
+          FROM %s.http_request_queue\
           ORDER BY id\
           LIMIT $1\
         )\
-        DELETE FROM net.http_request_queue q\
+        DELETE FROM %s.http_request_queue q\
         USING rows WHERE q.id = rows.id\
-        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
+        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body";
+    sprintf(rendered_query, query_template, extension_schema_name, extension_schema_name);
+
+    SPIPlanPtr tmp = SPI_prepare(rendered_query,
                                  1, (Oid[]){INT4OID});
 
     if (tmp == NULL)
@@ -292,9 +312,15 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
   }
 
   if (ins_response_plan == NULL) {
+    char rendered_query[1000];
+    if (extension_schema_name == NULL)
+      pg_net_get_extension_schema_name();
+    char *query_template = "\
+        insert into %s._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)";
+    sprintf(rendered_query, query_template, extension_schema_name);
+
     SPIPlanPtr tmp = SPI_prepare(
-        "\
-        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
+	rendered_query,
         nparams, (Oid[nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID});
 
     if (tmp == NULL)
@@ -323,4 +349,60 @@ void pfree_handle(CurlHandle *handle) {
   if (handle->request_headers) // curl_slist_free_all already handles the NULL
                                // case, but be explicit about it
     curl_slist_free_all(handle->request_headers);
+}
+
+
+bool pg_net_get_extension_schema_name(void)
+{
+	Oid nsp_oid = InvalidOid;
+	Oid ext_oid = get_extension_oid("pg_net", true);
+	if (ext_oid == InvalidOid)
+		return false;
+
+	nsp_oid = pg_net_get_extension_schema(ext_oid);
+	if (nsp_oid == InvalidOid){
+		elog(ERROR, "Unable to determine 'pg_net' install schema");
+		return false;
+	}
+
+	extension_schema_name = get_namespace_name(nsp_oid);
+	return true;
+}
+
+
+/*
+ * get_extension_schema - given an extension OID, fetch its extnamespace
+ *
+ * Returns InvalidOid if no such extension.
+ */
+static Oid
+pg_net_get_extension_schema(Oid ext_oid)
+{
+    Oid         result;
+    SysScanDesc scandesc;
+    HeapTuple   tuple;
+    ScanKeyData entry[1];
+
+    Relation rel = table_open(ExtensionRelationId, AccessShareLock);
+    ScanKeyInit(&entry[0],
+    	Anum_pg_extension_oid,
+        BTEqualStrategyNumber, F_OIDEQ,
+        ObjectIdGetDatum(ext_oid));
+
+    scandesc = systable_beginscan(rel, ExtensionOidIndexId, true,
+                                  NULL, 1, entry);
+
+    tuple = systable_getnext(scandesc);
+
+    /* We assume that there can be at most one matching tuple */
+    if (HeapTupleIsValid(tuple))
+        result = ((Form_pg_extension) GETSTRUCT(tuple))->extnamespace;
+    else
+        result = InvalidOid;
+
+    systable_endscan(scandesc);
+
+    table_close(rel, AccessShareLock);
+
+    return result;
 }
