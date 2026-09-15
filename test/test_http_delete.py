@@ -4,11 +4,11 @@ from common import collect_response_sync, http_request
 
 
 def test_http_delete_returns_id(sess):
-    """Test net.http_delete returns an id"""
+    """Test http_delete returns an id"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_get(
+        select http_get(
             url:='http://localhost:8080/delete'
         );
     """
@@ -18,11 +18,11 @@ def test_http_delete_returns_id(sess):
 
 
 def test_http_delete_collect_sync_success(sess):
-    """Test net.http_delete works"""
+    """Test http_delete works"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_delete(
+        select http_delete(
             url:='http://localhost:8080/delete'
         ,   params:= '{"param-foo": "bar"}'
         ,   headers:= '{"X-Baz": "foo"}'
@@ -44,14 +44,14 @@ def test_http_delete_collect_sync_success(sess):
 
 def test_http_delete_positional_args(sess):
     """
-    Test net.http_delete works with positional arguments.
+    Test http_delete works with positional arguments.
     This to ensure backwards compat when a new parameter is added to the function.
     """
 
     # Delete call with url only
     request_id = http_request(sess, text(
         """
-        select net.http_delete(
+        select http_delete(
             'http://localhost:8080/delete'
         );
     """
@@ -66,7 +66,7 @@ def test_http_delete_positional_args(sess):
     # Delete call with url and params
     request_id = http_request(sess, text(
         """
-        select net.http_delete(
+        select http_delete(
             'http://localhost:8080/delete',
             '{"param-foo": "bar"}'
         );
@@ -82,7 +82,7 @@ def test_http_delete_positional_args(sess):
     # Delete call with url, params, and headers
     request_id = http_request(sess, text(
         """
-        select net.http_delete(
+        select http_delete(
             'http://localhost:8080/delete',
             '{"param-foo": "bar"}',
             '{"X-Baz": "foo"}'
@@ -99,7 +99,7 @@ def test_http_delete_positional_args(sess):
     # Delete call with url, params, headers, and timeout
     request_id = http_request(sess, text(
         """
-        select net.http_delete(
+        select http_delete(
             'http://localhost:8080/delete',
             '{"param-foo": "bar"}',
             '{"X-Baz": "foo"}',
@@ -120,7 +120,7 @@ def test_http_delete_with_body(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_delete(
+        select http_delete(
             url  :='http://localhost:8080/delete_w_body'
         ,   body := '{"key": "val"}'
         );

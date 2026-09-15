@@ -6,12 +6,12 @@ wrong_port = 6666
 
 
 def test_get_bad_url(sess):
-    """Test net.http_get returns a descriptive errors for bad urls"""
+    """Test http_get returns a descriptive errors for bad urls"""
 
     with pytest.raises(Exception) as execinfo:
         sess.execute(text(
             f"""
-            select net.http_get('localhost:{wrong_port}');
+            select http_get('localhost:{wrong_port}');
         """
         ))
 
@@ -19,12 +19,12 @@ def test_get_bad_url(sess):
 
 
 def test_http_get_rejects_relative_url(sess):
-    """Test net.http_get with a correct error when given a relative url"""
+    """Test http_get with a correct error when given a relative url"""
 
     with pytest.raises(Exception) as execinfo:
         sess.execute(text(
             """
-            select net.http_get('/malformed_url');
+            select http_get('/malformed_url');
         """
         ))
 
@@ -32,36 +32,36 @@ def test_http_get_rejects_relative_url(sess):
 
 
 def test_bad_post(sess):
-    """Test net.http_post with an empty url + body returns an error"""
+    """Test http_post with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
         sess.execute(text(
             """
-            select net.http_post(null, '{"hello": "world"}');
+            select http_post(null, '{"hello": "world"}');
         """
         ))
     assert 'null value in column "url"' in str(execinfo)
 
 
 def test_bad_get(sess):
-    """Test net.http_get with an empty url + body returns an error"""
+    """Test http_get with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
         res = sess.execute(text(
             """
-            select net.http_get(null);
+            select http_get(null);
         """
         ))
     assert 'null value in column "url"' in str(execinfo)
 
 
 def test_bad_delete(sess):
-    """Test net.http_delete with an empty url + body returns an error"""
+    """Test http_delete with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
         sess.execute(text(
             """
-            select net.http_delete(null);
+            select http_delete(null);
         """
         ))
     assert 'null value in column "url"' in str(execinfo)
@@ -72,7 +72,7 @@ def test_bad_utils(sess):
 
     res = sess.execute(text(
         """
-        select net._encode_url_with_params_array(null, null);
+        select _encode_url_with_params_array(null, null);
     """
     )).scalar_one()
 
@@ -80,7 +80,7 @@ def test_bad_utils(sess):
 
     res = sess.execute(text(
         """
-        select net._urlencode_string(null);
+        select _urlencode_string(null);
     """
     )).scalar_one()
 
@@ -95,7 +95,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
 
     request_id = http_requests(sess, text(
         f"""
-        select net.http_get('http://localhost:{wrong_port}') from generate_series(1,10) offset 9;
+        select http_get('http://localhost:{wrong_port}') from generate_series(1,10) offset 9;
     """
     ))
 
@@ -106,7 +106,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
 
     (error_msg, count) = sess.execute(text(
         """
-        select error_msg, count(*) from net._http_response where status_code is null group by error_msg;
+        select error_msg, count(*) from _http_response where status_code is null group by error_msg;
     """
     )).fetchone()
 
@@ -117,7 +117,7 @@ def test_it_keeps_working_after_many_connection_refused(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200');
+        select http_get('http://localhost:8080/pathological?status=200');
     """
     ))
 
@@ -136,7 +136,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
 
     request_id = http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?disconnect=true') from generate_series(1,10) offset 9;
+        select http_get('http://localhost:8080/pathological?disconnect=true') from generate_series(1,10) offset 9;
     """
     ))
 
@@ -147,7 +147,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
 
     (error_msg, count) = sess.execute(text(
         """
-        select error_msg, count(*) from net._http_response where status_code is null group by error_msg;
+        select error_msg, count(*) from _http_response where status_code is null group by error_msg;
     """
     )).fetchone()
 
@@ -156,7 +156,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
 
     request_id = http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10) offset 9;
+        select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10) offset 9;
     """
     ))
 
@@ -166,7 +166,7 @@ def test_it_keeps_working_after_server_returns_nothing(sess):
 
     (status_code, count) = sess.execute(text(
         """
-        select status_code, count(*) from net._http_response where status_code = 200 group by status_code;
+        select status_code, count(*) from _http_response where status_code = 200 group by status_code;
     """
     )).fetchone()
 

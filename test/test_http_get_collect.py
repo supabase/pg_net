@@ -5,11 +5,11 @@ from common import collect_response_sync, http_request
 
 
 def test_http_get_returns_id(sess):
-    """Test net.http_get returns an id"""
+    """Test http_get returns an id"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080');
+        select http_get('http://localhost:8080');
     """
     ))
 
@@ -17,11 +17,11 @@ def test_http_get_returns_id(sess):
 
 
 def test_http_get_works_with_ip(sess):
-    """Test net.http_get returns an id when using an IP with port"""
+    """Test http_get returns an id when using an IP with port"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://127.0.0.1:8080');
+        select http_get('http://127.0.0.1:8080');
     """
     ))
 
@@ -33,7 +33,7 @@ def test_http_get_collect_sync_success(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080');
+        select http_get('http://localhost:8080');
     """
     ))
 
@@ -52,7 +52,7 @@ def test_http_collect_response_async_does_not_exist(sess):
     # Collect the response, waiting as needed
     response = sess.execute(text(
         """
-        select * from net._http_collect_response(1, async:=true);
+        select * from _http_collect_response(1, async:=true);
     """
     )).fetchone()
 
@@ -62,11 +62,11 @@ def test_http_collect_response_async_does_not_exist(sess):
 
 
 def test_http_get_responses_have_different_created_times(sess):
-    """Ensure the rows in net._http_response have different created times"""
+    """Ensure the rows in _http_response have different created times"""
 
     http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080/echo-method')
+        select http_get('http://localhost:8080/echo-method')
     """
     ))
 
@@ -74,7 +74,7 @@ def test_http_get_responses_have_different_created_times(sess):
 
     http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080/echo-method')
+        select http_get('http://localhost:8080/echo-method')
     """
     ))
 
@@ -82,7 +82,7 @@ def test_http_get_responses_have_different_created_times(sess):
 
     http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080/echo-method')
+        select http_get('http://localhost:8080/echo-method')
     """
     ))
 
@@ -90,7 +90,7 @@ def test_http_get_responses_have_different_created_times(sess):
 
     count = sess.execute(text(
         """
-        select count(distinct created) from net._http_response;
+        select count(distinct created) from _http_response;
     """
     )).scalar()
 
@@ -102,7 +102,7 @@ def test_http_get_collect_with_redirect(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080/redirect_me');
+        select http_get('http://localhost:8080/redirect_me');
     """
     ))
 
@@ -117,7 +117,7 @@ def test_http_get_collect_redirect_headers_from_final_response(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080/redirect_me');
+        select http_get('http://localhost:8080/redirect_me');
     """
     ))
 
@@ -134,7 +134,7 @@ def test_http_get_ipv6(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://localhost:8888/');
+        select http_get('http://localhost:8888/');
     """
     ))
 
@@ -145,11 +145,11 @@ def test_http_get_ipv6(sess):
 
 
 def test_http_get_null_headers(sess):
-    """Test net.http_get can have null headers"""
+    """Test http_get can have null headers"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_get('http://localhost:8080', null::jsonb, null::jsonb, 100);
+        select http_get('http://localhost:8080', null::jsonb, null::jsonb, 100);
     """
     ))
 

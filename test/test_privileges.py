@@ -10,7 +10,7 @@ def test_net_on_postgres_role(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get(
+        select http_get(
             'http://localhost:8080/anything'
         );
     """
@@ -31,7 +31,7 @@ def test_net_on_pre_existing_role(sess):
     (request_id, current_user) = sess.execute(text(
         """
         set local role to pre_existing;
-        select net.http_get(
+        select http_get(
             'http://localhost:8080/anything'
         ), current_user;
     """
@@ -63,7 +63,7 @@ def test_net_on_new_role(sess):
     (request_id, current_user) = sess.execute(text(
         """
         set local role to another;
-        select net.http_get(
+        select http_get(
             'http://localhost:8080/anything'
         ), current_user;
     """
@@ -81,12 +81,12 @@ def test_net_on_new_role(sess):
     assert response["status"] == "SUCCESS"
     assert current_user == 'another'
 
-    # can use the net.worker_restart function
+    # can use the worker_restart function
     (res, current_user) = sess.execute(
         text(
             """
         set local role to another;
-        select net.worker_restart(), current_user;
+        select worker_restart(), current_user;
     """
         )
     ).fetchone()
@@ -94,7 +94,7 @@ def test_net_on_new_role(sess):
     assert current_user == 'another'
 
     sess.execute(text("""
-        select net.wait_until_running();
+        select wait_until_running();
         set local role postgres;
         drop role another;
     """))

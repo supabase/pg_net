@@ -17,7 +17,7 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
 
         request_id = http_request(sess, text(
             """
-            select net.http_get(
+            select http_get(
                 'http://localhost:8080/anything'
             );
         """
@@ -49,7 +49,7 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
 
     request_id = http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
+        select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
     ))
 
@@ -96,7 +96,7 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
 
     request_id = http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
+        select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
     ))
 

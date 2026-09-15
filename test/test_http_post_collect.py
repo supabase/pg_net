@@ -4,11 +4,11 @@ from common import collect_response_sync, http_request
 
 
 def test_http_post_returns_id(sess):
-    """Test net.http_post returns an id"""
+    """Test http_post returns an id"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_post(
+        select http_post(
             url:='http://localhost:8080/post',
             body:='{}'::jsonb
         );
@@ -19,11 +19,11 @@ def test_http_post_returns_id(sess):
 
 
 def test_http_post_special_chars_body(sess):
-    """Test net.http_post returns an id"""
+    """Test http_post returns an id"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_post(
+        select http_post(
             url:='http://localhost:8080/post',
             body:=json_build_object('foo', 'ba"r')::jsonb
         );
@@ -38,7 +38,7 @@ def test_http_post_collect_sync_success(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_post(
+        select http_post(
             url:='http://localhost:8080/post'
         );
     """
@@ -57,7 +57,7 @@ def test_http_post_collect_non_empty_body(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_post(
+        select http_post(
             url:='http://localhost:8080/post',
             body:='{"hello": "world"}'::jsonb,
             headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
@@ -83,7 +83,7 @@ def test_http_post_wrong_header_exception(sess):
     try:
         sess.execute(text(
             """
-            select net.http_post(
+            select http_post(
                 url:='http://localhost:8080/post',
                 headers:='{"Content-Type": "application/text"}'::jsonb
             );
@@ -101,7 +101,7 @@ def test_http_post_no_content_type_coerce(sess):
 
     request_id, = sess.execute(text(
         """
-        select net.http_post(
+        select http_post(
             url:='http://localhost:8080/post',
             headers:='{"other": "val"}'::jsonb
         );
@@ -113,7 +113,7 @@ def test_http_post_no_content_type_coerce(sess):
         select
             headers
         from
-            net.http_request_queue
+            http_request_queue
         where
             id = :request_id
     """), {"request_id": request_id}
@@ -124,11 +124,11 @@ def test_http_post_no_content_type_coerce(sess):
 
 
 def test_http_post_empty_body(sess):
-    """Test net.http_post can post a null body"""
+    """Test http_post can post a null body"""
 
     request_id = http_request(sess, text(
         """
-        select net.http_post(
+        select http_post(
             url:='http://localhost:8080/echo-method',
             body:=null
         );

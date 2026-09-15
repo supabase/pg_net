@@ -43,8 +43,8 @@ def get_worker_query_count(sess):
         select coalesce(sum(calls), 0)
         from pg_stat_statements
         where
-            query ilike '%DELETE FROM net._http_response r %' or
-            query ilike '%DELETE FROM net.http_request_queue%';
+            query ilike '%DELETE FROM _http_response r %' or
+            query ilike '%DELETE FROM http_request_queue%';
     """
     )).fetchone()
 
@@ -92,7 +92,7 @@ def test_wakes_at_commit_time(sess):
 
     http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
+        select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
     """
     ))
 
@@ -108,7 +108,7 @@ def test_wakes_at_commit_time(sess):
     # if the new requests are rollbacked/aborted, then no new queries will be made by the bg worker
     sess.execute(text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
+        select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,100);
     """
     ))
 

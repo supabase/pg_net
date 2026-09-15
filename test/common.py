@@ -34,7 +34,7 @@ def collect_response_sync(sess, request_id):
     """
     Wait for request with request_id to complete and return its response.
 
-    Flattens net._http_collect_response's nested composite return type
+    Flattens _http_collect_response's nested composite return type
     (status, message, response(status_code, headers, body)) into a single
     row, so callers get a name-addressable mapping (e.g. result["body"])
     instead of indexing into a stringified nested tuple.
@@ -48,7 +48,7 @@ def collect_response_sync(sess, request_id):
             (response).status_code,
             (response).headers,
             (response).body
-        from net._http_collect_response(:request_id, async:=false);
+        from _http_collect_response(:request_id, async:=false);
     """
         ),
         {"request_id": request_id},
@@ -81,7 +81,7 @@ def get_queue_length(autocommit_sess):
 
     def fetch():
         (queue_length,) = autocommit_sess.execute(text("""
-            select count(*) from net.http_request_queue;
+            select count(*) from http_request_queue;
         """)).fetchone()
         return queue_length
     return fetch
@@ -89,7 +89,7 @@ def get_queue_length(autocommit_sess):
 
 def get_response_count(autocommit_sess):
     """
-    Returns a function that returns the number of rows in net._http_response table
+    Returns a function that returns the number of rows in _http_response table
 
     The returned function captures autocommit_sess argument and
     uses it to run the sql query. 
@@ -97,7 +97,7 @@ def get_response_count(autocommit_sess):
 
     def fetch():
         (response_count,) = autocommit_sess.execute(text("""
-            select count(*) from net._http_response;
+            select count(*) from _http_response;
         """)).fetchone()
         return response_count
     return fetch
@@ -210,7 +210,7 @@ def wait_for_queue_drain(autocommit_sess):
 
 def wait_for_response_count(autocommit_sess, expected_count):
     """
-    Waits until number of rows in net._http_response match expected_count
+    Waits until number of rows in _http_response match expected_count
 
     Or throws an error if it doesn't within a timeout
     """
@@ -224,7 +224,7 @@ def wait_for_response_count(autocommit_sess, expected_count):
 
 def wait_for_any_response(autocommit_sess):
     """
-    Waits for at least one row in in net._http_response
+    Waits for at least one row in in _http_response
 
     Or throws an error if it doesn't within a timeout
     """
@@ -279,10 +279,10 @@ def wait_until(fetch, predicate, timeout=10, sleep_interval=0.1, description="co
 
 def wakeup_worker(sess):
     """
-    Wakes up the worker manually by calling net.wake() and committing
+    Wakes up the worker manually by calling wake() and committing
     """
 
-    sess.execute(text("select net.wake()"))
+    sess.execute(text("select wake()"))
     sess.commit()  # commit so worker  wakes
 
 
@@ -293,14 +293,14 @@ def restart_worker(sess):
     You'd think that the following implementation should
     restart the worker and wait for it to come back up:
 
-    sess.execute(text("select net.worker_restart()"))
-    sess.execute(text("select net.wait_until_running()"))
+    sess.execute(text("select worker_restart()"))
+    sess.execute(text("select wait_until_running()"))
 
     But it has a race condition in which this function might
     return before the worker has restarted. This happens because
-    net.worker_restart() returns immediately after setting a flag
+    worker_restart() returns immediately after setting a flag
     to indicate to the core worker loop to restart. Then the
-    net.wait_until_running() function waits for the worker state to
+    wait_until_running() function waits for the worker state to
     become WS_RUNNING. But it can read the state from either the worker
     before the restart or after. In the first case it returns before
     the worker has restarted properly, and in the second case it
@@ -308,7 +308,7 @@ def restart_worker(sess):
 
     Instead we compare the pids of the workers before and after the
     restart which guarantees that the worker has restarted. After the
-    restart we still run net.wait_until_running() for it to be
+    restart we still run wait_until_running() for it to be
     intialized properly.
     """
 
@@ -318,7 +318,7 @@ def restart_worker(sess):
         """)).scalar()
 
     old_pid = fetch_worker_pid()
-    sess.execute(text("select net.worker_restart()"))
+    sess.execute(text("select worker_restart()"))
     wait_until(
         fetch_worker_pid,
         lambda pid: pid is not None and pid != old_pid,
@@ -326,4 +326,4 @@ def restart_worker(sess):
     )
     # the new worker's pg_stat_activity row appears slightly before it
     # publishes WS_RUNNING, so also wait for it to be fully up
-    sess.execute(text("select net.wait_until_running()"))
+    sess.execute(text("select wait_until_running()"))

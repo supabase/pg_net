@@ -7,7 +7,7 @@ def test_http_header_missing_value(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get(
+        select http_get(
             url:='http://localhost:8080/pathological?malformed-header=missing-value'
         );
     """
@@ -28,7 +28,7 @@ def test_http_header_injection(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get(
+        select http_get(
             url:='http://localhost:8080/pathological?malformed-header=header-injection'
         );
     """
@@ -49,7 +49,7 @@ def test_http_header_spaces(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get(
+        select http_get(
             url:='http://localhost:8080/pathological?malformed-header=spaces-in-header-name'
         );
     """
@@ -70,7 +70,7 @@ def test_http_header_non_printable_chars(sess):
 
     request_id = http_request(sess, text(
         """
-        select net.http_get(
+        select http_get(
             url:='http://localhost:8080/pathological?malformed-header=non-printable-chars'
         );
     """

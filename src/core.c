@@ -15,8 +15,8 @@
 #include "event.h"
 
 bool pg_net_get_extension_schema_name(void);
-
 static Oid pg_net_get_extension_schema(Oid ext_oid);
+static Oid pg_net_get_extension_schema_oid(void);
 
 static SPIPlanPtr del_response_plan     = NULL;
 static SPIPlanPtr del_return_queue_plan = NULL;
@@ -355,18 +355,31 @@ void pfree_handle(CurlHandle *handle) {
 bool pg_net_get_extension_schema_name(void)
 {
 	Oid nsp_oid = InvalidOid;
-	Oid ext_oid = get_extension_oid("pg_net", true);
-	if (ext_oid == InvalidOid)
-		return false;
 
-	nsp_oid = pg_net_get_extension_schema(ext_oid);
+	nsp_oid = pg_net_get_extension_schema_oid();
 	if (nsp_oid == InvalidOid){
 		elog(ERROR, "Unable to determine 'pg_net' install schema");
 		return false;
 	}
-
 	extension_schema_name = get_namespace_name(nsp_oid);
 	return true;
+}
+
+
+static Oid
+pg_net_get_extension_schema_oid(void)
+{
+	Oid nsp_oid = InvalidOid;
+	Oid ext_oid = get_extension_oid("pg_net", true);
+	if (ext_oid == InvalidOid)
+		return ext_oid;
+
+	nsp_oid = pg_net_get_extension_schema(ext_oid);
+	if (nsp_oid == InvalidOid){
+		elog(ERROR, "Unable to determine 'pg_net' install schema");
+	}
+
+	return nsp_oid;
 }
 
 

@@ -47,8 +47,8 @@ def test_success_when_worker_is_up(sess):
     """net.check_worker_is_up should not return anything when the worker is running"""
 
     (result,) = sess.execute(text("""
-        select net.wait_until_running();
-        select net.check_worker_is_up();
+        select wait_until_running();
+        select check_worker_is_up();
     """)).fetchone()
     assert result is not None
     assert result == ''
@@ -79,14 +79,14 @@ def test_worker_will_process_queue_when_up(sess, autocommit_sess):
     # Make a request while the worker is down
     http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+        select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     ))
 
     # Check that requests were enqueued
     (count,) = sess.execute(text(
         """
-        select count(*) from net.http_request_queue;
+        select count(*) from http_request_queue;
     """
     )).fetchone()
     assert count == 10
@@ -129,7 +129,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
 
         http_requests(sess, text(
             """
-            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+            select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
         ))
 
@@ -138,7 +138,7 @@ def test_can_delete_rows_while_processing_queue(sess, autocommit_sess):
 
         (count,) = sess.execute(text(
             """
-            with deleted as (delete from net.http_request_queue returning *) select count(*) from deleted;
+            with deleted as (delete from http_request_queue returning *) select count(*) from deleted;
         """
         )).fetchone()
         assert count > 1
@@ -157,28 +157,28 @@ def test_truncate_wait_while_processing_queue(sess, autocommit_sess):
 
     try:
         # ensure the worker will be processing the queue 1 by 1 (slowly) so it doesn't clear the whole
-        # net.http_request_queue in one go
+        # http_request_queue in one go
         autocommit_sess.execute(
             text("alter system set pg_net.batch_size to '1';"))
         restart_worker(autocommit_sess)
 
         http_requests(sess, text(
             """
-            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+            select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
         ))
 
         # truncate succeeds fast, despite the worker still processing the queue 1 by 1
         sess.execute(text(
             """
-            truncate net.http_request_queue;
+            truncate http_request_queue;
         """
         ))
 
         # now the queue will be empty
         (count,) = sess.execute(text(
             """
-            select count(*) from net.http_request_queue;
+            select count(*) from http_request_queue;
         """
         )).fetchone()
         assert count == 0
@@ -195,7 +195,7 @@ def test_no_failure_on_drop_extension(sess, autocommit_sess):
 
     http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200&delay=2') from generate_series(1,10);
+        select http_get('http://localhost:8080/pathological?status=200&delay=2') from generate_series(1,10);
     """
     ))
 
@@ -232,14 +232,14 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
 
         http_requests(sess, text(
             """
-            select net.http_get('http://localhost:8080/pathological?status=200&delay=1') from generate_series(1,5);
+            select http_get('http://localhost:8080/pathological?status=200&delay=1') from generate_series(1,5);
         """
         ))
 
         # Wait until responses have started arriving
         (processed,) = wait_until(
             fetch=lambda: autocommit_sess.execute(text("""
-                select count(*) from net._http_response;
+                select count(*) from _http_response;
             """)).fetchone(),
             predicate=lambda result: result[0] > 0,
             timeout=5,
@@ -252,7 +252,7 @@ def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess)
         # Check that more requests are processed after a restart
         wait_until(
             fetch=lambda: autocommit_sess.execute(text("""
-                select count(*) from net._http_response;
+                select count(*) from _http_response;
             """)).fetchone(),
             predicate=lambda result: result[0] >= processed,
             timeout=5,
@@ -275,7 +275,7 @@ def test_new_requests_get_attended_without_explicit_wakeup(sess, autocommit_sess
 
     http_requests(sess, text(
         """
-        select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+        select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
     """
     ))
 
@@ -285,22 +285,22 @@ def test_new_requests_get_attended_without_explicit_wakeup(sess, autocommit_sess
 
 def test_direct_inserts_no_requests(sess, autocommit_sess):
     """
-    Check that direct insertions to the net.http_request_queue doesn't
+    Check that direct insertions to the http_request_queue doesn't
     trigger new requests
     """
 
     # Make sure the worker has already settled into its idle wait before we
     # insert. If a prior test left it mid-batch, its trailing WORKER_WAIT_ONE_SECOND
     # recheck (worker.c) can pick up this test's direct insert on its own,
-    # with no net.wake() involved, and make this test flake.
+    # with no wake() involved, and make this test flake.
     wait_for_worker_state(autocommit_sess, 'idle')
 
     sess.execute(text(
         """
-        insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
+        insert into http_request_queue(method, url, headers, timeout_milliseconds)
         values (
             'GET',
-            net._encode_url_with_params_array('http://localhost:8080/pathological?status=200', '{}'),
+            _encode_url_with_params_array('http://localhost:8080/pathological?status=200', '{}'),
             '{}',
             5000
         );
@@ -315,7 +315,7 @@ def test_direct_inserts_no_requests(sess, autocommit_sess):
     # No response still
     (count,) = sess.execute(text(
         """
-        select count(*) from net._http_response;
+        select count(*) from _http_response;
     """
     )).fetchone()
 
@@ -324,7 +324,7 @@ def test_direct_inserts_no_requests(sess, autocommit_sess):
     # Reqest is still in queue
     (count,) = sess.execute(text(
         """
-        select count(*) from net.http_request_queue;
+        select count(*) from http_request_queue;
     """
     )).fetchone()
 
@@ -355,13 +355,13 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
 
         tmp_sess.execute(text(
             """
-            select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
+            select http_get('http://localhost:8080/pathological?status=200') from generate_series(1,10);
         """
         )).fetchone()
 
         (count,) = tmp_sess.execute(text(
             """
-            select count(*) from net.http_request_queue;
+            select count(*) from http_request_queue;
         """
         )).fetchone()
         assert count == 10
@@ -384,7 +384,7 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
 
         (status_code, count) = tmp_sess.execute(text(
             """
-            select status_code, count(*) from net._http_response group by status_code;
+            select status_code, count(*) from _http_response group by status_code;
         """
         )).fetchone()
 
@@ -400,32 +400,32 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
 
 def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     """
-    Check that the worker's INSERTs into net._http_response must be reflected
+    Check that the worker's INSERTs into _http_response must be reflected
     in pg_stat_user_tables. Without this, autovacuum/autoanalyze can never be
     scheduled and the table silently bloats.
     """
 
     # Make sure the worker is fully up before we start, otherwise we race
     # with whatever the previous test left behind.
-    autocommit_sess.execute(text("select net.wait_until_running();"))
+    autocommit_sess.execute(text("select wait_until_running();"))
 
     # Clean baseline so deltas are unambiguous.
     autocommit_sess.execute(text(
-        "select pg_stat_reset_single_table_counters('net._http_response'::regclass);"
+        "select pg_stat_reset_single_table_counters('_http_response'::regclass);"
     ))
 
     # Drive a batch of requests through the worker.
     http_requests(sess, text("""
-        select net.http_get('http://localhost:8080/pathological?status=200')
+        select http_get('http://localhost:8080/pathological?status=200')
         from generate_series(1,30);
     """))
 
     # Wait until the worker has actually drained the queue and written all
-    # responses to net._http_response. Don't assume "30 rows" - the worker
+    # responses to _http_response. Don't assume "30 rows" - the worker
     # may pick up the queue in chunks depending on wake() coalescing.
     wait_until(
         fetch=lambda: sess.execute(text(
-            "select count(*) from net.http_request_queue;"
+            "select count(*) from http_request_queue;"
         )).fetchone(),
         predicate=lambda result: result[0] == 0,
         timeout=10,
@@ -436,7 +436,7 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
     # Confirm the worker actually wrote rows, otherwise the pgstat assertion
     # below would be meaningless.
     (resp_count,) = autocommit_sess.execute(text(
-        "select count(*) from net._http_response;"
+        "select count(*) from _http_response;"
     )).fetchone()
     assert resp_count > 0, "worker did not write any responses"
 
@@ -470,7 +470,7 @@ def test_worker_writes_increment_pgstat_counters(sess, autocommit_sess):
 
 def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_sess):
     """
-    Check that autoanalyze on net._http_response must fire after the worker
+    Check that autoanalyze on _http_response must fire after the worker
     writes enough rows. Without working pgstat counters, autovacuum/autoanalyze
     never get scheduled and the table bloats - this is the primary symptom
     seen on production (slow expiry DELETEs from a bloated index).
@@ -478,7 +478,7 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
 
     try:
         # Make sure the worker is fully up before we start.
-        autocommit_sess.execute(text("select net.wait_until_running();"))
+        autocommit_sess.execute(text("select wait_until_running();"))
 
         # Make autovacuum eager *before* generating traffic so the launcher is
         # already running on a 1s naptime by the time stats threshold is crossed.
@@ -501,7 +501,7 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
         # Per-table: trip the autoanalyze threshold after a handful of rows.
         # Reloptions take effect immediately; no reload required.
         autocommit_sess.execute(text("""
-            alter table net._http_response set (
+            alter table _http_response set (
                 autovacuum_analyze_threshold = 10,
                 autovacuum_analyze_scale_factor = 0,
                 autovacuum_vacuum_threshold = 10,
@@ -510,12 +510,12 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
         """))
 
         autocommit_sess.execute(text(
-            "select pg_stat_reset_single_table_counters('net._http_response'::regclass);"
+            "select pg_stat_reset_single_table_counters('_http_response'::regclass);"
         ))
 
         # Drive 30 inserts through the worker. 30 is well above the threshold (10).
         http_requests(sess, text("""
-            select net.http_get('http://localhost:8080/pathological?status=200')
+            select http_get('http://localhost:8080/pathological?status=200')
             from generate_series(1,30);
         """))
 
@@ -533,11 +533,11 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
             predicate=lambda result: result[0] > 0,
             timeout=30,
             sleep_interval=0.5,
-            description="autoanalyze to fire on net._http_response",
+            description="autoanalyze to fire on _http_response",
         )
 
         assert autoanalyze_count > 0, (
-            "autoanalyze never fired on net._http_response within 30s. "
+            "autoanalyze never fired on _http_response within 30s. "
             "Worker writes are not making pgstat threshold visible to the "
             "autovacuum launcher - the customer-facing symptom (silent bloat) "
             "would manifest in production."
@@ -546,7 +546,7 @@ def test_worker_writes_trigger_autoanalyze_on_http_response(sess, autocommit_ses
     finally:
         # Cleanup: restore defaults so we don't bleed into other tests.
         autocommit_sess.execute(text("""
-            alter table net._http_response reset (
+            alter table _http_response reset (
                 autovacuum_analyze_threshold,
                 autovacuum_analyze_scale_factor,
                 autovacuum_vacuum_threshold,
@@ -563,7 +563,7 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
     its row in pg_stat_activity has a valid state column.
     """
 
-    autocommit_sess.execute(text("select net.wait_until_running();"))
+    autocommit_sess.execute(text("select wait_until_running();"))
 
     # Wait for the worker to drain any leftover work from previous tests
     # and settle into idle. Polling makes this robust regardless of what
@@ -572,7 +572,7 @@ def test_worker_reports_activity_in_pg_stat_activity(sess, autocommit_sess):
 
     # Fire a slow request so the worker stays active long enough to observe.
     http_requests(sess, text("""
-        select net.http_get('http://localhost:8080/pathological?status=200&delay=2');
+        select http_get('http://localhost:8080/pathological?status=200&delay=2');
     """))
 
     # Poll for 'active' for up to 5s. The slow request keeps the worker

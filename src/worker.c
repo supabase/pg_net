@@ -5,6 +5,8 @@
 
 #define PG_PRELUDE_IMPL
 #include "pg_prelude.h"
+#include "utils/fmgroids.h"
+#include "access/table.h"
 
 #include "curl_prelude.h"
 
@@ -51,6 +53,8 @@ static shmem_request_hook_type prev_shmem_request_hook = NULL;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static volatile sig_atomic_t   got_sighup              = false;
+static Oid pg_net_get_extension_schema(Oid ext_oid);
+static Oid pg_net_get_extension_schema_oid(void);
 
 void _PG_init(void);
 
@@ -214,9 +218,11 @@ static void wait_while_processing_interrupts(WorkerWait ww, bool *should_restart
 }
 
 static bool is_extension_locked(Oid ext_table_oids[static total_extension_tables]) {
-  Oid net_oid = get_namespace_oid("net", true);
+  Oid net_oid = pg_net_get_extension_schema_oid();
 
   if (!OidIsValid(net_oid)) {
+    ereport(WARNING,
+            errmsg("pg_net schema not found"));
     return false;
   }
 
@@ -556,4 +562,58 @@ void _PG_init(void) {
 
   DefineCustomStringVariable("pg_net.username", "Connection user for the worker", NULL,
                              &guc_username, NULL, PGC_SU_BACKEND, 0, NULL, NULL, NULL);
+}
+
+static Oid
+pg_net_get_extension_schema_oid(void)
+{
+	Oid nsp_oid = InvalidOid;
+	Oid ext_oid = get_extension_oid("pg_net", true);
+	if (ext_oid == InvalidOid)
+		return ext_oid;
+
+	nsp_oid = pg_net_get_extension_schema(ext_oid);
+	if (nsp_oid == InvalidOid){
+		elog(ERROR, "Unable to determine 'pg_net' install schema");
+	}
+
+	return nsp_oid;
+}
+
+
+/*
+ * get_extension_schema - given an extension OID, fetch its extnamespace
+ *
+ * Returns InvalidOid if no such extension.
+ */
+static Oid
+pg_net_get_extension_schema(Oid ext_oid)
+{
+    Oid         result;
+    SysScanDesc scandesc;
+    HeapTuple   tuple;
+    ScanKeyData entry[1];
+
+    Relation rel = table_open(ExtensionRelationId, AccessShareLock);
+    ScanKeyInit(&entry[0],
+    	Anum_pg_extension_oid,
+        BTEqualStrategyNumber, F_OIDEQ,
+        ObjectIdGetDatum(ext_oid));
+
+    scandesc = systable_beginscan(rel, ExtensionOidIndexId, true,
+                                  NULL, 1, entry);
+
+    tuple = systable_getnext(scandesc);
+
+    /* We assume that there can be at most one matching tuple */
+    if (HeapTupleIsValid(tuple))
+        result = ((Form_pg_extension) GETSTRUCT(tuple))->extnamespace;
+    else
+        result = InvalidOid;
+
+    systable_endscan(scandesc);
+
+    table_close(rel, AccessShareLock);
+
+    return result;
 }
