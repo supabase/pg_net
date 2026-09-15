@@ -43,8 +43,8 @@ def get_worker_query_count(sess):
         select coalesce(sum(calls), 0)
         from pg_stat_statements
         where
-            query ilike '%DELETE FROM _http_response r %' or
-            query ilike '%DELETE FROM http_request_queue%';
+            query ilike '%DELETE FROM public._http_response r %' or
+            query ilike '%DELETE FROM public.http_request_queue%';
     """
     )).fetchone()
 

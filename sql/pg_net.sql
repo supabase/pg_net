@@ -350,3 +350,8 @@ begin
   select _http_collect_response(request_id, async);
 end;
 $$;
+
+grant all on table http_request_queue to PUBLIC;
+grant all on table _http_response to PUBLIC;
+grant all on sequence http_request_queue_id_seq to PUBLIC;
+
