@@ -22,6 +22,29 @@ static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   return realsize;
 }
 
+// Reject a header containing CR or LF before it reaches libcurl.
+//
+// libcurl appends the CRLF terminator itself, so an embedded CR/LF ends the
+// header early and everything after it is taken by the receiving parser as
+// further headers or as the start of the body (request splitting). Only the
+// header name is included in the error: the value is attacker-controlled and
+// commonly holds credentials, so it must not be copied into the server log.
+static void reject_crlf_in_header(const char *hdr) {
+  size_t bad = strcspn(hdr, "\r\n");
+
+  if (hdr[bad] != '\0') {
+    size_t name_len = strcspn(hdr, ":");
+
+    // A header with no ':' has no name to report, so bound what is echoed.
+    if (name_len > bad) {
+      name_len = bad;
+    }
+
+    ereport(ERROR, errmsg("header \"%.*s\" contains a carriage return or line feed",
+                          (int)name_len, hdr));
+  }
+}
+
 static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_slist *headers) {
   ArrayIterator iterator;
   Datum         value;
@@ -36,6 +59,7 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_s
     }
 
     hdr = TextDatumGetCString(value);
+    reject_crlf_in_header(hdr);
     EREPORT_CURL_SLIST_APPEND(headers, hdr);
     pfree(hdr);
   }
