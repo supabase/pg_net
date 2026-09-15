@@ -1,8 +1,5 @@
-from sqlalchemy import text
-
-
-def test_connect(sess):
+def test_connect(conn):
     """Sanity test verifying connection to postgres works"""
 
-    (x,) = sess.execute(text("select 1")).fetchone()
-    assert x == 1
+    conn.execute("select 1")
+    assert [(1, )] == conn.execute("select 1").fetchall()

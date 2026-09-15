@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import psycopg
 
 
 @pytest.fixture(scope="function")
@@ -9,6 +10,23 @@ def engine():
     engine = create_engine("postgresql+psycopg:///postgres")
     yield engine
     engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def conn():
+    """Direct connection via psycopg"""
+
+    conn = psycopg.connect("dbname=postgres")
+
+    conn.execute("create extension if not exists pg_net;")
+    conn.commit()
+
+    yield conn
+
+    conn.rollback()
+
+    conn.execute("drop extension if exists pg_net cascade;")
+    conn.commit()
 
 
 @pytest.fixture(scope="function")
