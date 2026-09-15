@@ -6,7 +6,7 @@ from sqlalchemy import text
 
 @pytest.fixture(scope="function")
 def engine():
-    engine = create_engine("postgresql:///postgres")
+    engine = create_engine("postgresql+psycopg:///postgres")
     yield engine
     engine.dispose()
 

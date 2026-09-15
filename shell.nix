@@ -22,7 +22,7 @@ let
   loadtest = pkgs.callPackage ./nix/loadtest.nix {};
   pythonDeps = with pkgs.python3Packages; [
     pytest
-    psycopg2
+    psycopg
     sqlalchemy
   ];
   style =
