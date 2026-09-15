@@ -63,7 +63,6 @@ def test_net_on_new_role(sess):
 
     (request_id, current_user) = sess.execute(text(
         """
-        
         select net.http_get(
             'http://localhost:8080/anything'
         ), current_user;
