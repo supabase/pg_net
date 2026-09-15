@@ -142,7 +142,7 @@ def try_connect(engine, tmp_sess):
 
     def fetch():
         try:
-            engine = create_engine("postgresql:///postgres")
+            engine = create_engine("postgresql+psycopg:///postgres")
             ac_engine = engine.execution_options(
                 isolation_level="AUTOCOMMIT")
             tmp_sess = Session(ac_engine)

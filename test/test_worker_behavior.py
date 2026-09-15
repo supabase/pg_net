@@ -343,7 +343,7 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
     crash or restart happens
     """
 
-    engine = create_engine("postgresql:///postgres")
+    engine = create_engine("postgresql+psycopg:///postgres")
     ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
     tmp_sess = Session(ac_engine)
 
@@ -375,7 +375,7 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
         wait_for_postgres_ready(engine, tmp_sess)
 
         # Recreate engine and session after restart
-        engine = create_engine("postgresql:///postgres")
+        engine = create_engine("postgresql+psycopg:///postgres")
         ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
         tmp_sess = Session(ac_engine)
 

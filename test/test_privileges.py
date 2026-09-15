@@ -28,9 +28,9 @@ def test_net_on_pre_existing_role(sess):
     role = sess.execute(text("select current_user;")).fetchone()
     assert role[0] == "postgres"
 
+    sess.execute(text("set local role to pre_existing;"))
     (request_id, current_user) = sess.execute(text(
         """
-        set local role to pre_existing;
         select net.http_get(
             'http://localhost:8080/anything'
         ), current_user;
@@ -59,10 +59,10 @@ def test_net_on_new_role(sess):
     sess.execute(text("""
         create role another;
     """))
+    sess.execute(text("set local role to another;"))
 
     (request_id, current_user) = sess.execute(text(
         """
-        set local role to another;
         select net.http_get(
             'http://localhost:8080/anything'
         ), current_user;
@@ -81,11 +81,11 @@ def test_net_on_new_role(sess):
     assert response["status"] == "SUCCESS"
     assert current_user == 'another'
 
+    sess.execute(text("set local role to another;"))
     # can use the net.worker_restart function
     (res, current_user) = sess.execute(
         text(
             """
-        set local role to another;
         select net.worker_restart(), current_user;
     """
         )
