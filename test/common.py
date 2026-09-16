@@ -3,6 +3,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 
+PSYCOPG_CONNSTR = "postgresql+psycopg:///postgres"
+
+
 def http_request(sess, query):
     """
     Execute query and commit to wake up the background worker.
@@ -142,7 +145,7 @@ def try_connect(engine, tmp_sess):
 
     def fetch():
         try:
-            engine = create_engine("postgresql+psycopg:///postgres")
+            engine = create_engine(PSYCOPG_CONNSTR)
             ac_engine = engine.execution_options(
                 isolation_level="AUTOCOMMIT")
             tmp_sess = Session(ac_engine)
