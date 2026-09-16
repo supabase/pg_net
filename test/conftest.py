@@ -3,10 +3,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from common import PSYCOPG_CONNSTR 
+
 
 @pytest.fixture(scope="function")
 def engine():
-    engine = create_engine("postgresql+psycopg:///postgres")
+    engine = create_engine(PSYCOPG_CONNSTR)
     yield engine
     engine.dispose()
 
