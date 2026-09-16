@@ -28,11 +28,13 @@ let
   style =
     pkgs.writeShellScriptBin "net-style" ''
       ${pkgs.clang-tools}/bin/clang-format -i src/*
+      ${pkgs.ruff}/bin/ruff format
     '';
   styleCheck =
     pkgs.writeShellScriptBin "net-style-check" ''
       ${pkgs.clang-tools}/bin/clang-format -i src/*
       ${pkgs.git}/bin/git diff-index --exit-code HEAD -- '*.c'
+      ${pkgs.ruff}/bin/ruff check
     '';
 in
 pkgs.mkShell {
@@ -45,6 +47,7 @@ pkgs.mkShell {
       loadtest
       style
       styleCheck
+      pkgs.ruff
     ];
   shellHook = ''
     export HISTFILE=.history
