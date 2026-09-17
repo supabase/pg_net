@@ -1,6 +1,7 @@
 import time
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+import psycopg
 
 
 PSYCOPG_CONNSTR = "postgresql+psycopg:///postgres"

@@ -80,6 +80,8 @@ $ PYTEST_ARGS="PYTEST_ARGS="test/test_user_db.py" xpg test
 
 Will run tests in `test/test_user_db.py`, or:
 
+### Writing new tests
+Currently the test suite uses SQLAlchemy for many tests. We are moving away from SQLAlchemy and towards using psycopg directly. Please do not write any new tests using SQLAlchemy.
 
 ### Debugging
 
