@@ -83,7 +83,7 @@ def test_worker_will_process_queue_when_up(sess, autocommit_sess):
     """)
     ).fetchone()
     assert killed is not None
-    assert killed == True
+    assert killed
 
     # Wait for background worker to go down
     wait_for_worker_down(autocommit_sess)
@@ -252,7 +252,7 @@ def test_no_failure_on_drop_extension(sess, autocommit_sess):
     """)
     ).fetchone()
     assert up is not None
-    assert up == True
+    assert up
 
 
 def test_worker_will_keep_processing_queue_when_restarted(sess, autocommit_sess):
