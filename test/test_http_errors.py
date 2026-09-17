@@ -53,7 +53,7 @@ def test_bad_get(sess):
     """Test net.http_get with an empty url + body returns an error"""
 
     with pytest.raises(Exception) as execinfo:
-        res = sess.execute(
+        sess.execute(
             text(
                 """
             select net.http_get(null);

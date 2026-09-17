@@ -28,9 +28,9 @@ def test_http_get_timeout_reached(sess):
         {"request_id": request_id},
     ).fetchone()
 
-    assert content_type == None
-    assert content == None
-    assert timed_out == True
+    assert content_type is None
+    assert content is None
+    assert timed_out
     assert response.startswith("Timeout of 5000 ms reached")
 
 
@@ -87,9 +87,9 @@ def test_http_detailed_timeout(sess):
     tcp_ssl_time = float(match.group("C"))
     http_time = float(match.group("D"))
 
-    assert content_type == None
-    assert content == None
-    assert timed_out == True
+    assert content_type is None
+    assert content is None
+    assert timed_out
     assert total_time > 0
     assert dns_time > 0
     assert tcp_ssl_time > 0

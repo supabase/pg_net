@@ -99,7 +99,7 @@ def test_net_on_new_role(sess):
     """
         )
     ).fetchone()
-    assert res == True
+    assert res
     assert current_user == "another"
 
     sess.execute(
