@@ -103,7 +103,7 @@ def test_http_post_wrong_header_exception(sess):
         """
             )
         ).fetchone()
-    except:
+    except Exception:
         sess.rollback()
         did_raise = True
 
