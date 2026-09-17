@@ -131,3 +131,6 @@ jobs:
 
       - name: Run style check
         run: nix-shell --run "net-style-check"
+
+      - name: Enforce conventional commits
+        uses: webiny/action-conventional-commits@7f91b1595ca1951cdb671ddc9f07a49081ec5b69 # v1.4.2
