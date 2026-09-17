@@ -1,7 +1,9 @@
 import time
 import re
+import psycopg
+import pytest
 from sqlalchemy import text
-from common import http_request
+from common import http_request, pg_collect_response, pg_http_request
 
 
 def test_http_get_timeout_reached(sess):
@@ -162,3 +164,59 @@ def test_many_slow_mixed_with_fast(sess):
 
     assert request_successes == 50
     assert request_timeouts == 50
+
+
+@pytest.mark.parametrize("timeout", [0, -1, 2147483647])
+def test_worker_bounds_out_of_range_timeouts(conn, timeout):
+    """A 0, negative or oversized timeout is clamped to pg_net.max_timeout_ms instead of hanging the worker"""
+
+    request_id = pg_http_request(
+        conn,
+        "select net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := %s)",
+        (timeout,),
+    )
+
+    response = pg_collect_response(conn, request_id)
+
+    assert response["status"] == "SUCCESS"
+
+
+def test_worker_honours_max_timeout_ms(conn):
+    """Lowering pg_net.max_timeout_ms lowers the bound the worker applies"""
+
+    admin = psycopg.connect("dbname=postgres", autocommit=True)
+    admin.execute("alter system set pg_net.max_timeout_ms = 2000")
+    admin.execute("select pg_reload_conf()")
+    time.sleep(1)
+
+    try:
+        request_id = pg_http_request(
+            conn,
+            "select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=6', timeout_milliseconds := 5000)",
+        )
+
+        pg_collect_response(conn, request_id)
+
+        (error_msg, timed_out) = conn.execute(
+            "select error_msg, timed_out from net._http_response where id = %s",
+            (request_id,),
+        ).fetchone()
+
+        assert timed_out
+        assert error_msg.startswith("Timeout of 2000 ms reached")
+    finally:
+        admin.execute("alter system reset pg_net.max_timeout_ms")
+        admin.execute("select pg_reload_conf()")
+        admin.close()
+        time.sleep(1)
+
+
+def test_max_timeout_ms_is_superuser_only(conn):
+    """Only superusers may change the bound"""
+
+    conn.execute("set role pre_existing")
+
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        conn.execute("set pg_net.max_timeout_ms = 5")
+
+    conn.rollback()

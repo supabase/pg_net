@@ -1,6 +1,11 @@
 #ifndef CORE_H
 #define CORE_H
 
+#define DEFAULT_MAX_TIMEOUT_MS 600000
+
+// pg_net.max_timeout_ms
+extern int guc_max_timeout_ms;
+
 typedef enum {
   WS_NOT_YET = 1,
   WS_RUNNING,

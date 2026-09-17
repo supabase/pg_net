@@ -44,12 +44,19 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_s
   return headers;
 }
 
+int guc_max_timeout_ms = DEFAULT_MAX_TIMEOUT_MS;
+
 void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   handle->id        = row.id;
   handle->body      = makeStringInfo();
   handle->ez_handle = curl_easy_init();
 
+  // libcurl treats a 0 timeout as no timeout, and a request that never finishes blocks the batch
+  // loop forever. Bound every request so the worker always makes progress.
   handle->timeout_milliseconds = row.timeout_milliseconds;
+  if (handle->timeout_milliseconds <= 0 || handle->timeout_milliseconds > guc_max_timeout_ms) {
+    handle->timeout_milliseconds = guc_max_timeout_ms;
+  }
 
   if (!row.headersBin.isnull) {
     ArrayType         *pgHeaders       = DatumGetArrayTypeP(row.headersBin.value);

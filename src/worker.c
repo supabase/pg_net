@@ -550,6 +550,10 @@ void _PG_init(void) {
       "pg_net.batch_size", "number of requests executed in one iteration of the background worker",
       NULL, &guc_batch_size, 200, 0, PG_INT16_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);
 
+  DefineCustomIntVariable(
+      "pg_net.max_timeout_ms", "upper bound for the timeout_milliseconds of a request", NULL,
+      &guc_max_timeout_ms, DEFAULT_MAX_TIMEOUT_MS, 1, PG_INT32_MAX, PGC_SUSET, 0, NULL, NULL, NULL);
+
   DefineCustomStringVariable("pg_net.database_name", "Database where the worker will connect to",
                              NULL, &guc_database_name, "postgres", PGC_SU_BACKEND, 0, NULL, NULL,
                              NULL);
