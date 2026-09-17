@@ -6,14 +6,17 @@ from common import collect_response_sync, http_request
 def test_http_post_returns_id(sess):
     """Test net.http_post returns an id"""
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:='{}'::jsonb
         );
     """
-    ))
+        ),
+    )
 
     assert request_id == 1
 
@@ -21,14 +24,17 @@ def test_http_post_returns_id(sess):
 def test_http_post_special_chars_body(sess):
     """Test net.http_post returns an id"""
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:=json_build_object('foo', 'ba"r')::jsonb
         );
     """
-    ))
+        ),
+    )
 
     assert request_id == 1
 
@@ -36,13 +42,16 @@ def test_http_post_special_chars_body(sess):
 def test_http_post_collect_sync_success(sess):
     """Collect a response, waiting if it has not completed yet"""
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_post(
             url:='http://localhost:8080/post'
         );
     """
-    ))
+        ),
+    )
 
     response = collect_response_sync(sess, request_id)
 
@@ -55,15 +64,18 @@ def test_http_post_collect_sync_success(sess):
 def test_http_post_collect_non_empty_body(sess):
     """Collect a response async before completed"""
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_post(
             url:='http://localhost:8080/post',
             body:='{"hello": "world"}'::jsonb,
             headers:='{"Content-Type": "application/json", "accept": "application/json"}'::jsonb
         );
     """
-    ))
+        ),
+    )
 
     response = collect_response_sync(sess, request_id)
 
@@ -81,14 +93,16 @@ def test_http_post_wrong_header_exception(sess):
     did_raise = False
 
     try:
-        sess.execute(text(
-            """
+        sess.execute(
+            text(
+                """
             select net.http_post(
                 url:='http://localhost:8080/post',
                 headers:='{"Content-Type": "application/text"}'::jsonb
             );
         """
-        )).fetchone()
+            )
+        ).fetchone()
     except:
         sess.rollback()
         did_raise = True
@@ -99,24 +113,29 @@ def test_http_post_wrong_header_exception(sess):
 def test_http_post_no_content_type_coerce(sess):
     """Confirm that a missing content type coerces to application/json"""
 
-    request_id, = sess.execute(text(
-        """
+    (request_id,) = sess.execute(
+        text(
+            """
         select net.http_post(
             url:='http://localhost:8080/post',
             headers:='{"other": "val"}'::jsonb
         );
     """
-    )).fetchone()
+        )
+    ).fetchone()
 
-    headers, = sess.execute(text(
-        """
+    (headers,) = sess.execute(
+        text(
+            """
         select
             headers
         from
             net.http_request_queue
         where
             id = :request_id
-    """), {"request_id": request_id}
+    """
+        ),
+        {"request_id": request_id},
     ).fetchone()
 
     assert headers["Content-Type"] == "application/json"
@@ -126,14 +145,17 @@ def test_http_post_no_content_type_coerce(sess):
 def test_http_post_empty_body(sess):
     """Test net.http_post can post a null body"""
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_post(
             url:='http://localhost:8080/echo-method',
             body:=null
         );
     """
-    ))
+        ),
+    )
 
     response = collect_response_sync(sess, request_id)
 

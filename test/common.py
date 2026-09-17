@@ -42,9 +42,10 @@ def collect_response_sync(sess, request_id):
     row, so callers get a name-addressable mapping (e.g. result["body"])
     instead of indexing into a stringified nested tuple.
     """
-    return sess.execute(
-        text(
-            """
+    return (
+        sess.execute(
+            text(
+                """
         select
             status,
             message,
@@ -53,9 +54,12 @@ def collect_response_sync(sess, request_id):
             (response).body
         from net._http_collect_response(:request_id, async:=false);
     """
-        ),
-        {"request_id": request_id},
-    ).mappings().fetchone()
+            ),
+            {"request_id": request_id},
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def is_worker_up(autocommit_sess):
@@ -63,7 +67,7 @@ def is_worker_up(autocommit_sess):
     Returns a function that checks whether worker is up or not
 
     The returned function captures autocommit_sess argument and
-    uses it to track worker status. 
+    uses it to track worker status.
     """
 
     def fetch():
@@ -71,6 +75,7 @@ def is_worker_up(autocommit_sess):
             text("select is_worker_up();")
         ).fetchone()
         return worker_is_up
+
     return fetch
 
 
@@ -79,14 +84,17 @@ def get_queue_length(autocommit_sess):
     Returns a function that returns the queue length
 
     The returned function captures autocommit_sess argument and
-    uses it to track queue length. 
+    uses it to track queue length.
     """
 
     def fetch():
-        (queue_length,) = autocommit_sess.execute(text("""
+        (queue_length,) = autocommit_sess.execute(
+            text("""
             select count(*) from net.http_request_queue;
-        """)).fetchone()
+        """)
+        ).fetchone()
         return queue_length
+
     return fetch
 
 
@@ -95,14 +103,17 @@ def get_response_count(autocommit_sess):
     Returns a function that returns the number of rows in net._http_response table
 
     The returned function captures autocommit_sess argument and
-    uses it to run the sql query. 
+    uses it to run the sql query.
     """
 
     def fetch():
-        (response_count,) = autocommit_sess.execute(text("""
+        (response_count,) = autocommit_sess.execute(
+            text("""
             select count(*) from net._http_response;
-        """)).fetchone()
+        """)
+        ).fetchone()
         return response_count
+
     return fetch
 
 
@@ -111,14 +122,17 @@ def get_worker_state(autocommit_sess):
     Returns a function that returns the background worker state
 
     The returned function captures autocommit_sess argument and
-    uses it to run the sql query. 
+    uses it to run the sql query.
     """
 
     def fetch():
-        (state,) = autocommit_sess.execute(text("""
+        (state,) = autocommit_sess.execute(
+            text("""
             select state from pg_stat_activity where backend_type ilike '%pg_net%';
-        """)).fetchone()
+        """)
+        ).fetchone()
         return state
+
     return fetch
 
 
@@ -127,14 +141,17 @@ def is_extension_installed(autocommit_sess):
     Returns a function that returns whether pg_net is installed or not
 
     The returned function captures autocommit_sess argument and
-    uses it to run the sql query. 
+    uses it to run the sql query.
     """
 
     def fetch():
-        (extension_installed,) = autocommit_sess.execute(text("""
+        (extension_installed,) = autocommit_sess.execute(
+            text("""
             select count(*) = 1 from pg_extension where extname = 'pg_net';
-        """)).fetchone()
+        """)
+        ).fetchone()
         return extension_installed
+
     return fetch
 
 
@@ -146,12 +163,12 @@ def try_connect(engine, tmp_sess):
     def fetch():
         try:
             engine = create_engine(PSYCOPG_CONNSTR)
-            ac_engine = engine.execution_options(
-                isolation_level="AUTOCOMMIT")
+            ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
             tmp_sess = Session(ac_engine)
             return tmp_sess.execute(text("select 1")).fetchone()
         except Exception:
             return None
+
     return fetch
 
 
@@ -207,7 +224,7 @@ def wait_for_queue_drain(autocommit_sess):
     wait_until(
         get_queue_length(autocommit_sess),
         lambda queue_length: queue_length == 0,
-        description="queue to drain"
+        description="queue to drain",
     )
 
 
@@ -221,7 +238,7 @@ def wait_for_response_count(autocommit_sess, expected_count):
     wait_until(
         get_response_count(autocommit_sess),
         lambda response_count: response_count == expected_count,
-        description="all responses to arrive"
+        description="all responses to arrive",
     )
 
 
@@ -235,7 +252,7 @@ def wait_for_any_response(autocommit_sess):
     wait_until(
         get_response_count(autocommit_sess),
         lambda response_count: response_count > 0,
-        description="any response to arrive"
+        description="any response to arrive",
     )
 
 
@@ -249,7 +266,7 @@ def wait_for_extension_drop(autocommit_sess):
     wait_until(
         is_extension_installed(autocommit_sess),
         lambda extension_installed: not extension_installed,
-        description="extension to be dropped"
+        description="extension to be dropped",
     )
 
 
@@ -263,11 +280,13 @@ def wait_for_postgres_ready(engine, tmp_sess):
     wait_until(
         try_connect(engine, tmp_sess),
         lambda result: result is not None,
-        description="postgres to become ready"
+        description="postgres to become ready",
     )
 
 
-def wait_until(fetch, predicate, timeout=10, sleep_interval=0.1, description="condition"):
+def wait_until(
+    fetch, predicate, timeout=10, sleep_interval=0.1, description="condition"
+):
     deadline = time.time() + timeout
     result = None
     while time.time() < deadline:
@@ -316,9 +335,11 @@ def restart_worker(sess):
     """
 
     def fetch_worker_pid():
-        return sess.execute(text("""
+        return sess.execute(
+            text("""
             select pid from pg_stat_activity where backend_type ilike '%pg_net%';
-        """)).scalar()
+        """)
+        ).scalar()
 
     old_pid = fetch_worker_pid()
     sess.execute(text("select net.worker_restart()"))

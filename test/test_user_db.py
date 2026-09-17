@@ -7,9 +7,11 @@ def test_net_with_different_username_dbname(sess, autocommit_sess):
 
     try:
         autocommit_sess.execute(
-            text("alter system set pg_net.username to 'pre_existing'"))
+            text("alter system set pg_net.username to 'pre_existing'")
+        )
         autocommit_sess.execute(
-            text("alter system set pg_net.database_name to 'pre_existing'"))
+            text("alter system set pg_net.database_name to 'pre_existing'")
+        )
         restart_worker(autocommit_sess)
 
         (username, datname) = sess.execute(
@@ -19,13 +21,12 @@ def test_net_with_different_username_dbname(sess, autocommit_sess):
         """
             )
         ).fetchone()
-        assert username == 'pre_existing'
-        assert datname == 'pre_existing'
+        assert username == "pre_existing"
+        assert datname == "pre_existing"
 
     finally:
         autocommit_sess.execute(text("alter system reset pg_net.username"))
-        autocommit_sess.execute(
-            text("alter system reset pg_net.database_name"))
+        autocommit_sess.execute(text("alter system reset pg_net.database_name"))
         restart_worker(autocommit_sess)
 
 

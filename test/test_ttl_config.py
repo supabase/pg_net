@@ -89,11 +89,13 @@ def test_compound_ttl_is_honored_by_worker(sess, autocommit_sess):
     """
     try:
         autocommit_sess.execute(
-            text("alter system set pg_net.ttl to '1 second 500 milliseconds'"))
+            text("alter system set pg_net.ttl to '1 second 500 milliseconds'")
+        )
         restart_worker(autocommit_sess)
 
-        request_id = http_request(sess, text(
-            "select net.http_get('http://localhost:8080/anything')"))
+        request_id = http_request(
+            sess, text("select net.http_get('http://localhost:8080/anything')")
+        )
 
         response = collect_response_sync(sess, request_id)
         assert response is not None

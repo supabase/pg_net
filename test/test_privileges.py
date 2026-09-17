@@ -8,13 +8,16 @@ def test_net_on_postgres_role(sess):
     role = sess.execute(text("select current_user;")).fetchone()
     assert role[0] == "postgres"
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_get(
             'http://localhost:8080/anything'
         );
     """
-    ))
+        ),
+    )
 
     response = collect_response_sync(sess, request_id)
 
@@ -29,15 +32,17 @@ def test_net_on_pre_existing_role(sess):
     assert role[0] == "postgres"
 
     sess.execute(text("set local role to pre_existing;"))
-    (request_id, current_user) = sess.execute(text(
-        """
+    (request_id, current_user) = sess.execute(
+        text(
+            """
         select net.http_get(
             'http://localhost:8080/anything'
         ), current_user;
     """
-    )).fetchone()
+        )
+    ).fetchone()
     assert request_id == 1
-    assert current_user == 'pre_existing'
+    assert current_user == "pre_existing"
 
     # Commit to wakeup background worker
     sess.commit()
@@ -47,7 +52,7 @@ def test_net_on_pre_existing_role(sess):
     response = collect_response_sync(sess, request_id)
     current_user = sess.execute(text("select current_user;")).scalar()
     assert response["status"] == "SUCCESS"
-    assert current_user == 'pre_existing'
+    assert current_user == "pre_existing"
 
 
 def test_net_on_new_role(sess):
@@ -56,20 +61,24 @@ def test_net_on_new_role(sess):
     role = sess.execute(text("select current_user;")).fetchone()
     assert role[0] == "postgres"
 
-    sess.execute(text("""
+    sess.execute(
+        text("""
         create role another;
-    """))
+    """)
+    )
     sess.execute(text("set local role to another;"))
 
-    (request_id, current_user) = sess.execute(text(
-        """
+    (request_id, current_user) = sess.execute(
+        text(
+            """
         select net.http_get(
             'http://localhost:8080/anything'
         ), current_user;
     """
-    )).fetchone()
+        )
+    ).fetchone()
     assert request_id == 1
-    assert current_user == 'another'
+    assert current_user == "another"
 
     # Commit to wakeup background worker
     sess.commit()
@@ -79,7 +88,7 @@ def test_net_on_new_role(sess):
     response = collect_response_sync(sess, request_id)
     current_user = sess.execute(text("select current_user;")).scalar()
     assert response["status"] == "SUCCESS"
-    assert current_user == 'another'
+    assert current_user == "another"
 
     sess.execute(text("set local role to another;"))
     # can use the net.worker_restart function
@@ -91,10 +100,12 @@ def test_net_on_new_role(sess):
         )
     ).fetchone()
     assert res == True
-    assert current_user == 'another'
+    assert current_user == "another"
 
-    sess.execute(text("""
+    sess.execute(
+        text("""
         select net.wait_until_running();
         set local role postgres;
         drop role another;
-    """))
+    """)
+    )
