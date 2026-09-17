@@ -7,11 +7,14 @@ from common import http_request
 def test_http_get_timeout_reached(sess):
     """Test net.http_get with timeout errs on a slow reply"""
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=6');
     """
-    ))
+        ),
+    )
 
     # wait for timeout
     time.sleep(7)
@@ -56,11 +59,14 @@ def test_http_detailed_timeout(sess):
     # select net.http_get(url := 'http://localhost:8080/pathological', timeout_milliseconds := 1000);
 
     # Timeout at the HTTP step
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_get(url := 'http://localhost:8080/pathological?delay=1', timeout_milliseconds := 1000)
     """
-    ))
+        ),
+    )
 
     # wait for timeout
     time.sleep(2.1)
@@ -76,10 +82,10 @@ def test_http_detailed_timeout(sess):
 
     match = regex.search(response)
 
-    total_time = float(match.group('A'))
-    dns_time = float(match.group('B'))
-    tcp_ssl_time = float(match.group('C'))
-    http_time = float(match.group('D'))
+    total_time = float(match.group("A"))
+    dns_time = float(match.group("B"))
+    tcp_ssl_time = float(match.group("C"))
+    http_time = float(match.group("D"))
 
     assert content_type == None
     assert content == None
@@ -96,11 +102,14 @@ def test_http_get_succeed_with_gt_timeout(sess):
     is greater than the slow reply response time
     """
 
-    request_id = http_request(sess, text(
-        """
+    request_id = http_request(
+        sess,
+        text(
+            """
         select net.http_get(url := 'http://localhost:8080?status=200&delay=3', timeout_milliseconds := 3500);
     """
-    ))
+        ),
+    )
 
     time.sleep(4.5)
 
@@ -122,8 +131,9 @@ def test_many_slow_mixed_with_fast(sess):
     the fast responses will wait the timeout duration
     """
 
-    sess.execute(text(
-        """
+    sess.execute(
+        text(
+            """
       select
         net.http_get(url := 'http://localhost:8080/pathological?status=200')
       , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2', timeout_milliseconds := 1000)
@@ -131,21 +141,24 @@ def test_many_slow_mixed_with_fast(sess):
       , net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=2', timeout_milliseconds := 1000)
       from generate_series(1,25) _;
     """
-    ))
+        )
+    )
 
     sess.commit()
 
     # wait for timeouts
     time.sleep(3)
 
-    (request_successes, request_timeouts) = sess.execute(text(
-        """
+    (request_successes, request_timeouts) = sess.execute(
+        text(
+            """
       select
         count(*) filter (where error_msg is null and status_code = 200) as request_successes,
         count(*) filter (where error_msg is not null and error_msg like 'Timeout of 1000 ms reached%') as request_timeouts
       from net._http_response;
     """
-    )).fetchone()
+        )
+    ).fetchone()
 
     assert request_successes == 50
     assert request_timeouts == 50

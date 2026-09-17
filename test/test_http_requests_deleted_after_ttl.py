@@ -11,17 +11,19 @@ def test_http_responses_deleted_after_ttl(sess, autocommit_sess):
     """
 
     try:
-        autocommit_sess.execute(
-            text("alter system set pg_net.ttl to '1 second'"))
+        autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second'"))
         restart_worker(autocommit_sess)
 
-        request_id = http_request(sess, text(
-            """
+        request_id = http_request(
+            sess,
+            text(
+                """
             select net.http_get(
                 'http://localhost:8080/anything'
             );
         """
-        ))
+            ),
+        )
 
         response = collect_response_sync(sess, request_id)
 
@@ -47,11 +49,14 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
     until completion despite no new requests coming
     """
 
-    request_id = http_requests(sess, text(
-        """
+    request_id = http_requests(
+        sess,
+        text(
+            """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    ))
+        ),
+    )
 
     response = collect_response_sync(sess, request_id)
 
@@ -61,10 +66,8 @@ def test_http_responses_will_complete_deletion(sess, autocommit_sess):
     wait_for_response_count(autocommit_sess, 4)
 
     try:
-        autocommit_sess.execute(
-            text("alter system set pg_net.ttl to '1 second';"))
-        autocommit_sess.execute(
-            text("alter system set pg_net.batch_size to 2;"))
+        autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second';"))
+        autocommit_sess.execute(text("alter system set pg_net.batch_size to 2;"))
         autocommit_sess.execute(text("select pg_reload_conf();"))
 
         # Wait for ttl so that when we wakeup the worker it has
@@ -94,11 +97,14 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
     new requests coming and despite worker restart
     """
 
-    request_id = http_requests(sess, text(
-        """
+    request_id = http_requests(
+        sess,
+        text(
+            """
         select net.http_get('http://localhost:8080/pathological?status=200') from generate_series(1,4) offset 3;
     """
-    ))
+        ),
+    )
 
     response = collect_response_sync(sess, request_id)
 
@@ -109,10 +115,8 @@ def test_http_responses_will_delete_despite_restart(sess, autocommit_sess):
 
     try:
         # Restart the worker
-        autocommit_sess.execute(
-            text("alter system set pg_net.ttl to '1 second';"))
-        autocommit_sess.execute(
-            text("alter system set pg_net.batch_size to 2;"))
+        autocommit_sess.execute(text("alter system set pg_net.ttl to '1 second';"))
+        autocommit_sess.execute(text("alter system set pg_net.batch_size to 2;"))
         restart_worker(autocommit_sess)
 
         # Wait for ttl so that the requests expire

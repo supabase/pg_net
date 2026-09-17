@@ -13,17 +13,18 @@ def test_wake_does_not_leak_xact_callbacks(sess, autocommit_sess):
     Measure TopMemoryContext of this backend before and after thousands of
     single-statement transactions that call net.wake(): it must stay flat.
     """
-    (version_num,) = autocommit_sess.execute(
-        text("show server_version_num")).fetchone()
+    (version_num,) = autocommit_sess.execute(text("show server_version_num")).fetchone()
     if int(version_num) < 140000:
         pytest.skip("pg_backend_memory_contexts requires PostgreSQL 14+")
 
     def top_memory_context_used_bytes():
-        return autocommit_sess.execute(text("""
+        return autocommit_sess.execute(
+            text("""
             select used_bytes
             from pg_backend_memory_contexts
             where name = 'TopMemoryContext'
-        """)).scalar_one()
+        """)
+        ).scalar_one()
 
     iterations = 5000
 
@@ -41,7 +42,9 @@ def test_wake_does_not_leak_xact_callbacks(sess, autocommit_sess):
 
     after = top_memory_context_used_bytes()
     growth = after - before
-    print(f"TopMemoryContext growth over {iterations} net.wake() transactions: {growth} bytes")
+    print(
+        f"TopMemoryContext growth over {iterations} net.wake() transactions: {growth} bytes"
+    )
 
     # a leaked callback entry costs 32 bytes (24-byte struct in a 32-byte
     # AllocSet chunk), so the buggy behavior grows by iterations * 32 bytes

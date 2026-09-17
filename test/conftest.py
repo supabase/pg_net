@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from common import PSYCOPG_CONNSTR 
+from common import PSYCOPG_CONNSTR
 
 
 @pytest.fixture(scope="function")
@@ -15,26 +15,29 @@ def engine():
 
 @pytest.fixture(scope="function")
 def sess(engine):
-
     session = Session(engine)
 
     # Reset sequences and tables between tests
-    session.execute(text(
-        """
+    session.execute(
+        text(
+            """
     create extension if not exists pg_net;
     """
-    ))
+        )
+    )
     session.commit()
 
     yield session
 
     session.rollback()
 
-    session.execute(text(
-        """
+    session.execute(
+        text(
+            """
     drop extension if exists pg_net cascade;
     """
-    ))
+        )
+    )
     session.commit()
 
 
