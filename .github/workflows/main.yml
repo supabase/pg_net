@@ -78,7 +78,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "17" --arg cassert false --run "make build TEST=1"
+        run: nix-shell --argstr pgVersion "17" --arg cassert false --run "make build TEST=1 BUILD_DIR=build-17"
 
       - name: Run load test
         run: |
