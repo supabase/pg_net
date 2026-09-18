@@ -676,7 +676,6 @@ def test_worker_idles_when_net_schema_exists_without_extension(sess, autocommit_
     """
 
     sess.execute(text("drop extension pg_net cascade;"))
-    sess.execute(text("create schema net;"))
     sess.commit()
 
     # restart the worker so it comes back up with a pending wake signal
