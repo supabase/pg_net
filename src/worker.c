@@ -337,6 +337,11 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
           init_curl_handle(&handles[j],
                            get_request_queue_row(SPI_tuptable->vals[j], SPI_tuptable->tupdesc));
 
+          if (handles[j].rejected_reason) {
+            insert_rejected_response(&handles[j]);
+            continue;
+          }
+
           EREPORT_MULTI(curl_multi_add_handle(worker_state->curl_mhandle, handles[j].ez_handle));
         }
 
@@ -394,7 +399,10 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
         // cleanup
         for (uint64 i = 0; i < requests_consumed; i++) {
-          EREPORT_MULTI(curl_multi_remove_handle(worker_state->curl_mhandle, handles[i].ez_handle));
+          if (!handles[i].rejected_reason) {
+            EREPORT_MULTI(
+                curl_multi_remove_handle(worker_state->curl_mhandle, handles[i].ez_handle));
+          }
 
           curl_easy_cleanup(handles[i].ez_handle);
 

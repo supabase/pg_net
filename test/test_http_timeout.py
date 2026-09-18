@@ -167,8 +167,8 @@ def test_many_slow_mixed_with_fast(sess):
 
 
 @pytest.mark.parametrize("timeout", [0, -1, 2147483647])
-def test_worker_bounds_out_of_range_timeouts(conn, timeout):
-    """A 0, negative or oversized timeout is clamped to pg_net.max_timeout_ms instead of hanging the worker"""
+def test_out_of_range_timeouts_are_rejected(conn, timeout):
+    """A 0, negative or oversized timeout is not sent, the request gets an error response instead"""
 
     request_id = pg_http_request(
         conn,
@@ -178,7 +178,11 @@ def test_worker_bounds_out_of_range_timeouts(conn, timeout):
 
     response = pg_collect_response(conn, request_id)
 
-    assert response["status"] == "SUCCESS"
+    assert response["status"] == "ERROR"
+    assert (
+        response["message"]
+        == f"timeout_milliseconds must be between 1 and 600000 (pg_net.max_timeout_ms), got {timeout}"
+    )
 
 
 def test_worker_honours_max_timeout_ms(conn):
@@ -192,18 +196,16 @@ def test_worker_honours_max_timeout_ms(conn):
     try:
         request_id = pg_http_request(
             conn,
-            "select net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=6', timeout_milliseconds := 5000)",
+            "select net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := 5000)",
         )
 
-        pg_collect_response(conn, request_id)
+        response = pg_collect_response(conn, request_id)
 
-        (error_msg, timed_out) = conn.execute(
-            "select error_msg, timed_out from net._http_response where id = %s",
-            (request_id,),
-        ).fetchone()
-
-        assert timed_out
-        assert error_msg.startswith("Timeout of 2000 ms reached")
+        assert response["status"] == "ERROR"
+        assert (
+            response["message"]
+            == "timeout_milliseconds must be between 1 and 2000 (pg_net.max_timeout_ms), got 5000"
+        )
     finally:
         admin.execute("alter system reset pg_net.max_timeout_ms")
         admin.execute("select pg_reload_conf()")
