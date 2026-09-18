@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import psycopg
 
 
-PSYCOPG_CONNSTR = "postgresql+psycopg:///postgres"
+PSYCOPG_CONNSTR = "postgresql+psycopg://postgres@:{port}/postgres?host={host}"
 
 
 def http_request(sess, query):
@@ -161,13 +161,15 @@ def try_connect(engine, tmp_sess):
     Returns a function that return whether postgres can accept connections.
     """
 
+    connstr = tmp_sess.get_bind().url
+
     def fetch():
         try:
-            engine = create_engine(PSYCOPG_CONNSTR)
+            engine = create_engine(connstr)
             ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
             tmp_sess = Session(ac_engine)
             return tmp_sess.execute(text("select 1")).fetchone()
-        except Exception:
+        except Exception as e:
             return None
 
     return fetch
