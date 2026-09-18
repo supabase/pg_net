@@ -44,12 +44,24 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_s
   return headers;
 }
 
+int guc_max_timeout_ms = DEFAULT_MAX_TIMEOUT_MS;
+
 void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   handle->id        = row.id;
   handle->body      = makeStringInfo();
   handle->ez_handle = curl_easy_init();
 
+  // libcurl treats a 0 timeout as no timeout, and a request that never finishes blocks the batch
+  // loop forever. Requests outside the bound are not sent, they get an error response instead. The
+  // handle is still fully set up so it can be cleaned up like the others.
   handle->timeout_milliseconds = row.timeout_milliseconds;
+  handle->rejected_reason      = NULL;
+  if (handle->timeout_milliseconds <= 0 || handle->timeout_milliseconds > guc_max_timeout_ms) {
+    handle->rejected_reason =
+        psprintf("timeout_milliseconds must be between 1 and %d (pg_net.max_timeout_ms), got %d",
+                 guc_max_timeout_ms, row.timeout_milliseconds);
+    handle->timeout_milliseconds = guc_max_timeout_ms;
+  }
 
   if (!row.headersBin.isnull) {
     ArrayType         *pgHeaders       = DatumGetArrayTypeP(row.headersBin.value);
@@ -234,8 +246,49 @@ static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
   return PG_JSONB_OBJECT_FINISH(headers);
 }
 
+enum { response_nparams = 7 }; // using an enum because const size_t doesn't compile
+
+static void execute_insert_response(Datum *vals, char *nulls) {
+  if (ins_response_plan == NULL) {
+    SPIPlanPtr tmp = SPI_prepare(
+        "\
+        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
+        response_nparams,
+        (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID});
+
+    if (tmp == NULL)
+      ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
+
+    ins_response_plan = SPI_saveplan(tmp);
+    if (ins_response_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
+
+    SPI_freeplan(tmp);
+  }
+
+  int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);
+
+  if (ret_code != SPI_OK_INSERT) {
+    ereport(ERROR, errmsg("Error when inserting response: %s", SPI_result_code_string(ret_code)));
+  }
+}
+
+void insert_rejected_response(CurlHandle *handle) {
+  Datum vals[response_nparams];
+  char  nulls[response_nparams];
+  MemSet(nulls, 'n', response_nparams);
+
+  vals[0]  = Int64GetDatum(handle->id);
+  nulls[0] = ' ';
+  vals[5]  = BoolGetDatum(false);
+  nulls[5] = ' ';
+  vals[6]  = CStringGetTextDatum(handle->rejected_reason);
+  nulls[6] = ' ';
+
+  execute_insert_response(vals, nulls);
+}
+
 void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
-  enum { nparams = 7 }; // using an enum because const size_t nparams doesn't compile
+  enum { nparams = response_nparams };
   Datum vals[nparams];
   char  nulls[nparams];
   MemSet(nulls, 'n', nparams);
@@ -291,32 +344,14 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
     }
   }
 
-  if (ins_response_plan == NULL) {
-    SPIPlanPtr tmp = SPI_prepare(
-        "\
-        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
-        nparams, (Oid[nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID});
-
-    if (tmp == NULL)
-      ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
-
-    ins_response_plan = SPI_saveplan(tmp);
-    if (ins_response_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
-
-    SPI_freeplan(tmp);
-  }
-
-  int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);
-
-  if (ret_code != SPI_OK_INSERT) {
-    ereport(ERROR, errmsg("Error when inserting response: %s", SPI_result_code_string(ret_code)));
-  }
+  execute_insert_response(vals, nulls);
 }
 
 void pfree_handle(CurlHandle *handle) {
   pfree(handle->url);
   pfree(handle->method);
   if (handle->req_body) pfree(handle->req_body);
+  if (handle->rejected_reason) pfree(handle->rejected_reason);
 
   if (handle->body) destroyStringInfo(handle->body);
 

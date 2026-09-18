@@ -137,6 +137,7 @@ The extension creates the following configurable variables:
 2. **pg_net.ttl** _(default: 6 hours)_: An interval that defines the max time a row in the _`net.http_response`_ will live before being deleted. Any interval that PostgreSQL accepts can be used (e.g. `'1 minute 10 seconds'`); invalid or negative values are rejected when the setting is changed. Note that the deletion won't happen exactly after the TTL has passed. The worker will perform this deletion while its processing requests.
 3. **pg_net.database_name** _(default: 'postgres')_: A string that defines which database the extension is applied to
 4. **pg_net.username** _(default: NULL)_: A string that defines which user will the background worker be connected with. If not set (`NULL`), it will assume the bootstrap user.
+5. **pg_net.max_timeout_ms** _(default: 600000)_: An integer that bounds the `timeout_milliseconds` of a request. A request with a timeout outside `1..pg_net.max_timeout_ms` is not sent and gets an `ERROR` response saying so, so every request has a finite lifetime and a single request can't block the others. Only superusers can change it.
 
 All these variables can be viewed with the following commands:
 ```sql
@@ -144,6 +145,7 @@ show pg_net.batch_size;
 show pg_net.ttl;
 show pg_net.database_name;
 show pg_net.username;
+show pg_net.max_timeout_ms;
 ```
 
 You can change these by editing the `postgresql.conf` file (find it with `SHOW config_file;`) or with `ALTER SYSTEM`:

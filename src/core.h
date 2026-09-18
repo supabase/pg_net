@@ -1,6 +1,11 @@
 #ifndef CORE_H
 #define CORE_H
 
+#define DEFAULT_MAX_TIMEOUT_MS 600000
+
+// pg_net.max_timeout_ms
+extern int guc_max_timeout_ms;
+
 typedef enum {
   WS_NOT_YET = 1,
   WS_RUNNING,
@@ -39,6 +44,7 @@ typedef struct {
   char              *req_body;
   char              *method;
   CURL              *ez_handle;
+  char              *rejected_reason; // set when the request must not be sent
 } CurlHandle;
 
 uint64 delete_expired_responses(char *ttl, int batch_size);
@@ -50,6 +56,7 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
 void set_curl_mhandle(WorkerState *wstate);
 
 void insert_response(CurlHandle *handle, CURLcode curl_return_code);
+void insert_rejected_response(CurlHandle *handle);
 
 void init_curl_handle(CurlHandle *handle, RequestQueueRow row);
 
