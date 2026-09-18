@@ -388,13 +388,14 @@ def test_direct_inserts_no_requests(sess, autocommit_sess):
     wait_for_response_count(autocommit_sess, 1)
 
 
-def test_processing_survives_postmaster_crash(autocommit_sess):
+def test_processing_survives_postmaster_crash(autocommit_sess, pg):
     """
     Check that the queue will continue processing even when a postmaster
     crash or restart happens
     """
 
-    engine = create_engine(PSYCOPG_CONNSTR)
+    connstr = autocommit_sess.get_bind().url
+    engine = create_engine(connstr)
     ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
     tmp_sess = Session(ac_engine)
 
@@ -423,14 +424,13 @@ def test_processing_survives_postmaster_crash(autocommit_sess):
 
         engine.dispose()
 
-        pgdata_env = os.getenv("PGDATA")
-        subprocess.run(["pg_ctl", "restart", "-D", pgdata_env])
+        pg.pgctl(f"restart -D {pg.pgdata}")
 
         # wait for postmaster to finish restarting and accept connections
         wait_for_postgres_ready(engine, tmp_sess)
 
         # Recreate engine and session after restart
-        engine = create_engine(PSYCOPG_CONNSTR)
+        engine = create_engine(connstr)
         ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
         tmp_sess = Session(ac_engine)
 
