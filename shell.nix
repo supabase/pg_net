@@ -14,7 +14,7 @@ in
     inherit (xpgLock) owner repo rev;
     sha256 = xpgLock.narHash;
   })
-, pgVersion ? null
+, pgVersion ? "17"
 , cassert ? true
 }:
 let
@@ -22,7 +22,9 @@ let
   loadtest = pkgs.callPackage ./nix/loadtest.nix {};
   pythonDeps = with pkgs.python3Packages; [
     pytest
+    pytest-xdist
     psycopg
+    filelock
     sqlalchemy
   ];
   style =
@@ -48,8 +50,11 @@ pkgs.mkShell {
       style
       styleCheck
       pkgs.ruff
+      pkgs.lcov
     ];
   shellHook = ''
     export HISTFILE=.history
+    export PATH=${xpgPkgs."postgresql_${pgVersion}_cassert"}/bin:"$PATH"
+    export BUILD_DIR="build"
   '';
 }
