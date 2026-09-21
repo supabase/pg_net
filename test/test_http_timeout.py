@@ -263,3 +263,174 @@ def test_rejected_requests_do_not_affect_the_rest_of_the_batch(conn):
         ),
         (200, None),
     ]
+
+
+REJECTED = (
+    "timeout_milliseconds must be between 1 and 600000 (pg_net.max_timeout_ms), got {}"
+)
+
+
+def wait_for_responses(conn, ids, deadline_s=20):
+    """Poll net._http_response until every id has a row, return {id: (status_code, error_msg, timed_out)}"""
+    deadline = time.time() + deadline_s
+    responses = {}
+    while len(responses) < len(ids) and time.time() < deadline:
+        for request_id, status_code, error_msg, timed_out in conn.execute(
+            "select id, status_code, error_msg, timed_out from net._http_response where id = any(%s)",
+            (list(ids),),
+        ).fetchall():
+            responses[request_id] = (status_code, error_msg, timed_out)
+        conn.rollback()
+        time.sleep(0.2)
+    return responses
+
+
+@pytest.mark.parametrize("timeout", [1, 600000])
+def test_timeout_bounds_are_accepted(conn, timeout):
+    """The bounds themselves are valid, the request is sent"""
+
+    request_id = pg_http_request(
+        conn,
+        "select net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := %s)",
+        (timeout,),
+    )
+
+    (status_code, error_msg, timed_out) = wait_for_responses(conn, [request_id])[
+        request_id
+    ]
+
+    # 1ms may legitimately time out, but the request must have been sent, not rejected
+    assert status_code == 200 or timed_out
+    assert error_msg != REJECTED.format(timeout)
+
+
+def test_batch_with_only_rejected_requests_keeps_the_worker_alive(conn):
+    """A batch where every request is rejected is answered and the worker carries on"""
+
+    ids = list(
+        conn.execute(
+            """
+        select
+            net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := 0),
+            net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := 0)
+        """
+        ).fetchone()
+    )
+    conn.commit()
+
+    responses = wait_for_responses(conn, ids)
+    assert [responses[i][1] for i in ids] == [REJECTED.format(0), REJECTED.format(0)]
+
+    follow_up = pg_http_request(
+        conn,
+        "select net.http_get(url := 'http://localhost:8080/pathological?status=200')",
+    )
+    assert wait_for_responses(conn, [follow_up])[follow_up][0] == 200
+
+
+def test_rejected_request_last_in_batch(conn):
+    """A rejected request at the end of a batch does not disturb the ones before it"""
+
+    ids = list(
+        conn.execute(
+            """
+        select
+            net.http_get(url := 'http://localhost:8080/pathological?status=200'),
+            net.http_post(url := 'http://localhost:8080/pathological?status=200', body := '{}'),
+            net.http_delete(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := 0)
+        """
+        ).fetchone()
+    )
+    conn.commit()
+
+    responses = wait_for_responses(conn, ids)
+    assert [responses[i][:2] for i in ids] == [
+        (200, None),
+        (200, None),
+        (None, REJECTED.format(0)),
+    ]
+
+
+def test_direct_insert_out_of_range_is_rejected(conn):
+    """Rows inserted directly into the queue go through the same check"""
+
+    request_id = pg_http_request(
+        conn,
+        """
+        insert into net.http_request_queue(method, url, timeout_milliseconds)
+        values ('GET', 'http://localhost:8080/pathological?status=200', -7)
+        returning id
+    """,
+    )
+    conn.execute("select net.wake()")
+    conn.commit()
+
+    assert wait_for_responses(conn, [request_id])[request_id][1] == REJECTED.format(-7)
+
+
+def test_rejected_alongside_slow_and_fast_requests(conn):
+    """Rejection, a real timeout and a success in one batch are all recorded correctly"""
+
+    ids = list(
+        conn.execute(
+            """
+        select
+            net.http_get(url := 'http://localhost:8080/pathological?status=200&delay=6', timeout_milliseconds := 1500),
+            net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := 0),
+            net.http_get(url := 'http://localhost:8080/pathological?status=200')
+        """
+        ).fetchone()
+    )
+    conn.commit()
+
+    responses = wait_for_responses(conn, ids)
+    slow, rejected, fast = (responses[i] for i in ids)
+    assert slow[2] and slow[1].startswith("Timeout of 1500 ms reached")
+    assert rejected == (None, REJECTED.format(0), False)
+    assert fast == (200, None, False)
+
+
+def test_large_batch_mixing_rejected_and_valid_requests(conn):
+    """More requests than batch_size, every other one rejected, all answered across batches"""
+
+    ids = [
+        row[0]
+        for row in conn.execute(
+            """
+        select net.http_get(
+            url := 'http://localhost:8080/pathological?status=200',
+            timeout_milliseconds := case when mod(n, 2) = 0 then 0 else 5000 end)
+        from generate_series(1, 250) n
+        """
+        ).fetchall()
+    ]
+    conn.commit()
+
+    responses = wait_for_responses(conn, ids, deadline_s=60)
+    assert len(responses) == 250
+    assert all(
+        responses[i][1] == REJECTED.format(0)
+        for n, i in enumerate(ids, 1)
+        if n % 2 == 0
+    )
+    assert all(responses[i][0] == 200 for n, i in enumerate(ids, 1) if n % 2 == 1)
+
+
+def test_worker_restart_after_rejections(conn):
+    """Rejections leave nothing behind that breaks a worker restart"""
+
+    request_id = pg_http_request(
+        conn,
+        "select net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := 0)",
+    )
+    assert wait_for_responses(conn, [request_id])[request_id][1] == REJECTED.format(0)
+
+    conn.execute("select net.worker_restart()")
+    conn.execute("select net.wait_until_running()")
+    conn.commit()
+
+    follow_up = pg_http_request(
+        conn,
+        "select net.http_get(url := 'http://localhost:8080/pathological?status=200')",
+    )
+    assert wait_for_responses(conn, [follow_up])[follow_up][0] == 200
