@@ -222,3 +222,44 @@ def test_max_timeout_ms_is_superuser_only(conn):
         conn.execute("set pg_net.max_timeout_ms = 5")
 
     conn.rollback()
+
+
+def test_rejected_requests_do_not_affect_the_rest_of_the_batch(conn):
+    """Rejected and valid requests consumed in the same batch are all answered"""
+
+    ids = list(
+        conn.execute(
+            """
+        select
+            net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := 0),
+            net.http_get(url := 'http://localhost:8080/pathological?status=200'),
+            net.http_get(url := 'http://localhost:8080/pathological?status=200', timeout_milliseconds := -1),
+            net.http_get(url := 'http://localhost:8080/pathological?status=200')
+        """
+        ).fetchone()
+    )
+    conn.commit()
+
+    deadline = time.time() + 15
+    responses = {}
+    while len(responses) < 4 and time.time() < deadline:
+        for request_id, status_code, error_msg in conn.execute(
+            "select id, status_code, error_msg from net._http_response where id = any(%s)",
+            (ids,),
+        ).fetchall():
+            responses[request_id] = (status_code, error_msg)
+        conn.rollback()
+        time.sleep(0.2)
+
+    assert [responses.get(i) for i in ids] == [
+        (
+            None,
+            "timeout_milliseconds must be between 1 and 600000 (pg_net.max_timeout_ms), got 0",
+        ),
+        (200, None),
+        (
+            None,
+            "timeout_milliseconds must be between 1 and 600000 (pg_net.max_timeout_ms), got -1",
+        ),
+        (200, None),
+    ]
