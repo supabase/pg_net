@@ -33,6 +33,36 @@ def http_requests(sess, query):
     return request_id
 
 
+def pg_http_request(conn, query, params=None):
+    """
+    psycopg version of http_request: run a query returning one request id and
+    commit so the background worker wakes up.
+    """
+    request_id = conn.execute(query, params).fetchone()[0]
+    conn.commit()
+    return request_id
+
+
+def pg_collect_response(conn, request_id):
+    """
+    psycopg version of collect_response_sync: wait for the request to complete
+    and return its response as a dict.
+    """
+    row = conn.execute(
+        """
+        select
+            status,
+            message,
+            (response).status_code,
+            (response).headers,
+            (response).body
+        from net._http_collect_response(%s, async := false);
+    """,
+        (request_id,),
+    ).fetchone()
+    return dict(zip(("status", "message", "status_code", "headers", "body"), row))
+
+
 def collect_response_sync(sess, request_id):
     """
     Wait for request with request_id to complete and return its response.

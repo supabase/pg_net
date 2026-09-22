@@ -332,10 +332,19 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
       if (requests_consumed > 0) {
         CurlHandle *handles = palloc(mul_size(sizeof(CurlHandle), requests_consumed));
 
+        // insert_rejected_response() runs SPI, which resets SPI_tuptable, so keep our own pointer
+        // to the consumed rows
+        SPITupleTable *queue_rows = SPI_tuptable;
+
         // initialize curl handles
         for (size_t j = 0; j < requests_consumed; j++) {
           init_curl_handle(&handles[j],
-                           get_request_queue_row(SPI_tuptable->vals[j], SPI_tuptable->tupdesc));
+                           get_request_queue_row(queue_rows->vals[j], queue_rows->tupdesc));
+
+          if (handles[j].rejected_reason) {
+            insert_rejected_response(&handles[j]);
+            continue;
+          }
 
           EREPORT_MULTI(curl_multi_add_handle(worker_state->curl_mhandle, handles[j].ez_handle));
         }
@@ -394,7 +403,10 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
         // cleanup
         for (uint64 i = 0; i < requests_consumed; i++) {
-          EREPORT_MULTI(curl_multi_remove_handle(worker_state->curl_mhandle, handles[i].ez_handle));
+          if (!handles[i].rejected_reason) {
+            EREPORT_MULTI(
+                curl_multi_remove_handle(worker_state->curl_mhandle, handles[i].ez_handle));
+          }
 
           curl_easy_cleanup(handles[i].ez_handle);
 
@@ -549,6 +561,10 @@ void _PG_init(void) {
   DefineCustomIntVariable(
       "pg_net.batch_size", "number of requests executed in one iteration of the background worker",
       NULL, &guc_batch_size, 200, 0, PG_INT16_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);
+
+  DefineCustomIntVariable(
+      "pg_net.max_timeout_ms", "upper bound for the timeout_milliseconds of a request", NULL,
+      &guc_max_timeout_ms, DEFAULT_MAX_TIMEOUT_MS, 1, PG_INT32_MAX, PGC_SUSET, 0, NULL, NULL, NULL);
 
   DefineCustomStringVariable("pg_net.database_name", "Database where the worker will connect to",
                              NULL, &guc_database_name, "postgres", PGC_SU_BACKEND, 0, NULL, NULL,
