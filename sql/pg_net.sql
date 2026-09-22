@@ -354,7 +354,7 @@ $$;
 
 grant usage on schema net to PUBLIC;
 
-grant usage all on all sequences in schema net to PUBLIC;
-grant select all on all sequences in schema net to PUBLIC;
+grant usage on all sequences in schema net to PUBLIC;
+grant select on all sequences in schema net to PUBLIC;
 
 grant select on all tables in schema net to PUBLIC;
