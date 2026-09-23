@@ -353,5 +353,11 @@ end;
 $$;
 
 grant usage on schema net to PUBLIC;
-grant all on all sequences in schema net to PUBLIC;
-grant all on all tables in schema net to PUBLIC;
+
+grant usage on all sequences in schema net to PUBLIC;
+grant select on all sequences in schema net to PUBLIC;
+
+grant select on all tables in schema net to PUBLIC;
+
+grant delete on net.http_request_queue to PUBLIC;
+grant truncate on net.http_request_queue to PUBLIC;
