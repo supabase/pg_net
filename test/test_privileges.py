@@ -28,7 +28,7 @@ def test_net_on_postgres_role(sess):
 
 
 def test_net_on_pre_existing_role(conn):
-    """Check that a pre existing role is not able to use net schema"""
+    """Check permissions on pre-existing role"""
 
     role = conn.execute("select current_user;").fetchall()
     assert role[0][0] == "postgres"
@@ -46,9 +46,14 @@ def test_net_on_pre_existing_role(conn):
         """
         )
 
+    conn.rollback()
+    conn.execute("set local role to pre_existing;")
+    conn.execute("DELETE FROM net.http_request_queue WHERE 1 = 0;")
+    conn.execute("TRUNCATE net.http_request_queue;")
+
 
 def test_net_on_new_role(conn):
-    """Check that a newly created role cannot use the net schema"""
+    """Check permissions on newly created role"""
 
     role = conn.execute("select current_user;").fetchall()
     assert role[0][0] == "postgres"
@@ -70,6 +75,10 @@ def test_net_on_new_role(conn):
         )
 
     conn.rollback()
+
+    conn.execute("set local role to another;")
+    conn.execute("DELETE FROM net.http_request_queue WHERE 1 = 0;")
+    conn.execute("TRUNCATE net.http_request_queue;")
 
     conn.execute("set local role to another;")
     # can use the net.worker_restart function
