@@ -1,5 +1,7 @@
 from sqlalchemy import text
 from common import collect_response_sync, http_request
+import pytest
+import psycopg
 
 
 def test_net_on_postgres_role(sess):
@@ -25,34 +27,21 @@ def test_net_on_postgres_role(sess):
     assert response["status"] == "SUCCESS"
 
 
-def test_net_on_pre_existing_role(sess):
-    """Check that a pre existing role can use the net schema"""
+def test_net_on_pre_existing_role(conn):
+    """Check that a pre existing role is not able to use net schema"""
 
-    role = sess.execute(text("select current_user;")).fetchone()
-    assert role[0] == "postgres"
+    role = conn.execute("select current_user;").fetchall()
+    assert role[0][0] == "postgres"
 
-    sess.execute(text("set local role to pre_existing;"))
-    (request_id, current_user) = sess.execute(
-        text(
-            """
-        select net.http_get(
-            'http://localhost:8080/anything'
-        ), current_user;
-    """
+    conn.execute("set local role to pre_existing;")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        conn.execute(
+                """
+            select net.http_get(
+                'http://localhost:8080/anything'
+            ), current_user;
+        """
         )
-    ).fetchone()
-    assert request_id == 1
-    assert current_user == "pre_existing"
-
-    # Commit to wakeup background worker
-    sess.commit()
-
-    # Confirm that the request was retrievable
-    sess.execute(text("set local role to pre_existing;"))
-    response = collect_response_sync(sess, request_id)
-    current_user = sess.execute(text("select current_user;")).scalar()
-    assert response["status"] == "SUCCESS"
-    assert current_user == "pre_existing"
 
 
 def test_net_on_new_role(sess):
