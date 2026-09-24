@@ -22,7 +22,21 @@ static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   return realsize;
 }
 
-static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_slist *headers) {
+// A header with a CR or LF in it can inject extra headers or a body into the request, since libcurl
+// ends every header with CRLF. Such requests are not sent. The message only names the header, the
+// value may hold credentials.
+static char *crlf_header_rejection(const char *hdr) {
+  size_t bad = strcspn(hdr, "\r\n");
+  if (hdr[bad] == '\0') return NULL;
+
+  size_t name_len = strcspn(hdr, ":");
+  if (name_len > bad) name_len = bad;
+
+  return psprintf("header \"%.*s\" contains a carriage return or line feed", (int)name_len, hdr);
+}
+
+static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_slist *headers,
+                                                 char **rejected_reason) {
   ArrayIterator iterator;
   Datum         value;
   bool          isnull;
@@ -36,7 +50,17 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_s
     }
 
     hdr = TextDatumGetCString(value);
-    EREPORT_CURL_SLIST_APPEND(headers, hdr);
+
+    char *reason = crlf_header_rejection(hdr);
+    if (reason) {
+      if (*rejected_reason == NULL)
+        *rejected_reason = reason;
+      else
+        pfree(reason);
+    } else {
+      EREPORT_CURL_SLIST_APPEND(headers, hdr);
+    }
+
     pfree(hdr);
   }
   array_free_iterator(iterator);
@@ -67,7 +91,7 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
     ArrayType         *pgHeaders       = DatumGetArrayTypeP(row.headersBin.value);
     struct curl_slist *request_headers = NULL;
 
-    request_headers = pg_text_array_to_slist(pgHeaders, request_headers);
+    request_headers = pg_text_array_to_slist(pgHeaders, request_headers, &handle->rejected_reason);
 
     EREPORT_CURL_SLIST_APPEND(request_headers, "User-Agent: pg_net/" EXTVERSION);
 

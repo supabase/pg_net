@@ -90,6 +90,8 @@ When any of the three request functions (`http_get`, `http_post`, `http_delete`)
 
 Once a response is received, it gets stored in the `_http_response` table. By monitoring this table, you can keep track of response statuses and messages.
 
+A request whose headers contain a carriage return or line feed is not sent. It gets an `ERROR` response naming the header, since libcurl terminates headers with CRLF and an embedded one would let the header smuggle extra headers or a body into the request.
+
 > [!IMPORTANT]
 > Inserting directly into `net.http_request_queue` won't wake the worker, you must use the request functions. Rows inserted directly are only processed the next time the worker wakes up.
 > We do it this way to avoid polling the `net.http_request_queue` table, which would pollute `pg_stat_statements` and cause unnecessary activity from the worker.
