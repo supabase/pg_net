@@ -83,6 +83,9 @@ $(EXTENSION).control: $(EXTENSION).control.in
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
+# otherwise contrib_regression is picked
+CONTRIB_TESTDB = postgres
+
 .PHONY: test
 test:
-	net-with-nginx python -m pytest -s -vv $(PYTEST_ARGS)
+	net-with-nginx make installcheck
