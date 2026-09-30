@@ -31,6 +31,7 @@ typedef struct {
   int32         timeout_milliseconds;
   NullableDatum headersBin;
   NullableDatum bodyBin;
+  Datum         username;
 } RequestQueueRow;
 
 // The curl easy handle plus additional data, this acts for both the request and
@@ -45,6 +46,7 @@ typedef struct {
   char              *method;
   CURL              *ez_handle;
   char              *rejected_reason; // set when the request must not be sent
+  char              *username; // set when the request must not be sent
 } CurlHandle;
 
 uint64 delete_expired_responses(char *ttl, int batch_size);

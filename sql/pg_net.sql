@@ -15,8 +15,11 @@ create unlogged table net.http_request_queue(
     url text not null,
     headers jsonb,
     body bytea,
-    timeout_milliseconds int not null
+    timeout_milliseconds int not null,
+    username text not null default current_user
 );
+alter table net.http_request_queue enable row level security;
+create policy net_request_policy on net.http_request_queue using (username OPERATOR(pg_catalog.=) current_user);
 
 create or replace function net.check_worker_is_up() returns void as $$
 begin
@@ -40,9 +43,11 @@ create unlogged table net._http_response(
     content text,
     timed_out bool,
     error_msg text,
-    created timestamptz not null default now()
+    created timestamptz not null default now(),
+    username text not null
 );
-
+alter table net._http_response enable row level security;
+create policy net_response_policy on net._http_response using (username OPERATOR(pg_catalog.=) current_user);
 create index on net._http_response (created);
 
 -- Blocks until an http_request is complete
