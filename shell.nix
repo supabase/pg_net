@@ -1,5 +1,4 @@
-let
-  flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
+let flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
   nixpkgsLock = flakeLock.nodes.nixpkgs.locked;
   xpgLock = flakeLock.nodes.xpg.locked;
 in
@@ -56,6 +55,7 @@ pkgs.mkShell {
     style
     styleCheck
     pkgs.ruff
+    pkgs.python313Packages.pglast
   ];
   shellHook = ''
     export HISTFILE=.history
