@@ -29,6 +29,11 @@ let
     pkgs.writeShellScriptBin "net-style" ''
       ${pkgs.clang-tools}/bin/clang-format -i src/*
       ${pkgs.ruff}/bin/ruff format
+      sql_files=$(ls sql/)
+      for sql_file in $sql_files; do
+	      ${pkgs.python313Packages.pglast}/bin/pgpp sql/''$sql_file > sql/tmp_''$sql_file;
+	      mv sql/tmp_''$sql_file sql/''$sql_file;
+      done;
     '';
   styleCheck =
     pkgs.writeShellScriptBin "net-style-check" ''
@@ -48,6 +53,7 @@ pkgs.mkShell {
       style
       styleCheck
       pkgs.ruff
+      pkgs.python313Packages.pglast
     ];
   shellHook = ''
     export HISTFILE=.history

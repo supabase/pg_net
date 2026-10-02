@@ -2,8 +2,8 @@
   description = "Development shell for pg_net";
 
   inputs = {
-    # 2025-11-13
-    nixpkgs.url = "github:NixOS/nixpkgs/91c9a64ce2a84e648d0cf9671274bb9c2fb9ba60";
+    # 2026-05-30 : 25.05
+    nixpkgs.url = "github:NixOS/nixpkgs/8c50a710ddca43d7a530fb805ad55bde8d0141c5";
     xpg = {
       url = "github:steve-chavez/xpg/v2.5.0";
     };
