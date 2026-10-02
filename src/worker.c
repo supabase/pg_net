@@ -43,6 +43,7 @@ static const size_t total_extension_tables       = 2;
 static char *guc_ttl;
 static int   guc_batch_size;
 static char *guc_database_name;
+static char *guc_address_blacklist;
 static char *guc_username;
 
 #if PG15_GTE
@@ -572,4 +573,8 @@ void _PG_init(void) {
 
   DefineCustomStringVariable("pg_net.username", "Connection user for the worker", NULL,
                              &guc_username, NULL, PGC_SU_BACKEND, 0, NULL, NULL, NULL);
+
+  DefineCustomStringVariable("pg_net.address_blacklist", "Addresses that the worker is not allowed to connect to",
+                             NULL, &guc_address_blacklist, "", PGC_SIGHUP, 0, NULL, NULL,
+                             NULL);
 }
