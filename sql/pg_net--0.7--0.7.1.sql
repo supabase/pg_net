@@ -12,6 +12,8 @@ create or replace function net.http_collect_response(
     language plpgsql
     security definer
 as $$
+begin;
   raise notice 'The net.http_collect_response function is deprecated.';
   select net._http_collect_response(request_id, async);
+end;
 $$;

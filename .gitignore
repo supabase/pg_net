@@ -20,4 +20,4 @@ nginx.pid
 tags
 net_worker.pid
 pg_net--*.sql
-!pg_net--*--*.sql
+!pg_net--0.1.sql
