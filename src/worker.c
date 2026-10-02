@@ -43,7 +43,7 @@ static const size_t total_extension_tables       = 2;
 static char *guc_ttl;
 static int   guc_batch_size;
 static char *guc_database_name;
-static char *guc_address_blacklist;
+char *guc_address_blacklist;
 static char *guc_username;
 
 #if PG15_GTE

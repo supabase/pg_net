@@ -7,7 +7,7 @@
 extern int guc_max_timeout_ms;
 
 // pg_net.address_blacklist
-extern static char *guc_address_blacklist;
+extern char *guc_address_blacklist;
 
 typedef enum {
   WS_NOT_YET = 1,
