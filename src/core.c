@@ -99,6 +99,7 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   }
 
   handle->url = TextDatumGetCString(row.url);
+  handle->username = TextDatumGetCString(row.username);
 
   handle->req_body = !row.bodyBin.isnull ? TextDatumGetCString(row.bodyBin.value) : NULL;
 
@@ -205,7 +206,7 @@ uint64 consume_request_queue(const int batch_size) {
         )\
         DELETE FROM net.http_request_queue q\
         USING rows WHERE q.id = rows.id\
-        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
+        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, q.username",
                                  1, (Oid[]){INT4OID});
 
     if (tmp == NULL)
@@ -249,7 +250,10 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
   NullableDatum bodyBin = {.value  = SPI_getbinval(spi_tupval, spi_tupdesc, 6, &tupIsNull),
                            .isnull = tupIsNull};
 
-  return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin};
+  Datum username = SPI_getbinval(spi_tupval, spi_tupdesc, 7, &tupIsNull);
+  EREPORT_NULL_ATTR(tupIsNull, username);
+
+  return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin, username};
 }
 
 static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
@@ -270,15 +274,15 @@ static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
   return PG_JSONB_OBJECT_FINISH(headers);
 }
 
-enum { response_nparams = 7 }; // using an enum because const size_t doesn't compile
+enum { response_nparams = 8 }; // using an enum because const size_t doesn't compile
 
 static void execute_insert_response(Datum *vals, char *nulls) {
   if (ins_response_plan == NULL) {
     SPIPlanPtr tmp = SPI_prepare(
         "\
-        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
+        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg, username) values ($1, $2, $3, $4, $5, $6, $7, $8)",
         response_nparams,
-        (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID});
+        (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID, TEXTOID});
 
     if (tmp == NULL)
       ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
@@ -307,6 +311,8 @@ void insert_rejected_response(CurlHandle *handle) {
   nulls[5] = ' ';
   vals[6]  = CStringGetTextDatum(handle->rejected_reason);
   nulls[6] = ' ';
+  vals[7]  = CStringGetTextDatum(handle->username);
+  nulls[7] = ' ';
 
   execute_insert_response(vals, nulls);
 }
@@ -319,6 +325,9 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
 
   vals[0]  = Int64GetDatum(handle->id);
   nulls[0] = ' ';
+
+  vals[7]  = CStringGetTextDatum(handle->username);
+  nulls[7] = ' ';
 
   if (curl_return_code == CURLE_OK) {
     Jsonb *jsonb_headers        = jsonb_headers_from_curl_handle(handle->ez_handle);
@@ -346,6 +355,7 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
 
     vals[5]  = BoolGetDatum(false);
     nulls[5] = ' ';
+
   } else {
     bool timed_out = curl_return_code == CURLE_OPERATION_TIMEDOUT;
 
