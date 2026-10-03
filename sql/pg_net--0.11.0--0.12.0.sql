@@ -1,18 +1,26 @@
-alter function net.http_get(text, jsonb, jsonb, integer) security invoker;
+ALTER FUNCTION net.http_get (text, jsonb, jsonb, integer) SECURITY INVOKER;
 
-alter function net.http_post(text, jsonb, jsonb, jsonb, integer) security invoker;
+ALTER FUNCTION net.http_post (text, jsonb, jsonb, jsonb, integer) SECURITY INVOKER;
 
-alter function net.http_delete ( text, jsonb, jsonb, integer) security invoker;
+ALTER FUNCTION net.http_delete (text, jsonb, jsonb, integer) SECURITY INVOKER;
 
-alter function net._http_collect_response ( bigint, boolean) security invoker;
+ALTER FUNCTION net._http_collect_response (bigint, boolean) SECURITY INVOKER;
 
-alter function net.http_collect_response ( bigint, boolean) security invoker;
+ALTER FUNCTION net.http_collect_response (bigint, boolean) SECURITY INVOKER;
 
-create or replace function net.worker_restart()
-  returns bool
-  language 'c'
-as 'pg_net';
+CREATE OR REPLACE FUNCTION net.worker_restart()
+RETURNS bool
+LANGUAGE c
+AS $$pg_net$$;
 
-grant usage on schema net to PUBLIC;
-grant all on all sequences in schema net to PUBLIC;
-grant all on all tables in schema net to PUBLIC;
+GRANT USAGE
+  ON SCHEMA net
+  TO PUBLIC;
+
+GRANT ALL PRIVILEGES
+  ON ALL SEQUENCES IN SCHEMA net
+  TO PUBLIC;
+
+GRANT ALL PRIVILEGES
+  ON ALL TABLES IN SCHEMA net
+  TO PUBLIC

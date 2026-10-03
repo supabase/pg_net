@@ -1,23 +1,25 @@
-drop function net.http_delete (text, jsonb, jsonb, integer);
+DROP FUNCTION net.http_delete (text, jsonb, jsonb, integer);
 
-create function net.http_delete(
-    -- url for the request
-    url text,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000,
-    -- optional body of the request
-    body jsonb default NULL
-)
-    -- request_id reference
-    returns bigint
-    volatile
-    parallel safe
-    language plpgsql
-as $$
+CREATE FUNCTION net.http_delete(url 
+                              -- url for the request
+text
+                              , params 
+                              -- key/value pairs to be url encoded and appended to the `url`
+jsonb = CAST('{}' AS jsonb)
+                              , headers 
+                              -- key/values to be included in request headers
+jsonb = CAST('{}' AS jsonb)
+                              , timeout_milliseconds 
+                              -- the maximum number of milliseconds the request may take before being cancelled
+integer = 5000
+                              , body 
+                              -- optional body of the request
+jsonb = NULL)
+RETURNS
+-- request_id reference
+bigint VOLATILE PARALLEL safe
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -40,4 +42,4 @@ begin
 
     return request_id;
 end
-$$;
+$$

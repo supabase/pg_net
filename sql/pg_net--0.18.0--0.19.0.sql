@@ -1,22 +1,25 @@
-create or replace function net.wake()
-  returns void
-  language 'c'
-as 'pg_net';
+CREATE OR REPLACE FUNCTION net.wake()
+RETURNS void
+LANGUAGE c
+AS $$pg_net$$;
 
-create or replace function net.http_get(
-    -- url for the request
-    url text,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000
-)
-    -- request_id reference
-    returns bigint
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_get(url 
+                                      -- url for the request
+text
+                                      , params 
+                                      -- key/value pairs to be url encoded and appended to the `url`
+jsonb = CAST('{}' AS jsonb)
+                                      , headers 
+                                      -- key/values to be included in request headers
+jsonb = CAST('{}' AS jsonb)
+                                      , timeout_milliseconds 
+                                      -- the maximum number of milliseconds the request may take before being cancelled
+integer = 5000)
+RETURNS
+-- request_id reference
+bigint
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -42,22 +45,26 @@ begin
 end
 $$;
 
-create or replace function net.http_post(
-    -- url for the request
-    url text,
-    -- body of the POST request
-    body jsonb default '{}'::jsonb,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 5000
-)
-    -- request_id reference
-    returns bigint
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_post(url 
+                                       -- url for the request
+text
+                                       , body 
+                                       -- body of the POST request
+jsonb = CAST('{}' AS jsonb)
+                                       , params 
+                                       -- key/value pairs to be url encoded and appended to the `url`
+jsonb = CAST('{}' AS jsonb)
+                                       , headers 
+                                       -- key/values to be included in request headers
+jsonb = CAST('{"Content-Type": "application/json"}' AS jsonb)
+                                       , timeout_milliseconds 
+                                       -- the maximum number of milliseconds the request may take before being cancelled
+integer = 5000)
+RETURNS
+-- request_id reference
+bigint
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -110,22 +117,26 @@ begin
 end
 $$;
 
-create or replace function net.http_delete(
-    -- url for the request
-    url text,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000,
-    -- optional body of the request
-    body jsonb default NULL
-)
-    -- request_id reference
-    returns bigint
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_delete(url 
+                                         -- url for the request
+text
+                                         , params 
+                                         -- key/value pairs to be url encoded and appended to the `url`
+jsonb = CAST('{}' AS jsonb)
+                                         , headers 
+                                         -- key/values to be included in request headers
+jsonb = CAST('{}' AS jsonb)
+                                         , timeout_milliseconds 
+                                         -- the maximum number of milliseconds the request may take before being cancelled
+integer = 5000
+                                         , body 
+                                         -- optional body of the request
+jsonb = NULL)
+RETURNS
+-- request_id reference
+bigint
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -150,4 +161,4 @@ begin
 
     return request_id;
 end
-$$;
+$$

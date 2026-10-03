@@ -1,17 +1,22 @@
-alter function net._await_response(bigint) parallel unsafe called on null input;
+ALTER FUNCTION net._await_response (bigint) PARALLEL unsafe
+                                            CALLED ON NULL INPUT;
 
-alter function net._urlencode_string(varchar) called on null input;
+ALTER FUNCTION net._urlencode_string (varchar) CALLED ON NULL INPUT;
 
-alter function net._encode_url_with_params_array(text, text[]) called on null input;
+ALTER FUNCTION net._encode_url_with_params_array (text, text[]) CALLED ON NULL INPUT;
 
-alter function net._await_response(bigint) parallel unsafe called on null input;
+ALTER FUNCTION net._await_response (bigint) PARALLEL unsafe
+                                            CALLED ON NULL INPUT;
 
-alter function net.http_get(text, jsonb , jsonb , int) parallel unsafe called on null input;
+ALTER FUNCTION net.http_get (text, jsonb, jsonb, integer) PARALLEL unsafe
+                                                          CALLED ON NULL INPUT;
 
-alter function net.http_post(text, jsonb , jsonb , jsonb, int) parallel unsafe;
+ALTER FUNCTION net.http_post (text, jsonb, jsonb, jsonb, integer) PARALLEL unsafe;
 
-alter function net.http_delete(text, jsonb , jsonb, int, jsonb) parallel unsafe;
+ALTER FUNCTION net.http_delete (text, jsonb, jsonb, integer, jsonb) PARALLEL unsafe;
 
-alter function net._http_collect_response(bigint, bool) parallel unsafe called on null input;
+ALTER FUNCTION net._http_collect_response (bigint, bool) PARALLEL unsafe
+                                                         CALLED ON NULL INPUT;
 
-alter function net.http_collect_response(bigint, bool) parallel unsafe called on null input;
+ALTER FUNCTION net.http_collect_response (bigint, bool) PARALLEL unsafe
+                                                        CALLED ON NULL INPUT

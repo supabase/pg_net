@@ -1,21 +1,23 @@
-create or replace function net.http_post(
-    -- url for the request
-    url text,
-    -- body of the POST request
-    body jsonb default '{}'::jsonb,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 1000
-)
-    -- request_id reference
-    returns bigint
-    volatile
-    parallel safe
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_post(url 
+                                       -- url for the request
+text
+                                       , body 
+                                       -- body of the POST request
+jsonb = CAST('{}' AS jsonb)
+                                       , params 
+                                       -- key/value pairs to be url encoded and appended to the `url`
+jsonb = CAST('{}' AS jsonb)
+                                       , headers 
+                                       -- key/values to be included in request headers
+jsonb = CAST('{"Content-Type": "application/json"}' AS jsonb)
+                                       , timeout_milliseconds 
+                                       -- the maximum number of milliseconds the request may take before being cancelled
+integer = 1000)
+RETURNS
+-- request_id reference
+bigint VOLATILE PARALLEL safe
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -69,4 +71,4 @@ begin
 
     return request_id;
 end
-$$;
+$$

@@ -1,23 +1,25 @@
-drop index if exists created_idx;
-alter table net.http_request_queue drop created;
+DROP INDEX IF EXISTS created_idx;
 
-alter table net._http_response drop constraint if exists _http_response_id_fkey;
-alter table net._http_response add created timestamptz not null default now();
-create index on net._http_response (created);
+ALTER TABLE net.http_request_queue DROP COLUMN created;
 
-create or replace function net.http_collect_response(
-    -- request_id reference
-    request_id bigint,
-    -- when `true`, return immediately. when `false` wait for the request to complete before returning
-    async bool default true
-)
-    -- http response composite wrapped in a result type
-    returns net.http_response_result
-    strict
-    volatile
-    parallel safe
-    language plpgsql
-as $$
+ALTER TABLE net._http_response DROP CONSTRAINT IF EXISTS _http_response_id_fkey;
+
+ALTER TABLE net._http_response ADD COLUMN created timestamptz NOT NULL DEFAULT now();
+
+CREATE INDEX 
+  ON net._http_response (created);
+
+CREATE OR REPLACE FUNCTION net.http_collect_response(request_id 
+                                                   -- request_id reference
+bigint
+                                                   , async 
+                                                   -- when `true`, return immediately. when `false` wait for the request to complete before returning
+bool = TRUE)
+RETURNS
+-- http response composite wrapped in a result type
+net.http_response_result RETURNS NULL ON NULL INPUT VOLATILE PARALLEL safe
+LANGUAGE plpgsql
+AS $$
 declare
     rec net._http_response;
     req_exists boolean;
@@ -57,4 +59,4 @@ begin
         )::net.http_response
     )::net.http_response_result;
 end;
-$$;
+$$

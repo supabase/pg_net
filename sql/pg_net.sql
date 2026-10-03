@@ -1,24 +1,24 @@
-create schema if not exists net;
+CREATE SCHEMA IF NOT EXISTS net;
 
-create domain net.http_method as text
-check (
-  value ilike 'get'
-  or value ilike 'post'
-  or value ilike 'delete'
-);
+CREATE DOMAIN net.http_method AS text CHECK (value ILIKE 'get'
+                                          OR value ILIKE 'post'
+                                          OR value ILIKE 'delete');
 
+CREATE UNLOGGED TABLE
 -- Store pending requests. The background worker reads from here
 -- API: Private
-create unlogged table net.http_request_queue(
-    id bigserial,
-    method net.http_method not null,
-    url text not null,
-    headers jsonb,
-    body bytea,
-    timeout_milliseconds int not null
+net.http_request_queue (
+    id bigserial
+  , method net.http_method NOT NULL
+  , url text NOT NULL
+  , headers jsonb
+  , body bytea
+  , timeout_milliseconds integer NOT NULL
 );
 
-create or replace function net.check_worker_is_up() returns void as $$
+CREATE OR REPLACE FUNCTION net.check_worker_is_up()
+RETURNS void
+AS $$
 begin
   if not exists (select pid from pg_stat_activity where backend_type ilike '%pg_net%') then
     raise exception using
@@ -27,32 +27,36 @@ begin
     , hint    = 'make sure that you didn''t modify any of pg_net internal tables';
   end if;
 end
-$$ language plpgsql;
-comment on function net.check_worker_is_up() is 'raises an exception if the pg_net background worker is not up, otherwise it doesn''t return anything';
+$$
+LANGUAGE plpgsql;
 
+COMMENT ON FUNCTION net.check_worker_is_up ()
+  IS 'raises an exception if the pg_net background worker is not up, otherwise it doesn''t return anything';
+
+CREATE UNLOGGED TABLE
 -- Associates a response with a request
 -- API: Private
-create unlogged table net._http_response(
-    id bigint,
-    status_code integer,
-    content_type text,
-    headers jsonb,
-    content text,
-    timed_out bool,
-    error_msg text,
-    created timestamptz not null default now()
+net._http_response (
+    id bigint
+  , status_code integer
+  , content_type text
+  , headers jsonb
+  , content text
+  , timed_out bool
+  , error_msg text
+  , created timestamptz NOT NULL DEFAULT now()
 );
 
-create index on net._http_response (created);
+CREATE INDEX 
+  ON net._http_response (created);
 
--- Blocks until an http_request is complete
+CREATE OR REPLACE FUNCTION net._await_response(request_id 
+                                             -- Blocks until an http_request is complete
 -- API: Private
-create or replace function net._await_response(
-    request_id bigint
-)
-    returns bool
-    language plpgsql
-as $$
+bigint)
+RETURNS bool
+LANGUAGE plpgsql
+AS $$
 declare
     rec net._http_response;
 begin
@@ -72,56 +76,64 @@ begin
 end;
 $$;
 
-
--- url encode a string
+CREATE OR REPLACE FUNCTION net._urlencode_string(string 
+                                               -- url encode a string
 -- API: Private
-create or replace function net._urlencode_string(string varchar)
-    -- url encoded string
-    returns text
-    language 'c'
-    immutable
-as 'MODULE_PATHNAME';
+varchar)
+RETURNS
+-- url encoded string
+text
+LANGUAGE c IMMUTABLE
+AS $$MODULE_PATHNAME$$;
 
--- API: Private
-create or replace function net._encode_url_with_params_array(url text, params_array text[])
-    -- url encoded string
-    returns text
-    language 'c'
-    immutable
-as 'MODULE_PATHNAME';
+CREATE OR REPLACE FUNCTION net._encode_url_with_params_array(url 
+                                                           -- API: Private
+text
+                                                           , params_array text[])
+RETURNS
+-- url encoded string
+text
+LANGUAGE c IMMUTABLE
+AS $$MODULE_PATHNAME$$;
 
-create or replace function net.worker_restart()
-  returns bool
-  language 'c'
-as 'MODULE_PATHNAME';
+CREATE OR REPLACE FUNCTION net.worker_restart()
+RETURNS bool
+LANGUAGE c
+AS $$MODULE_PATHNAME$$;
 
-create or replace function net.wait_until_running()
-  returns void
-  language 'c'
-as 'MODULE_PATHNAME';
-comment on function net.wait_until_running() is 'waits until the worker is running';
+CREATE OR REPLACE FUNCTION net.wait_until_running()
+RETURNS void
+LANGUAGE c
+AS $$MODULE_PATHNAME$$;
 
-create or replace function net.wake()
-  returns void
-  language 'c'
-as 'MODULE_PATHNAME';
+COMMENT ON FUNCTION net.wait_until_running ()
+  IS 'waits until the worker is running';
 
--- Interface to make an async request
+CREATE OR REPLACE FUNCTION net.wake()
+RETURNS void
+LANGUAGE c
+AS $$MODULE_PATHNAME$$;
+
+CREATE OR REPLACE FUNCTION net.http_get(url 
+                                      -- Interface to make an async request
 -- API: Public
-create or replace function net.http_get(
-    -- url for the request
-    url text,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000
-)
-    -- request_id reference
-    returns bigint
-    language plpgsql
-as $$
+text
+                                      , params 
+                                      -- url for the request
+jsonb = 
+                                      -- key/value pairs to be url encoded and appended to the `url`
+CAST('{}' AS jsonb)
+                                      , headers 
+                                      -- key/values to be included in request headers
+jsonb = CAST('{}' AS jsonb)
+                                      , timeout_milliseconds 
+                                      -- the maximum number of milliseconds the request may take before being cancelled
+integer = 5000)
+RETURNS
+-- request_id reference
+bigint
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -147,24 +159,29 @@ begin
 end
 $$;
 
--- Interface to make an async request
+CREATE OR REPLACE FUNCTION net.http_post(url 
+                                       -- Interface to make an async request
 -- API: Public
-create or replace function net.http_post(
-    -- url for the request
-    url text,
-    -- body of the POST request
-    body jsonb default '{}'::jsonb,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 5000
-)
-    -- request_id reference
-    returns bigint
-    language plpgsql
-as $$
+text
+                                       , body 
+                                       -- url for the request
+jsonb = 
+                                       -- body of the POST request
+CAST('{}' AS jsonb)
+                                       , params 
+                                       -- key/value pairs to be url encoded and appended to the `url`
+jsonb = CAST('{}' AS jsonb)
+                                       , headers 
+                                       -- key/values to be included in request headers
+jsonb = CAST('{"Content-Type": "application/json"}' AS jsonb)
+                                       , timeout_milliseconds 
+                                       -- the maximum number of milliseconds the request may take before being cancelled
+integer = 5000)
+RETURNS
+-- request_id reference
+bigint
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -217,24 +234,29 @@ begin
 end
 $$;
 
--- Interface to make an async request
+CREATE OR REPLACE FUNCTION net.http_delete(url 
+                                         -- Interface to make an async request
 -- API: Public
-create or replace function net.http_delete(
-    -- url for the request
-    url text,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000,
-    -- optional body of the request
-    body jsonb default NULL
-)
-    -- request_id reference
-    returns bigint
-    language plpgsql
-as $$
+text
+                                         , params 
+                                         -- url for the request
+jsonb = 
+                                         -- key/value pairs to be url encoded and appended to the `url`
+CAST('{}' AS jsonb)
+                                         , headers 
+                                         -- key/values to be included in request headers
+jsonb = CAST('{}' AS jsonb)
+                                         , timeout_milliseconds 
+                                         -- the maximum number of milliseconds the request may take before being cancelled
+integer = 5000
+                                         , body 
+                                         -- optional body of the request
+jsonb = NULL)
+RETURNS
+-- request_id reference
+bigint
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -261,40 +283,41 @@ begin
 end
 $$;
 
+CREATE TYPE net.request_status AS ENUM ('PENDING'
+                                      , 'SUCCESS'
+                                      , 'ERROR');
+
+CREATE TYPE 
 -- Lifecycle states of a request (all protocols)
 -- API: Public
-create type net.request_status as enum ('PENDING', 'SUCCESS', 'ERROR');
-
-
--- A response from an HTTP server
+net.http_response AS (   
+                                  -- A response from an HTTP server
 -- API: Public
-create type net.http_response AS (
-    status_code integer,
-    headers jsonb,
-    body text
-);
+status_code integer
+                                  ,  headers jsonb
+                                  ,  body text);
 
+CREATE TYPE 
 -- State wrapper around responses
 -- API: Public
-create type net.http_response_result as (
-    status net.request_status,
-    message text,
-    response net.http_response
-);
+net.http_response_result AS (   status net.request_status
+                                         ,  message text
+                                         ,  response net.http_response);
 
-
--- Collect respones of an http request
+CREATE OR REPLACE FUNCTION net._http_collect_response(request_id 
+                                                    -- Collect respones of an http request
 -- API: Private
-create or replace function net._http_collect_response(
-    -- request_id reference
-    request_id bigint,
-    -- when `true`, return immediately. when `false` wait for the request to complete before returning
-    async bool default true
-)
-    -- http response composite wrapped in a result type
-    returns net.http_response_result
-    language plpgsql
-as $$
+bigint
+                                                    , async 
+                                                    -- request_id reference
+bool = TRUE)
+RETURNS
+-- when `true`, return immediately. when `false` wait for the request to complete before returning
+net.http_response_result
+-- http response composite wrapped in a result type
+
+LANGUAGE plpgsql
+AS $$
 declare
     rec net._http_response;
     req_exists boolean;
@@ -336,22 +359,31 @@ begin
 end;
 $$;
 
-create or replace function net.http_collect_response(
-    -- request_id reference
-    request_id bigint,
-    -- when `true`, return immediately. when `false` wait for the request to complete before returning
-    async bool default true
-)
-    -- http response composite wrapped in a result type
-    returns net.http_response_result
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_collect_response(request_id 
+                                                   -- request_id reference
+bigint
+                                                   , async 
+                                                   -- when `true`, return immediately. when `false` wait for the request to complete before returning
+bool = TRUE)
+RETURNS
+-- http response composite wrapped in a result type
+net.http_response_result
+LANGUAGE plpgsql
+AS $$
 begin
   raise notice 'The net.http_collect_response function is deprecated.';
   select net._http_collect_response(request_id, async);
 end;
 $$;
 
-grant usage on schema net to PUBLIC;
-grant all on all sequences in schema net to PUBLIC;
-grant all on all tables in schema net to PUBLIC;
+GRANT USAGE
+  ON SCHEMA net
+  TO PUBLIC;
+
+GRANT ALL PRIVILEGES
+  ON ALL SEQUENCES IN SCHEMA net
+  TO PUBLIC;
+
+GRANT ALL PRIVILEGES
+  ON ALL TABLES IN SCHEMA net
+  TO PUBLIC

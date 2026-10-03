@@ -29,12 +29,28 @@ let
     pkgs.writeShellScriptBin "net-style" ''
       ${pkgs.clang-tools}/bin/clang-format -i src/*
       ${pkgs.ruff}/bin/ruff format
+      sql_files=$(ls sql/)
+      for sql_file in $sql_files; do
+	      ${pkgs.python313Packages.pglast}/bin/pgpp --preserve-comments sql/''$sql_file > sql/tmp_''$sql_file;
+	      mv sql/tmp_''$sql_file sql/''$sql_file;
+      done;
     '';
   styleCheck =
     pkgs.writeShellScriptBin "net-style-check" ''
       ${pkgs.clang-tools}/bin/clang-format -i src/*
       ${pkgs.git}/bin/git diff-index --exit-code HEAD -- '*.c'
       ${pkgs.ruff}/bin/ruff check
+      sql_files=$(ls sql/)
+      for sql_file in $sql_files; do
+	      ${pkgs.python313Packages.pglast}/bin/pgpp --preserve-comments sql/''$sql_file > sql/tmp_''$sql_file;
+	      if cmp -s sql/tmp_''$sql_file sql/''$sql_file; then
+			rm sql/tmp_''$sql_file
+	      else
+			rm sql/tmp_''$sql_file
+			echo "diff found in ''$sql_file"
+			exit 1
+	      fi
+      done;
     '';
 in
 pkgs.mkShell {
@@ -48,6 +64,7 @@ pkgs.mkShell {
       style
       styleCheck
       pkgs.ruff
+      pkgs.python313Packages.pglast
     ];
   shellHook = ''
     export HISTFILE=.history
