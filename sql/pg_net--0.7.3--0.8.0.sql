@@ -1,24 +1,20 @@
-create or replace function net.worker_restart() returns bool as $$
+CREATE OR REPLACE FUNCTION net.worker_restart()
+RETURNS bool
+AS $$
   select pg_reload_conf();
   select pg_terminate_backend(pid)
   from pg_stat_activity
   where backend_type ilike '%pg_net%';
-$$
-security definer
-language sql;
+$$ SECURITY DEFINER
+LANGUAGE sql;
 
-create or replace function net.http_get(
-    url text,
-    params jsonb default '{}'::jsonb,
-    headers jsonb default '{}'::jsonb,
-    timeout_milliseconds int default 5000
-)
-    returns bigint
-    strict
-    volatile
-    parallel safe
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_get(url text
+                                      , params jsonb = CAST('{}' AS jsonb)
+                                      , headers jsonb = CAST('{}' AS jsonb)
+                                      , timeout_milliseconds integer = 5000)
+RETURNS bigint RETURNS NULL ON NULL INPUT VOLATILE PARALLEL safe
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -41,18 +37,14 @@ begin
 end
 $$;
 
-create or replace function net.http_post(
-    url text,
-    body jsonb default '{}'::jsonb,
-    params jsonb default '{}'::jsonb,
-    headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
-    timeout_milliseconds int DEFAULT 5000
-)
-    returns bigint
-    volatile
-    parallel safe
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_post(url text
+                                       , body jsonb = CAST('{}' AS jsonb)
+                                       , params jsonb = CAST('{}' AS jsonb)
+                                       , headers jsonb = CAST('{"Content-Type": "application/json"}' AS jsonb)
+                                       , timeout_milliseconds integer = 5000)
+RETURNS bigint VOLATILE PARALLEL safe
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -98,18 +90,13 @@ begin
 end
 $$;
 
-create or replace function net.http_delete(
-    url text,
-    params jsonb default '{}'::jsonb,
-    headers jsonb default '{}'::jsonb,
-    timeout_milliseconds int default 5000
-)
-    returns bigint
-    strict
-    volatile
-    parallel safe
-    language plpgsql
-as $$
+CREATE OR REPLACE FUNCTION net.http_delete(url text
+                                         , params jsonb = CAST('{}' AS jsonb)
+                                         , headers jsonb = CAST('{}' AS jsonb)
+                                         , timeout_milliseconds integer = 5000)
+RETURNS bigint RETURNS NULL ON NULL INPUT VOLATILE PARALLEL safe
+LANGUAGE plpgsql
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -130,4 +117,4 @@ begin
 
     return request_id;
 end
-$$;
+$$

@@ -1,12 +1,16 @@
-alter function net._encode_url_with_params_array ( text, text[]) strict;
+ALTER FUNCTION net._encode_url_with_params_array (text, text[]) RETURNS NULL ON NULL INPUT;
 
-alter table net.http_request_queue drop constraint if exists http_request_queue_pkey cascade;
-alter table net._http_response drop constraint if exists _http_response_pkey cascade;
+ALTER TABLE net.http_request_queue DROP CONSTRAINT IF EXISTS http_request_queue_pkey CASCADE;
 
-drop trigger if exists ensure_worker_is_up on net.http_request_queue;
-drop function if exists net._check_worker_is_up();
+ALTER TABLE net._http_response DROP CONSTRAINT IF EXISTS _http_response_pkey CASCADE;
 
-create or replace function net.check_worker_is_up() returns void as $$
+DROP TRIGGER IF EXISTS ensure_worker_is_up ON net.http_request_queue;
+
+DROP FUNCTION IF EXISTS net._check_worker_is_up ();
+
+CREATE OR REPLACE FUNCTION net.check_worker_is_up()
+RETURNS void
+AS $$
 begin
   if not exists (select pid from pg_stat_activity where backend_type = 'pg_net worker') then
     raise exception using
@@ -15,9 +19,11 @@ begin
     , hint    = 'make sure that you didn''t modify any of pg_net internal tables';
   end if;
 end
-$$ language plpgsql;
+$$
+LANGUAGE plpgsql;
 
-drop index if exists net._http_response_created_idx;
+DROP INDEX IF EXISTS net._http_response_created_idx;
 
-alter table net.http_request_queue set unlogged;
-alter table net._http_response set unlogged;
+ALTER TABLE net.http_request_queue SET UNLOGGED;
+
+ALTER TABLE net._http_response SET UNLOGGED

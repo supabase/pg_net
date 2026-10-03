@@ -1,31 +1,28 @@
-alter domain net.http_method drop constraint http_method_check;
-alter domain net.http_method add constraint http_method_check
-check (
-  value ilike 'get'
-  or value ilike 'post'
-  or value ilike 'delete'
-);
+ALTER DOMAIN net.http_method DROP CONSTRAINT http_method_check;
 
-drop function net.http_collect_response(bigint, boolean);
+ALTER DOMAIN net.http_method ADD CONSTRAINT http_method_check CHECK (value ILIKE 'get'
+                                                                  OR value ILIKE 'post'
+                                                                  OR value ILIKE 'delete');
 
-create or replace function net.http_delete(
-    -- url for the request
-    url text,
-    -- key/value pairs to be url encoded and appended to the `url`
-    params jsonb default '{}'::jsonb,
-    -- key/values to be included in request headers
-    headers jsonb default '{}'::jsonb,
-    -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 2000
-)
-    -- request_id reference
-    returns bigint
-    strict
-    volatile
-    parallel safe
-    language plpgsql
-    security definer
-as $$
+DROP FUNCTION net.http_collect_response (bigint, boolean);
+
+CREATE OR REPLACE FUNCTION net.http_delete(url 
+                                         -- url for the request
+text
+                                         , params 
+                                         -- key/value pairs to be url encoded and appended to the `url`
+jsonb = CAST('{}' AS jsonb)
+                                         , headers 
+                                         -- key/values to be included in request headers
+jsonb = CAST('{}' AS jsonb)
+                                         , timeout_milliseconds 
+                                         -- the maximum number of milliseconds the request may take before being cancelled
+integer = 2000)
+RETURNS
+-- request_id reference
+bigint RETURNS NULL ON NULL INPUT VOLATILE PARALLEL safe
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
 declare
     request_id bigint;
     params_array text[];
@@ -49,20 +46,17 @@ begin
 end
 $$;
 
-create or replace function net._http_collect_response(
-    -- request_id reference
-    request_id bigint,
-    -- when `true`, return immediately. when `false` wait for the request to complete before returning
-    async bool default true
-)
-    -- http response composite wrapped in a result type
-    returns net.http_response_result
-    strict
-    volatile
-    parallel safe
-    language plpgsql
-    security definer
-as $$
+CREATE OR REPLACE FUNCTION net._http_collect_response(request_id 
+                                                    -- request_id reference
+bigint
+                                                    , async 
+                                                    -- when `true`, return immediately. when `false` wait for the request to complete before returning
+bool = TRUE)
+RETURNS
+-- http response composite wrapped in a result type
+net.http_response_result RETURNS NULL ON NULL INPUT VOLATILE PARALLEL safe
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
 declare
     rec net._http_response;
     req_exists boolean;
@@ -102,4 +96,4 @@ begin
         )::net.http_response
     )::net.http_response_result;
 end;
-$$;
+$$
