@@ -31,7 +31,7 @@ let
       ${pkgs.ruff}/bin/ruff format
       sql_files=$(ls sql/)
       for sql_file in $sql_files; do
-	      ${pkgs.python313Packages.pglast}/bin/pgpp sql/''$sql_file > sql/tmp_''$sql_file;
+	      ${pkgs.python313Packages.pglast}/bin/pgpp --preserve-comments sql/''$sql_file > sql/tmp_''$sql_file;
 	      mv sql/tmp_''$sql_file sql/''$sql_file;
       done;
     '';
@@ -42,7 +42,7 @@ let
       ${pkgs.ruff}/bin/ruff check
       sql_files=$(ls sql/)
       for sql_file in $sql_files; do
-	      ${pkgs.python313Packages.pglast}/bin/pgpp sql/''$sql_file > sql/tmp_''$sql_file;
+	      ${pkgs.python313Packages.pglast}/bin/pgpp --preserve-comments sql/''$sql_file > sql/tmp_''$sql_file;
 	      if cmp -s sql/tmp_''$sql_file sql/''$sql_file; then
 			rm sql/tmp_''$sql_file
 	      else
