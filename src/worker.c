@@ -574,7 +574,7 @@ void _PG_init(void) {
   DefineCustomStringVariable("pg_net.username", "Connection user for the worker", NULL,
                              &guc_username, NULL, PGC_SU_BACKEND, 0, NULL, NULL, NULL);
 
-  DefineCustomStringVariable("pg_net.address_blacklist", "Addresses that the worker is not allowed to connect to",
+  DefineCustomStringVariable("pg_net.address_reject", "Addresses that the worker is not allowed to connect to",
                              NULL, &guc_address_blacklist, "", PGC_SIGHUP, 0, NULL, NULL,
                              NULL);
 }
