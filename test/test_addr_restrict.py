@@ -8,6 +8,10 @@ import pytest
 # TODO create a separate test that can run on macos
 # TODO test should be linux only
 
+
+PLATFORM_IS_DARWIN = platform.system() == "Darwin"
+
+
 def test_addr_restrict_multi_platform(autocommit_sess):
     """Test net.http_delete works, test runs on all platforms"""
 
@@ -59,7 +63,7 @@ def test_addr_restrict_multi_platform(autocommit_sess):
     assert response is not None
     assert response["status"] == "SUCCESS"
 
-@pytest.mark.skipif(platform.system() == "darwin", reason="Test requires multiple internal IP's")
+@pytest.mark.skipif(PLATFORM_IS_DARWIN, reason="Test requires multiple internal IP's")
 def test_addr_restrict(autocommit_sess):
     """Test net.http_delete works"""
 
@@ -130,7 +134,7 @@ def test_addr_restrict(autocommit_sess):
     assert response["status"] == "SUCCESS"
 
 
-@pytest.mark.skipif(platform.system() == "darwin", reason="Test requires multiple internal IP's")
+@pytest.mark.skipif(PLATFORM_IS_DARWIN, reason="Test requires multiple internal IP's")
 def test_addr_restrict_multi(autocommit_sess):
     """Test 2 addresses in blacklist"""
 
