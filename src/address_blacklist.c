@@ -5,6 +5,8 @@
 #include "pg_prelude.h"
 #include "curl_prelude.h"
 #include "address_blacklist.h"
+#include "pg_prelude.h"
+#include "errors.h"
 
 #ifndef TRUE
 #define TRUE 1
@@ -186,6 +188,7 @@ curl_socket_t opensocket(void *clientp, curlsocktype purpose,
 #endif
  
       for(ip = filter->list; ip; ip = ip->next) {
+        elog(DEBUG1, "address expired rows");
         if(ip->family == address->family && ip_match(ip, cinaddr))
           break;
 #ifdef AF_INET6
@@ -200,8 +203,7 @@ curl_socket_t opensocket(void *clientp, curlsocktype purpose,
           char buf[128] = { 0 };
           /* !checksrc! disable BANNEDFUNC 1 */
           inet_ntop(address->family, cinaddr, buf, sizeof(buf));
-          fprintf(stderr, "* Rejecting IP %s due to blacklist entry %s.\n",
-                  buf, ip->str);
+          elog(DEBUG2, "* Rejecting IP %s due to blacklist entry %s.", buf, ip->str);
         }
         return CURL_SOCKET_BAD;
       }
@@ -210,8 +212,7 @@ curl_socket_t opensocket(void *clientp, curlsocktype purpose,
           char buf[128] = { 0 };
           /* !checksrc! disable BANNEDFUNC 1 */
           inet_ntop(address->family, cinaddr, buf, sizeof(buf));
-          fprintf(stderr,
-                  "* Rejecting IP %s due to missing whitelist entry.\n", buf);
+          elog(DEBUG2, "* Rejecting IP %s due to missing whitelist entry.", buf);
         }
         return CURL_SOCKET_BAD;
       }

@@ -82,9 +82,15 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   filter->type = CONNECTION_FILTER_BLACKLIST;
   int n;
   char *addr;
-  for (addr = strtok(guc_address_blacklist, ","), n = 0; addr; addr = strtok(NULL, ","), n++)
-	  filter->list = ip_list_append(filter->list, addr);
-
+  struct ip *temp_list = NULL;
+  for (addr = strtok(guc_address_blacklist, ","), n = 0; addr; addr = strtok(NULL, ","), n++){
+	  temp_list = ip_list_append(filter->list, addr);
+	  if (temp_list == NULL) {
+              elog(DEBUG2, "invalid ip address in blacklist %s", addr);
+	  } else {
+	      filter->list = temp_list;
+	  }
+  }
 
   // libcurl treats a 0 timeout as no timeout, and a request that never finishes blocks the batch
   // loop forever. Requests outside the bound are not sent, they get an error response instead. The
