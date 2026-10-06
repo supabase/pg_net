@@ -264,10 +264,10 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
   worker_state->shared_latch = &MyProc->procLatch;
   on_proc_exit(net_on_exit, 0);
 
-  BackgroundWorkerUnblockSignals();
   pqsignal(SIGTERM, handle_sigterm);
   pqsignal(SIGHUP, handle_sighup);
   pqsignal(SIGUSR1, handle_sigusr1);
+  BackgroundWorkerUnblockSignals();
 
   BackgroundWorkerInitializeConnection(guc_database_name, guc_username, 0);
   pgstat_report_appname("pg_net " EXTVERSION); // set appname for pg_stat_activity
