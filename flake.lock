@@ -45,13 +45,13 @@
       "locked": {
         "lastModified": 1785529904,
         "narHash": "sha256-DDIeJCHRtmvB7yocWTo1MISIGf0DsUmyLw6ISuEV4e0=",
-        "owner": "steve-chavez",
+        "owner": "supabase",
         "repo": "xpg",
         "rev": "e7d47eb58f19168b5facc6b78a64f6cc7f04bbcb",
         "type": "github"
       },
       "original": {
-        "owner": "steve-chavez",
+        "owner": "supabase",
         "ref": "v2.5.0",
         "repo": "xpg",
         "type": "github"
