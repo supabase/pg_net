@@ -324,7 +324,8 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
         break;
       }
 
-      SPI_connect();
+      int ret = SPI_connect();
+      if (ret != SPI_OK_CONNECT) elog(ERROR, "SPI_connect failed with error %d", ret);
 
       expired_responses = delete_expired_responses(guc_ttl, guc_batch_size);
 
@@ -419,7 +420,8 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
         pfree(handles);
       }
 
-      SPI_finish();
+      ret = SPI_finish();
+      if (ret != SPI_OK_FINISH) elog(ERROR, "SPI_finish failed with error %d", ret);
 
       unlock_extension(ext_table_oids);
 
