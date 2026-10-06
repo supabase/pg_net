@@ -148,11 +148,10 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
 #endif
 }
 
-void set_curl_mhandle(WorkerState *wstate) {
-  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
-  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_SOCKETDATA, wstate);
-  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
-  EREPORT_CURL_MULTI_SETOPT(wstate->curl_mhandle, CURLMOPT_TIMERDATA, wstate);
+void set_curl_mhandle(CURLM *curl_mhandle) {
+  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETFUNCTION, multi_socket_cb);
+  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_SOCKETDATA, curl_mhandle);
+  EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
 }
 
 uint64 delete_expired_responses(char *ttl, int batch_size) {
