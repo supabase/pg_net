@@ -39,7 +39,6 @@ static const int    net_worker_restart_time_sec  = 1;
 static const long   no_timeout                   = -1L;
 static bool         wake_commit_cb_active        = false;
 static bool         wake_commit_cb_registered    = false;
-static bool         worker_should_restart        = false;
 static const size_t total_extension_tables       = 2;
 
 static char *guc_ttl;
@@ -176,7 +175,6 @@ static void publish_state(WorkerStatus s) {
 }
 
 static void net_on_exit(__attribute__((unused)) int code, __attribute__((unused)) Datum arg) {
-  worker_should_restart = false;
   pg_atomic_write_u32(&worker_state->should_wake,
                       1); // ensure the remaining work will continue since we'll restart
 
@@ -295,6 +293,8 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
   // Initial state: we go straight into the outer loop and wait for a wake.
   pgstat_report_activity(STATE_IDLE, NULL);
+
+  bool worker_should_restart = false;
 
   do {
 
