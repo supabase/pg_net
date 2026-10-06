@@ -173,6 +173,11 @@ uint64 delete_expired_responses(char *ttl, int batch_size) {
 
     del_response_plan = SPI_saveplan(tmp);
     if (del_response_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
+
+    int ret_code = SPI_freeplan(tmp);
+    if (ret_code != 0)
+      ereport(ERROR,
+              errmsg("Error freeing delete response plan: %s", SPI_result_code_string(ret_code)));
   }
 
   int ret_code = SPI_execute_plan(
@@ -212,6 +217,11 @@ uint64 consume_request_queue(const int batch_size) {
 
     del_return_queue_plan = SPI_saveplan(tmp);
     if (del_return_queue_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
+
+    int ret_code = SPI_freeplan(tmp);
+    if (ret_code != 0)
+      ereport(ERROR, errmsg("Error freeing delete return queue plan: %s",
+                            SPI_result_code_string(ret_code)));
   }
 
   int ret_code =
@@ -285,7 +295,10 @@ static void execute_insert_response(Datum *vals, char *nulls) {
     ins_response_plan = SPI_saveplan(tmp);
     if (ins_response_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
 
-    SPI_freeplan(tmp);
+    int ret_code = SPI_freeplan(tmp);
+    if (ret_code != 0)
+      ereport(ERROR,
+              errmsg("Error freeing insert response plan: %s", SPI_result_code_string(ret_code)));
   }
 
   int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);
