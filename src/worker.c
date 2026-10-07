@@ -61,12 +61,27 @@ PGDLLEXPORT pg_noreturn void pg_net_worker(Datum main_arg);
 PGDLLEXPORT void pg_net_worker(Datum main_arg) pg_attribute_noreturn();
 #endif
 
+/*
+ * Set the shared latch.
+ *
+ * It avoids a narrow race condition in which the latch is set to
+ * NULL by the pg_net background worker between checking the latch
+ * pointer for null and calling SetLatch. To avoid this race the
+ * shared_latch in the WorkerState struct is marked as a volatile
+ * pointer. This volatile pointer is then loaded once in this
+ * function and only that loaded value is then checked for NULL
+ * and passed to SetLatch.
+ */
+static void SetSharedLatch(void) {
+  Latch *latch = worker_state->shared_latch;
+  if (latch) SetLatch(latch);
+}
+
 PG_FUNCTION_INFO_V1(worker_restart);
 Datum worker_restart(__attribute__((unused)) PG_FUNCTION_ARGS) {
   bool result = DatumGetBool(DirectFunctionCall1(pg_reload_conf, (Datum)NULL)); // reload the config
   pg_atomic_write_u32(&worker_state->got_restart, 1);
-  pg_write_barrier();
-  if (worker_state->shared_latch) SetLatch(worker_state->shared_latch);
+  SetSharedLatch();
   PG_RETURN_BOOL(result); // TODO is not necessary to return a bool here, but we do it to maintain
                           // backward compatibility
 }
@@ -102,11 +117,12 @@ static void wake_at_commit(XactEvent event, __attribute__((unused)) void *arg) {
     if (wake_commit_cb_active) {
       uint32 expected = 0;
       bool   success  = pg_atomic_compare_exchange_u32(&worker_state->should_wake, &expected, 1);
-      pg_write_barrier();
 
-      if (success) // only wake the worker on first put, so if many concurrent wakes come we only
-                   // wake once
-        SetLatch(worker_state->shared_latch);
+      if (success) {
+        // only wake the worker on first put, so if many concurrent wakes come we only
+        // wake once
+        SetSharedLatch();
+      }
 
       wake_commit_cb_active = false;
     }
@@ -143,21 +159,19 @@ Datum wake(__attribute__((unused)) PG_FUNCTION_ARGS) {
 static void handle_sigterm(PG_SIGNAL_PARAMS) {
   int save_errno = errno;
   pg_atomic_write_u32(&worker_state->got_restart, 1);
-  pg_write_barrier();
-  if (worker_state->shared_latch) SetLatch(worker_state->shared_latch);
+  SetSharedLatch();
   errno = save_errno;
 }
 
 static void handle_sighup(PG_SIGNAL_PARAMS) {
   int save_errno = errno;
   got_sighup     = true;
-  if (worker_state->shared_latch) SetLatch(worker_state->shared_latch);
+  SetSharedLatch();
   errno = save_errno;
 }
 
 static void publish_state(WorkerStatus s) {
   pg_atomic_write_u32(&worker_state->status, (uint32)s);
-  pg_write_barrier();
   ConditionVariableBroadcast(&worker_state->cv);
 }
 
