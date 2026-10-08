@@ -181,8 +181,6 @@ static void net_on_exit(__attribute__((unused)) int code, __attribute__((unused)
 
   worker_state->shared_latch = NULL;
 
-  event_monitor_close();
-
   if (curl_mhandle) {
     curl_multi_cleanup(curl_mhandle);
     curl_mhandle = NULL;
@@ -191,6 +189,10 @@ static void net_on_exit(__attribute__((unused)) int code, __attribute__((unused)
     curl_global_cleanup();
     curl_global_initialized = false;
   }
+
+  // Must be closed after curl cleanup functions because they depend
+  // on epfd being valid
+  event_monitor_close();
 }
 
 // wait according to the wait type while ensuring interrupts are processed while waiting
