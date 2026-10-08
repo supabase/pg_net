@@ -77,11 +77,33 @@ static void SetSharedLatch(void) {
   if (latch) SetLatch(latch);
 }
 
+#define TEN_MILLISECONDS 10 * 1000L
+/*
+ * Sleep for ms milliseconds by looping until the deadline if necessary.
+ * Looping is needed because pg_usleep might be interrupted by a signal
+ */
+static void sleep_for_ms(int ms) {
+  TimestampTz end = TimestampTzPlusMilliseconds(GetCurrentTimestamp(), ms);
+  while (GetCurrentTimestamp() < end)
+    pg_usleep(TEN_MILLISECONDS);
+}
+
 PG_FUNCTION_INFO_V1(worker_restart);
 Datum worker_restart(__attribute__((unused)) PG_FUNCTION_ARGS) {
   bool result = DatumGetBool(DirectFunctionCall1(pg_reload_conf, (Datum)NULL)); // reload the config
   pg_atomic_write_u32(&worker_state->got_restart, 1);
-  SetSharedLatch();
+  // This reintroduces the old buggy code in which shared_latch was loaded
+  // twice: once in the if condition and again when calling SetLatch
+  if (worker_state->shared_latch) {
+    elog(WARNING, "BUG: latch was non-NULL, sleeping 3s before SetLatch");
+    // Sleep for 3 seconds to give a chance to net_on_exit function to
+    // set the shared_latch to NULL
+    sleep_for_ms(3000);
+
+    elog(WARNING, "BUG: calling SetLatch on %p", (void *)worker_state->shared_latch);
+    // Reread the shared_latch which should now be NULL
+    SetLatch(worker_state->shared_latch);
+  }
   PG_RETURN_BOOL(result); // TODO is not necessary to return a bool here, but we do it to maintain
                           // backward compatibility
 }
@@ -262,6 +284,9 @@ static void unlock_extension(Oid ext_table_oids[static total_extension_tables]) 
 }
 
 void pg_net_worker(__attribute__((unused)) Datum main_arg) {
+  // Sleeping for six seconds to let the SetLatch call in
+  // worker_restart see shared_latch set to NULL.
+  sleep_for_ms(6000);
   worker_state->shared_latch = &MyProc->procLatch;
   on_proc_exit(net_on_exit, 0);
 
