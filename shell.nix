@@ -3,54 +3,60 @@ let
   nixpkgsLock = flakeLock.nodes.nixpkgs.locked;
   xpgLock = flakeLock.nodes.xpg.locked;
 in
-{ pkgs ?
-  import (builtins.fetchTarball {
+{
+  pkgs ? import (builtins.fetchTarball {
     name = nixpkgsLock.rev;
     url = "https://github.com/${nixpkgsLock.owner}/${nixpkgsLock.repo}/archive/${nixpkgsLock.rev}.tar.gz";
     sha256 = nixpkgsLock.narHash;
-  }) { }
-, xpgPkgs ?
-  import (pkgs.fetchFromGitHub {
-    inherit (xpgLock) owner repo rev;
-    sha256 = xpgLock.narHash;
-  })
-, pgVersion ? null
-, cassert ? true
+  }) { },
+  xpgPkgs ? import (
+    pkgs.fetchFromGitHub {
+      inherit (xpgLock) owner repo rev;
+      sha256 = xpgLock.narHash;
+    }
+  ),
+  pgVersion ? null,
+  cassert ? true,
 }:
 let
-  nginxCustom = pkgs.callPackage ./nix/nginxCustom.nix {};
-  loadtest = pkgs.callPackage ./nix/loadtest.nix {};
+  nginxCustom = pkgs.callPackage ./nix/nginxCustom.nix { };
+  loadtest = pkgs.callPackage ./nix/loadtest.nix { };
   pythonDeps = with pkgs.python3Packages; [
     pytest
     psycopg
     sqlalchemy
   ];
-  style =
-    pkgs.writeShellScriptBin "net-style" ''
-      ${pkgs.clang-tools}/bin/clang-format -i src/*
-      ${pkgs.ruff}/bin/ruff format
-      ${pkgs.findutils}/bin/find . -name '*.nix' -exec ${pkgs.nixfmt}/bin/nixfmt {} \+
-    '';
-  styleCheck =
-    pkgs.writeShellScriptBin "net-style-check" ''
-      ${pkgs.clang-tools}/bin/clang-format -i src/*
-      ${pkgs.git}/bin/git diff-index --exit-code HEAD -- '*.c'
-      ${pkgs.ruff}/bin/ruff check
-      ${pkgs.findutils}/bin/find . -name '*.nix' -exec ${pkgs.nixfmt}/bin/nixfmt --check {} \+
-    '';
+  style = pkgs.writeShellScriptBin "net-style" ''
+    ${pkgs.clang-tools}/bin/clang-format -i src/*
+    ${pkgs.ruff}/bin/ruff format
+    ${pkgs.findutils}/bin/find . -name '*.nix' -exec ${pkgs.nixfmt}/bin/nixfmt {} \+
+  '';
+  styleCheck = pkgs.writeShellScriptBin "net-style-check" ''
+    ${pkgs.clang-tools}/bin/clang-format -i src/*
+    ${pkgs.git}/bin/git diff-index --exit-code HEAD -- '*.c'
+    ${pkgs.ruff}/bin/ruff check
+    ${pkgs.findutils}/bin/find . -name '*.nix' -exec ${pkgs.nixfmt}/bin/nixfmt --check {} \+
+  '';
 in
 pkgs.mkShell {
-  buildInputs =
-    [
-      (if pgVersion == null then xpgPkgs.xpg else xpgPkgs.xpg.forVersions { versions = [ pgVersion ]; inherit cassert; })
-      pythonDeps
-      nginxCustom.nginxScript
-      pkgs.curlWithGnuTls
-      loadtest
-      style
-      styleCheck
-      pkgs.ruff
-    ];
+  buildInputs = [
+    (
+      if pgVersion == null then
+        xpgPkgs.xpg
+      else
+        xpgPkgs.xpg.forVersions {
+          versions = [ pgVersion ];
+          inherit cassert;
+        }
+    )
+    pythonDeps
+    nginxCustom.nginxScript
+    pkgs.curlWithGnuTls
+    loadtest
+    style
+    styleCheck
+    pkgs.ruff
+  ];
   shellHook = ''
     export HISTFILE=.history
   '';

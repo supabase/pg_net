@@ -1,10 +1,18 @@
-{ writeShellScriptBin, psrecord, writers, python3Packages } :
+{
+  writeShellScriptBin,
+  psrecord,
+  writers,
+  python3Packages,
+}:
 
 let
   psrecordToMd =
     writers.writePython3 "psrecord-to-md"
       {
-        libraries = [ python3Packages.pandas python3Packages.tabulate ];
+        libraries = [
+          python3Packages.pandas
+          python3Packages.tabulate
+        ];
       }
       ''
         import sys
@@ -39,7 +47,10 @@ let
   csvToMd =
     writers.writePython3 "csv-to-md"
       {
-        libraries = [ python3Packages.pandas python3Packages.tabulate ];
+        libraries = [
+          python3Packages.pandas
+          python3Packages.tabulate
+        ];
       }
       ''
         import sys
