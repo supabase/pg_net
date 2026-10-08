@@ -1,15 +1,22 @@
-create or replace function net.check_worker_is_up() returns void as $$
-begin
-  if not exists (select pid from pg_stat_activity where backend_type ilike '%pg_net%') then
-    raise exception using
-      message = 'the pg_net background worker is not up'
-    , detail  = 'the pg_net background worker is down due to an internal error and cannot process requests'
-    , hint    = 'make sure that you didn''t modify any of pg_net internal tables';
-  end if;
-end
-$$ language plpgsql;
-comment on function net.check_worker_is_up() is 'raises an exception if the pg_net background worker is not up, otherwise it doesn''t return anything';
-
+create or replace function net.http_collect_response(
+    -- request_id reference
+    request_id bigint,
+    -- when `true`, return immediately. when `false` wait for the request to complete before returning
+    async bool default true
+)
+    -- http response composite wrapped in a result type
+    returns net.http_response_result
+    strict
+    volatile
+    parallel safe
+    language plpgsql
+    security definer
+as $$
+begin;
+  raise notice 'The net.http_collect_response function is deprecated.';
+  select net._http_collect_response(request_id, async);
+end;
+$$;
 
 -- Collect respones of an http request
 -- API: Private
@@ -63,4 +70,8 @@ begin
     )::net.http_response_result;
 end;
 $$;
+
+alter table net.http_request_queue alter column id drop not null;
+alter table net._http_response alter column id drop not null;
+
 
