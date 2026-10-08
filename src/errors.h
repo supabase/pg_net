@@ -43,6 +43,9 @@
 
 #define EREPORT_NULL_ATTR(tupIsNull, attr)                                                         \
   do {                                                                                             \
+    if (SPI_result != 0)                                                                           \
+      ereport(ERROR, errmsg("SPI_getbinval failed for %s: %s", #attr,                              \
+                            SPI_result_code_string(SPI_result)));                                  \
     if (tupIsNull) ereport(ERROR, errmsg("%s cannot be null", #attr));                             \
   } while (0)
 
