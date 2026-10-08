@@ -1,5 +1,4 @@
 # the `-Wno`s quiet C90 warnings
-DATA = $(wildcard $(EXTENSION)--*--*.sql)
 PG_CFLAGS = -std=c11 -Wextra -Wall -Werror \
 	-Wold-style-definition \
 	-Wno-declaration-after-statement \
