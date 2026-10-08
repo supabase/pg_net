@@ -12,15 +12,15 @@ typedef enum {
   WS_EXITED,
 } WorkerStatus;
 
-// the state of the background worker
+// The state of the background worker stored in shared memory.
+// It is used to communicate between the background worker process
+// and other backends.
 typedef struct {
   pg_atomic_uint32  got_restart;
   pg_atomic_uint32  should_wake;
   pg_atomic_uint32  status;
   Latch            *shared_latch;
   ConditionVariable cv; // required to publish the state of the worker to other backends
-  int               epfd;
-  CURLM            *curl_mhandle;
 } WorkerState;
 
 // A row coming from the http_request_queue
@@ -53,7 +53,7 @@ uint64 consume_request_queue(const int batch_size);
 
 RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdesc);
 
-void set_curl_mhandle(WorkerState *wstate);
+void set_curl_mhandle(CURLM *curl_mhandle);
 
 void insert_response(CurlHandle *handle, CURLcode curl_return_code);
 void insert_rejected_response(CurlHandle *handle);
