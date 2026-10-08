@@ -16,10 +16,10 @@ typedef enum {
 // It is used to communicate between the background worker process
 // and other backends.
 typedef struct {
-  pg_atomic_uint32  got_restart;
-  pg_atomic_uint32  should_wake;
-  pg_atomic_uint32  status;
-  Latch            *shared_latch;
+  pg_atomic_uint32 got_restart;
+  pg_atomic_uint32 should_wake;
+  pg_atomic_uint32 status;
+  Latch *volatile shared_latch;
   ConditionVariable cv; // required to publish the state of the worker to other backends
 } WorkerState;
 
