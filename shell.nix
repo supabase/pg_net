@@ -29,12 +29,14 @@ let
     pkgs.writeShellScriptBin "net-style" ''
       ${pkgs.clang-tools}/bin/clang-format -i src/*
       ${pkgs.ruff}/bin/ruff format
+      ${pkgs.findutils}/bin/find . -name '*.nix' -exec ${pkgs.nixfmt}/bin/nixfmt {} \+
     '';
   styleCheck =
     pkgs.writeShellScriptBin "net-style-check" ''
       ${pkgs.clang-tools}/bin/clang-format -i src/*
       ${pkgs.git}/bin/git diff-index --exit-code HEAD -- '*.c'
       ${pkgs.ruff}/bin/ruff check
+      ${pkgs.findutils}/bin/find . -name '*.nix' -exec ${pkgs.nixfmt}/bin/nixfmt --check {} \+
     '';
 in
 pkgs.mkShell {
