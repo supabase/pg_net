@@ -154,9 +154,29 @@ void set_curl_mhandle(CURLM *curl_mhandle) {
   EREPORT_CURL_MULTI_SETOPT(curl_mhandle, CURLMOPT_TIMERFUNCTION, multi_timer_cb);
 }
 
+/*
+ * Prepares and saves a plan for the given sql source and returns the
+ * saved plan
+ */
+static SPIPlanPtr prepare_and_save_plan(const char *sql, int nargs, Oid *argtypes) {
+  SPIPlanPtr prepared = SPI_prepare(sql, nargs, argtypes);
+  if (prepared == NULL)
+    ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
+
+  SPIPlanPtr saved = SPI_saveplan(prepared);
+  if (saved == NULL)
+    ereport(ERROR, errmsg("SPI_saveplan failed: %s", SPI_result_code_string(SPI_result)));
+
+  int ret_code = SPI_freeplan(prepared);
+  if (ret_code != 0)
+    ereport(ERROR, errmsg("SPI_freeplan error: %s", SPI_result_code_string(ret_code)));
+
+  return saved;
+}
+
 uint64 delete_expired_responses(char *ttl, int batch_size) {
   if (del_response_plan == NULL) {
-    SPIPlanPtr tmp = SPI_prepare("\
+    del_response_plan = prepare_and_save_plan("\
         WITH\
         rows AS (\
           SELECT ctid\
@@ -167,17 +187,7 @@ uint64 delete_expired_responses(char *ttl, int batch_size) {
         )\
         DELETE FROM net._http_response r\
         USING rows WHERE r.ctid = rows.ctid",
-                                 2, (Oid[]){INTERVALOID, INT4OID});
-    if (tmp == NULL)
-      ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
-
-    del_response_plan = SPI_saveplan(tmp);
-    if (del_response_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
-
-    int ret_code = SPI_freeplan(tmp);
-    if (ret_code != 0)
-      ereport(ERROR,
-              errmsg("Error freeing delete response plan: %s", SPI_result_code_string(ret_code)));
+                                              2, (Oid[]){INTERVALOID, INT4OID});
   }
 
   int ret_code = SPI_execute_plan(
@@ -199,7 +209,7 @@ uint64 delete_expired_responses(char *ttl, int batch_size) {
 
 uint64 consume_request_queue(const int batch_size) {
   if (del_return_queue_plan == NULL) {
-    SPIPlanPtr tmp = SPI_prepare("\
+    del_return_queue_plan = prepare_and_save_plan("\
         WITH\
         rows AS (\
           SELECT id\
@@ -210,18 +220,7 @@ uint64 consume_request_queue(const int batch_size) {
         DELETE FROM net.http_request_queue q\
         USING rows WHERE q.id = rows.id\
         RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body",
-                                 1, (Oid[]){INT4OID});
-
-    if (tmp == NULL)
-      ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
-
-    del_return_queue_plan = SPI_saveplan(tmp);
-    if (del_return_queue_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
-
-    int ret_code = SPI_freeplan(tmp);
-    if (ret_code != 0)
-      ereport(ERROR, errmsg("Error freeing delete return queue plan: %s",
-                            SPI_result_code_string(ret_code)));
+                                                  1, (Oid[]){INT4OID});
   }
 
   int ret_code =
@@ -283,22 +282,11 @@ enum { response_nparams = 7 }; // using an enum because const size_t doesn't com
 
 static void execute_insert_response(Datum *vals, char *nulls) {
   if (ins_response_plan == NULL) {
-    SPIPlanPtr tmp = SPI_prepare(
+    ins_response_plan = prepare_and_save_plan(
         "\
         insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
         response_nparams,
         (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID});
-
-    if (tmp == NULL)
-      ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
-
-    ins_response_plan = SPI_saveplan(tmp);
-    if (ins_response_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
-
-    int ret_code = SPI_freeplan(tmp);
-    if (ret_code != 0)
-      ereport(ERROR,
-              errmsg("Error freeing insert response plan: %s", SPI_result_code_string(ret_code)));
   }
 
   int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);
