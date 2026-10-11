@@ -180,9 +180,15 @@ static void net_on_exit(__attribute__((unused)) int code, __attribute__((unused)
 
   worker_state->shared_latch = NULL;
 
+  elog(LOG, "REPRO net_on_exit pid=%d: shared memory has epfd=%d curl_mhandle=%p", MyProcPid,
+       worker_state->epfd, (void *)worker_state->curl_mhandle);
+
   ev_monitor_close(worker_state);
 
+  elog(LOG, "REPRO net_on_exit pid=%d: calling curl_multi_cleanup(%p)", MyProcPid,
+       (void *)worker_state->curl_mhandle);
   curl_multi_cleanup(worker_state->curl_mhandle);
+  elog(LOG, "REPRO net_on_exit pid=%d: curl_multi_cleanup returned", MyProcPid);
   curl_global_cleanup();
 }
 
@@ -275,6 +281,9 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
   if (curl_ret != CURLE_OK)
     ereport(ERROR, errmsg("curl_global_init() returned %s\n", curl_easy_strerror(curl_ret)));
 
+  elog(LOG, "REPRO worker pid=%d: before creating its own state, shared memory has epfd=%d curl_mhandle=%p",
+       MyProcPid, worker_state->epfd, (void *)worker_state->curl_mhandle);
+
   worker_state->epfd = event_monitor();
 
   if (worker_state->epfd < 0) {
@@ -283,6 +292,9 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
   worker_state->curl_mhandle = curl_multi_init();
   if (!worker_state->curl_mhandle) ereport(ERROR, errmsg("curl_multi_init()"));
+
+  elog(LOG, "REPRO worker pid=%d: created epfd=%d curl_mhandle=%p", MyProcPid, worker_state->epfd,
+       (void *)worker_state->curl_mhandle);
 
   set_curl_mhandle(worker_state);
 
