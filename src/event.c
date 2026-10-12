@@ -46,6 +46,7 @@ void event_monitor_close(void) {
 int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms,
                    __attribute__((unused)) void *userp) {
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
+  if (timeout_ms == 0) timeout_ms = 2000; // TEMPORARY repro hack: make the first wait_event() block
 
   if (timerfd < 0) {
     timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
@@ -180,6 +181,7 @@ void event_monitor_close() {
 int multi_timer_cb(__attribute__((unused)) CURLM *multi, long timeout_ms,
                    __attribute__((unused)) void *userp) {
   elog(DEBUG2, "multi_timer_cb: Setting timeout to %ld ms\n", timeout_ms);
+  if (timeout_ms == 0) timeout_ms = 2000; // TEMPORARY repro hack: make the first wait_event() block
   event timer_event;
   int   id = 1;
 

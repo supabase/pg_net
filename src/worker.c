@@ -345,7 +345,6 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
         SPITupleTable *queue_rows = SPI_tuptable;
 
         // initialize curl handles
-        int running_handles = 0;
         for (size_t j = 0; j < requests_consumed; j++) {
           init_curl_handle(&handles[j],
                            get_request_queue_row(queue_rows->vals[j], queue_rows->tupdesc));
@@ -356,11 +355,11 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
           }
 
           EREPORT_MULTI(curl_multi_add_handle(curl_mhandle, handles[j].ez_handle));
-          running_handles++;
         }
 
         // start curl event loop
-        int   maxevents = requests_consumed + 1; // 1 extra for the timer
+        int   running_handles = 0;
+        int   maxevents       = requests_consumed + 1; // 1 extra for the timer
         event events[maxevents];
 
         do {
