@@ -345,6 +345,7 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
         SPITupleTable *queue_rows = SPI_tuptable;
 
         // initialize curl handles
+        int running_handles = 0;
         for (size_t j = 0; j < requests_consumed; j++) {
           init_curl_handle(&handles[j],
                            get_request_queue_row(queue_rows->vals[j], queue_rows->tupdesc));
@@ -355,20 +356,26 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
           }
 
           EREPORT_MULTI(curl_multi_add_handle(curl_mhandle, handles[j].ez_handle));
+          running_handles++;
         }
 
         // start curl event loop
-        int   running_handles = 0;
-        int   maxevents       = requests_consumed + 1; // 1 extra for the timer
+        int   maxevents = requests_consumed + 1; // 1 extra for the timer
         event events[maxevents];
 
-        do {
+        // run while there are curl handles, some won't finish in a single iteration
+        // since they could be slow and waiting for a timeout
+        while (running_handles > 0) {
           int nfds = wait_event(events, maxevents, curl_handle_event_timeout_ms);
 
           if (nfds < 0) {
             int save_errno = errno;
-            if (save_errno == EINTR) { // can happen when the wait is interrupted, for example when
-                                       // running under GDB. Just continue in this case.
+            // EINTR is returned when a signal is delivered to the process while
+            // it's waiting inside `wait_event` (`epoll_wait`/`kqueue` to be precise).
+            // This could be SIGTRAP from GDB or SIGHUP from a pg_reload_conf call (or
+            // any other signal). In any case, we need to retry the `wait_event` call,
+            // hence we continue.
+            if (save_errno == EINTR) {
               elog(DEBUG1, "wait_event() got %s, continuing", strerror(save_errno));
               continue;
             } else {
@@ -404,9 +411,7 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
           }
 
           elog(DEBUG1, "Pending curl running_handles: %d", running_handles);
-          // run while there are curl handles, some won't finish in a single iteration since they
-          // could be slow and waiting for a timeout
-        } while (running_handles > 0);
+        }
 
         // cleanup
         for (uint64 i = 0; i < requests_consumed; i++) {
