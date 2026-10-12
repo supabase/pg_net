@@ -25,10 +25,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "make build TEST=1"
 
       - name: Run tests
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "net-with-nginx python -m pytest  -n 2 test/"
 
   test-on-macos:
     runs-on: macos-15
@@ -50,10 +50,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "make build TEST=1"
 
       - name: Run tests
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "net-with-nginx python -m pytest  -n 2 test/"
 
   loadtest:
     runs-on: ubuntu-latest
@@ -78,7 +78,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "17" --arg cassert false --run "xpg build"
+        run: nix-shell --argstr pgVersion "17" --arg cassert false --run "make build TEST=1"
 
       - name: Run load test
         run: |
@@ -103,14 +103,17 @@ jobs:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+      - name: Build
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "make build TEST=1 COVERAGE=1"
+
       - name: Coverage
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} coverage"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "make test_coverage"
 
       - name: Send coverage to Coveralls
         uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          files: ./build-${{ matrix.pg-version }}/coverage.info
+          files: ./build/coverage.info
 
   style:
     runs-on: ubuntu-latest

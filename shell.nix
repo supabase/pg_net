@@ -23,7 +23,9 @@ let
   loadtest = pkgs.callPackage ./nix/loadtest.nix { };
   pythonDeps = with pkgs.python3Packages; [
     pytest
+    pytest-xdist
     psycopg
+    filelock
     sqlalchemy
   ];
   style = pkgs.writeShellScriptBin "net-style" ''
@@ -59,5 +61,7 @@ pkgs.mkShell {
   ];
   shellHook = ''
     export HISTFILE=.history
+    export PATH=${xpgPkgs."postgresql_${pgVersion}_cassert"}/bin:"$PATH"
+    export BUILD_DIR="build"
   '';
 }

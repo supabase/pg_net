@@ -86,3 +86,12 @@ include $(PGXS)
 .PHONY: test
 test:
 	net-with-nginx python -m pytest -s -vv $(PYTEST_ARGS)
+
+
+.PHONY: test_coverage
+test_coverage:
+	net-with-nginx python -m pytest -s -vv $(PYTEST_ARGS)
+	lcov --capture --directory . --output-file $(BUILD_DIR)/coverage.info
+	lcov --remove $(BUILD_DIR)/coverage.info '/nix/*' --output-file $(BUILD_DIR)/coverage.info
+	lcov --list "$(BUILD_DIR)/coverage.info"
+	genhtml "$(BUILD_DIR)/coverage.info" --output-directory $(BUILD_DIR)/coverage_html
