@@ -297,7 +297,6 @@ create or replace function net._http_collect_response(
 as $$
 declare
     rec net._http_response;
-    req_exists boolean;
 begin
 
     if not async then
@@ -348,7 +347,7 @@ create or replace function net.http_collect_response(
 as $$
 begin
   raise notice 'The net.http_collect_response function is deprecated.';
-  select net._http_collect_response(request_id, async);
+  return net._http_collect_response(request_id, async);
 end;
 $$;
 
