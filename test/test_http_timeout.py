@@ -4,6 +4,9 @@ import psycopg
 import pytest
 from sqlalchemy import text
 from common import http_request, pg_collect_response, pg_http_request
+import os
+
+running_parallel = os.environ.get("PYTEST_XDIST_WORKER")
 
 
 def test_http_get_timeout_reached(sess):
@@ -36,6 +39,10 @@ def test_http_get_timeout_reached(sess):
     assert response.startswith("Timeout of 5000 ms reached")
 
 
+@pytest.mark.skipif(
+    os.environ.get("PYTEST_XDIST_WORKER") is not None,
+    reason="test does not play nice with others",
+)
 def test_http_detailed_timeout(sess):
     """Test the timeout shows a detailed error msg"""
 
