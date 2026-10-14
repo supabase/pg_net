@@ -99,7 +99,7 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   }
 
   handle->url = TextDatumGetCString(row.url);
-  handle->username = TextDatumGetCString(row.username);
+  handle->rolename = TextDatumGetCString(row.rolename);
 
   handle->req_body = !row.bodyBin.isnull ? TextDatumGetCString(row.bodyBin.value) : NULL;
 
@@ -220,7 +220,7 @@ uint64 consume_request_queue(const int batch_size) {
         )\
         DELETE FROM net.http_request_queue q\
         USING rows WHERE q.id = rows.id\
-        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, q.username",
+        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, q.rolename",
                                  1, (Oid[]){INT4OID});
 
     if (tmp == NULL)
@@ -264,10 +264,10 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
   NullableDatum bodyBin = {.value  = SPI_getbinval(spi_tupval, spi_tupdesc, 6, &tupIsNull),
                            .isnull = tupIsNull};
 
-  Datum username = SPI_getbinval(spi_tupval, spi_tupdesc, 7, &tupIsNull);
-  EREPORT_NULL_ATTR(tupIsNull, username);
+  Datum rolename = SPI_getbinval(spi_tupval, spi_tupdesc, 7, &tupIsNull);
+  EREPORT_NULL_ATTR(tupIsNull, rolename);
 
-  return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin, username};
+  return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin, rolename};
 }
 
 static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
@@ -294,7 +294,7 @@ static void execute_insert_response(Datum *vals, char *nulls) {
   if (ins_response_plan == NULL) {
     ins_response_plan = prepare_and_save_plan(
         "\
-        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg, username) values ($1, $2, $3, $4, $5, $6, $7, $8)",
+        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg, rolename) values ($1, $2, $3, $4, $5, $6, $7, $8)",
         response_nparams,
         (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID, TEXTOID});
 
@@ -325,7 +325,7 @@ void insert_rejected_response(CurlHandle *handle) {
   nulls[5] = ' ';
   vals[6]  = CStringGetTextDatum(handle->rejected_reason);
   nulls[6] = ' ';
-  vals[7]  = CStringGetTextDatum(handle->username);
+  vals[7]  = CStringGetTextDatum(handle->rolename);
   nulls[7] = ' ';
 
   execute_insert_response(vals, nulls);
@@ -340,7 +340,7 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
   vals[0]  = Int64GetDatum(handle->id);
   nulls[0] = ' ';
 
-  vals[7]  = CStringGetTextDatum(handle->username);
+  vals[7]  = CStringGetTextDatum(handle->rolename);
   nulls[7] = ' ';
 
   if (curl_return_code == CURLE_OK) {

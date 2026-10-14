@@ -16,10 +16,18 @@ create unlogged table net.http_request_queue(
     headers jsonb,
     body bytea,
     timeout_milliseconds int not null,
-    username text not null default current_user
+    rolename text not null default 'public'
 );
 alter table net.http_request_queue enable row level security;
-create policy net_request_policy on net.http_request_queue using (username OPERATOR(pg_catalog.=) current_user);
+
+create policy net_request_policy 
+on net.http_request_queue 
+using (
+	case 
+	when rolename = 'public' then true
+	else pg_has_role(current_user, rolename, 'member') 
+	end
+);
 
 create or replace function net.check_worker_is_up() returns void as $$
 begin
@@ -44,11 +52,20 @@ create unlogged table net._http_response(
     timed_out bool,
     error_msg text,
     created timestamptz not null default now(),
-    username text not null
+    rolename text not null
 );
 alter table net._http_response enable row level security;
-create policy net_response_policy on net._http_response using (username OPERATOR(pg_catalog.=) current_user);
+
 create index on net._http_response (created);
+
+create policy net_response_policy 
+on net._http_response
+using (
+	case 
+	when rolename = 'public' then true
+	else pg_has_role(current_user, rolename, 'member') 
+	end
+);
 
 -- Blocks until an http_request is complete
 -- API: Private
@@ -121,7 +138,9 @@ create or replace function net.http_get(
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000
+    timeout_milliseconds int default 5000,
+    -- the role that should have access to the request/response data
+    rolename text default 'public'
 )
     -- request_id reference
     returns bigint
@@ -136,12 +155,13 @@ begin
     from jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, timeout_milliseconds, rolename)
     values (
         'GET',
         net._encode_url_with_params_array(url, params_array),
         headers,
-        timeout_milliseconds
+        timeout_milliseconds,
+	rolename
     )
     returning id
     into request_id;
@@ -164,7 +184,9 @@ create or replace function net.http_post(
     -- key/values to be included in request headers
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int DEFAULT 5000
+    timeout_milliseconds int DEFAULT 5000,
+    -- the role that should have access to the request/response data
+    rolename text default 'public'
 )
     -- request_id reference
     returns bigint
@@ -205,13 +227,14 @@ begin
         jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds, rolename)
     values (
         'POST',
         net._encode_url_with_params_array(url, params_array),
         headers,
         convert_to(body::text, 'UTF8'),
-        timeout_milliseconds
+        timeout_milliseconds,
+	rolename
     )
     returning id
     into request_id;
@@ -234,7 +257,9 @@ create or replace function net.http_delete(
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int default 5000,
     -- optional body of the request
-    body jsonb default NULL
+    body jsonb default NULL,
+    -- the role that should have access to the request/response data
+    rolename text default 'public'
 )
     -- request_id reference
     returns bigint
@@ -249,13 +274,14 @@ begin
     from jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds, rolename)
     values (
         'DELETE',
         net._encode_url_with_params_array(url, params_array),
         headers,
         convert_to(body::text, 'UTF8'),
-        timeout_milliseconds
+        timeout_milliseconds,
+	rolename
     )
     returning id
     into request_id;
