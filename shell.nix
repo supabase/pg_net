@@ -37,18 +37,37 @@ let
     ${pkgs.ruff}/bin/ruff check
     ${pkgs.findutils}/bin/find . -name '*.nix' -exec ${pkgs.nixfmt}/bin/nixfmt --check {} \+
   '';
+  plpgsqlcheck14 = pkgs.callPackage ./nix/plpgsql-check.nix {
+    postgresql = xpgPkgs.postgresql_14;
+  };
+  plpgsqlcheck15 = pkgs.callPackage ./nix/plpgsql-check.nix {
+    postgresql = xpgPkgs.postgresql_15;
+  };
+  plpgsqlcheck16 = pkgs.callPackage ./nix/plpgsql-check.nix {
+    postgresql = xpgPkgs.postgresql_16;
+  };
+  plpgsqlcheck17 = pkgs.callPackage ./nix/plpgsql-check.nix {
+    postgresql = xpgPkgs.postgresql_17;
+  };
+  plpgsqlcheck18 = pkgs.callPackage ./nix/plpgsql-check.nix {
+    postgresql = xpgPkgs.postgresql_18;
+  };
+  plpgsqlcheck19 = pkgs.callPackage ./nix/plpgsql-check.nix {
+    postgresql = xpgPkgs.postgresql_19;
+  };
 in
 pkgs.mkShell {
   buildInputs = [
-    (
-      if pgVersion == null then
-        xpgPkgs.xpg
-      else
-        xpgPkgs.xpg.forVersions {
-          versions = [ pgVersion ];
-          inherit cassert;
-        }
-    )
+    (xpgPkgs.xpg.withExtensions {
+      extensions = {
+        "14" = [ plpgsqlcheck14 ];
+        "15" = [ plpgsqlcheck15 ];
+        "16" = [ plpgsqlcheck16 ];
+        "17" = [ plpgsqlcheck17 ];
+        "18" = [ plpgsqlcheck18 ];
+        "19" = [ plpgsqlcheck19 ];
+      };
+    })
     pythonDeps
     nginxCustom.nginxScript
     pkgs.curlWithGnuTls
