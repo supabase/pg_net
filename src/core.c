@@ -98,7 +98,7 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
     handle->request_headers = request_headers;
   }
 
-  handle->url = TextDatumGetCString(row.url);
+  handle->url      = TextDatumGetCString(row.url);
   handle->rolename = TextDatumGetCString(row.rolename);
 
   handle->req_body = !row.bodyBin.isnull ? TextDatumGetCString(row.bodyBin.value) : NULL;
@@ -221,7 +221,7 @@ uint64 consume_request_queue(const int batch_size) {
         DELETE FROM net.http_request_queue q\
         USING rows WHERE q.id = rows.id\
         RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, q.rolename",
-                                 1, (Oid[]){INT4OID});
+                                                  1, (Oid[]){INT4OID});
   }
 
   int ret_code =
@@ -286,11 +286,12 @@ enum { response_nparams = 8 }; // using an enum because const size_t doesn't com
 
 static void execute_insert_response(Datum *vals, char *nulls) {
   if (ins_response_plan == NULL) {
-    ins_response_plan = prepare_and_save_plan(
-        "\
+    ins_response_plan =
+        prepare_and_save_plan("\
         insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg, rolename) values ($1, $2, $3, $4, $5, $6, $7, $8)",
-        response_nparams,
-        (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID, TEXTOID});
+                              response_nparams,
+                              (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID,
+                                                      BOOLOID, TEXTOID, TEXTOID});
   }
 
   int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);

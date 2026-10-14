@@ -329,7 +329,8 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
         // initialize curl handles
         for (size_t j = 0; j < requests_consumed; j++) {
-	  RequestQueueRow req_queue_row = get_request_queue_row(queue_rows->vals[j], queue_rows->tupdesc);
+          RequestQueueRow req_queue_row =
+              get_request_queue_row(queue_rows->vals[j], queue_rows->tupdesc);
           init_curl_handle(&handles[j], req_queue_row);
 
           if (handles[j].rejected_reason) {
