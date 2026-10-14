@@ -222,12 +222,6 @@ uint64 consume_request_queue(const int batch_size) {
         USING rows WHERE q.id = rows.id\
         RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, q.rolename",
                                  1, (Oid[]){INT4OID});
-
-    if (tmp == NULL)
-      ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
-
-    del_return_queue_plan = SPI_saveplan(tmp);
-    if (del_return_queue_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
   }
 
   int ret_code =
@@ -297,14 +291,6 @@ static void execute_insert_response(Datum *vals, char *nulls) {
         insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg, rolename) values ($1, $2, $3, $4, $5, $6, $7, $8)",
         response_nparams,
         (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID, BOOLOID, TEXTOID, TEXTOID});
-
-    if (tmp == NULL)
-      ereport(ERROR, errmsg("SPI_prepare failed: %s", SPI_result_code_string(SPI_result)));
-
-    ins_response_plan = SPI_saveplan(tmp);
-    if (ins_response_plan == NULL) ereport(ERROR, errmsg("SPI_saveplan failed"));
-
-    SPI_freeplan(tmp);
   }
 
   int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);
