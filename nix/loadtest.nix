@@ -88,6 +88,12 @@ writeShellScriptBin "net-loadtest" ''
     batch_size_opt="-c pg_net.batch_size=$2"
   fi
 
+  # Optional server delay in ms following a normal distribution.
+  # Arguments: delay in ms ($3), delay standard deviation in ms ($4)
+  if [ -n "''${3:-}" ]; then
+    reqs="$reqs, delay_ms => ''${3}, delay_sd_ms => ''${4:-0}"
+  fi
+
   net-with-nginx xpg --options "-c log_min_messages=WARNING $batch_size_opt" \
     psql -c "call wait_for_many_gets($reqs)" -c "\pset format csv" -c "\o $query_csv" -c "select * from run" > /dev/null &
 
