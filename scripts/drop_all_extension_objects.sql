@@ -1,0 +1,31 @@
+DO $$
+DECLARE
+  extension_objects text[];
+  extension_object text;
+BEGIN
+
+SELECT array_agg(pg_catalog.pg_describe_object(classid, objid, 0)) into extension_objects
+FROM pg_catalog.pg_depend
+INNER JOIN (
+	SELECT e.oid
+	FROM pg_catalog.pg_extension e
+	WHERE e.extname OPERATOR(pg_catalog.=) 'pg_net' 
+	COLLATE pg_catalog.default
+	ORDER BY 1
+) AS pg_net_oid 
+ON pg_net_oid.oid = refobjid 
+WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass 
+	AND refobjid = '16387' 
+	AND deptype = 'e'
+ORDER BY 1;
+
+FOR extension_object IN select unnest(extension_objects) LOOP
+  BEGIN 
+    EXECUTE 'alter extension pg_net drop ' || extension_object;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'failed on %: %', extension_object, sqlerrm;
+  END;
+END LOOP;
+
+END;
+$$;
