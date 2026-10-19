@@ -128,7 +128,7 @@ $ sudo net-with-gdb
 
 The `net-loadtest` launchs a temporary db and a nginx server, waiting until a number of requests are done, then reporting results (plus process monitoring) at the end.
 
-It takes a two parameters: the number of requests (GETs) and the `pg_net.batch_size`.
+It takes up to four optional parameters: the number of requests (GETs), the `pg_net.batch_size`, and a server delay in ms with its standard deviation in ms (normally distributed). Run `net-loadtest --help` for details.
 
 ```bash
 $ net-loadtest 1000 200
