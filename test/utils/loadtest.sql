@@ -8,6 +8,11 @@ create table run (
 );
 
 -- random delay in ms from a normal distribution with the given mean and standard deviation.
+--
+-- Uses the Box-Muller transform to turn two independent uniform samples u1, u2 into a standard normal
+-- value z = sqrt(-2 * ln(u1)) * cos(2 * pi * u2), which is then scaled to mean_ms + sd_ms * z.
+-- PostgreSQL random() returns values in [0, 1) and ln(0) is undefined, so u1 is taken as `1 - random()`,
+-- which lies in (0, 1]. Negative results are clamped to 0 since a delay can't be negative.
 create or replace function random_delay_ms(mean_ms int, sd_ms int) returns int as $$
   select greatest(0, round(mean_ms + sd_ms * sqrt(-2 * ln(1 - random())) * cos(2 * pi() * random())))::int
 $$ language sql volatile;
