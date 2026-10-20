@@ -1,4 +1,5 @@
-let flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
+let
+  flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
   nixpkgsLock = flakeLock.nodes.nixpkgs.locked;
   xpgLock = flakeLock.nodes.xpg.locked;
 in
