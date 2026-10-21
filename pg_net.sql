@@ -40,6 +40,7 @@ begin
         where id = request_id;
 
         if rec is null then
+            -- Wait 50 ms before checking again
             perform pg_sleep(0.05);
         end if;
     end loop;
@@ -78,8 +79,11 @@ begin
     where id = request_id;
 
     if rec is null or rec.error_msg is not null then
+        -- The request is either still processing or the request_id provided does not exist
 
+        -- TODO: request in progress is indistinguishable from request that doesn't exist
 
+        -- No request matching request_id found
         return (
             'ERROR',
             coalesce(rec.error_msg, 'request matching request_id not found'),
@@ -88,6 +92,7 @@ begin
 
     end if;
 
+    -- Return a valid, populated http_response_result
     return (
         'SUCCESS',
         'ok',
@@ -133,9 +138,9 @@ CREATE FUNCTION net.http_collect_response(request_id bigint
 RETURNS net.http_response_result
 LANGUAGE plpgsql
 AS $$
-begin;
+begin
   raise notice 'The net.http_collect_response function is deprecated.';
-  select net._http_collect_response(request_id, async);
+  return net._http_collect_response(request_id, async);
 end;
 $$;
 
@@ -157,6 +162,7 @@ begin
     into params_array
     from jsonb_each_text(params);
 
+    -- Add to the request queue
     insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
     values (
         'DELETE',
@@ -191,6 +197,7 @@ begin
     into params_array
     from jsonb_each_text(params);
 
+    -- Add to the request queue
     insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
     values (
         'GET',
@@ -223,6 +230,7 @@ declare
     content_type text;
 begin
 
+    -- Exctract the content_type from headers
     select
         header_value into content_type
     from
@@ -232,10 +240,13 @@ begin
     limit
         1;
 
+    -- If the user provided new headers and omitted the content type
+    -- add it back in automatically
     if content_type is null then
         select headers || '{"Content-Type": "application/json"}'::jsonb into headers;
     end if;
 
+    -- Confirm that the content-type is set as "application/json"
     if content_type <> 'application/json' then
         raise exception 'Content-Type header must be "application/json"';
     end if;
@@ -247,6 +258,7 @@ begin
     from
         jsonb_each_text(params);
 
+    -- Add to the request queue
     insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
     values (
         'POST',
