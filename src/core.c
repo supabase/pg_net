@@ -93,8 +93,6 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
 
     request_headers = pg_text_array_to_slist(pgHeaders, request_headers, &handle->rejected_reason);
 
-    EREPORT_CURL_SLIST_APPEND(request_headers, "User-Agent: pg_net/" EXTVERSION);
-
     handle->request_headers = request_headers;
   }
 
@@ -137,6 +135,8 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HEADER, 0L);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_URL, handle->url);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HTTPHEADER, handle->request_headers);
+  // libcurl leaves this out when the request headers have their own User-Agent
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_USERAGENT, "pg_net/" EXTVERSION);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_TIMEOUT_MS, (long)handle->timeout_milliseconds);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_PRIVATE, handle);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_FOLLOWLOCATION, (long)true);
