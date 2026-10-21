@@ -33,4 +33,4 @@ END LOOP;
 END;
 $$;
 EOF) \
-  --command="\! pg_dump --schema=net --user=postgres --schema-only | grep -v -- -- | grep -v '^SET .*;' | grep -v 'SELECT pg_catalog.set_config' | pgpp > pg_net.sql"
+  --command="\! pg_dump --schema=net --user=postgres --schema-only | grep -v -- '^--' | grep -v '^SET .*;' | grep -v 'SELECT pg_catalog.set_config' | pgpp > pg_net.sql"

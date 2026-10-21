@@ -11,9 +11,9 @@ create or replace function net.http_collect_response(
     volatile
     language plpgsql
 as $$
-begin;
+begin
   raise notice 'The net.http_collect_response function is deprecated.';
-  select net._http_collect_response(request_id, async);
+  return net._http_collect_response(request_id, async);
 end;
 $$;
 
