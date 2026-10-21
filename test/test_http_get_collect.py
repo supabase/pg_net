@@ -60,7 +60,7 @@ def test_http_collect_response_async_does_not_exist(conn):
 
     # Collect the response, waiting as needed
     response = conn.execute(
-            """
+        """
         select * from net.http_collect_response(1, async:=true);
     """
     ).fetchone()
@@ -75,7 +75,7 @@ def test__http_collect_response_async_does_not_exist(conn):
 
     # Collect the response, waiting as needed
     response = conn.execute(
-            """
+        """
         select * from net._http_collect_response(1, async:=true);
     """
     ).fetchone()
