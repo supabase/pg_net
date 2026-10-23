@@ -55,16 +55,29 @@ def test_http_get_collect_sync_success(sess):
     assert response["status_code"] == 200
 
 
-def test_http_collect_response_async_does_not_exist(sess):
-    """Collect a non-existent response with async true"""
+def test_http_collect_response_async_does_not_exist(conn):
+    """Collect a non-existent response from net.http_collect_response with async true"""
 
     # Collect the response, waiting as needed
-    response = sess.execute(
-        text(
-            """
+    response = conn.execute(
+        """
+        select * from net.http_collect_response(1, async:=true);
+    """
+    ).fetchone()
+
+    assert response[0] == "ERROR"
+    assert "not found" in response[1]
+    assert response[2] is None
+
+
+def test__http_collect_response_async_does_not_exist(conn):
+    """Collect a non-existent response from net._http_collect_response with async true"""
+
+    # Collect the response, waiting as needed
+    response = conn.execute(
+        """
         select * from net._http_collect_response(1, async:=true);
     """
-        )
     ).fetchone()
 
     assert response[0] == "ERROR"
