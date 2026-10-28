@@ -49,6 +49,11 @@ jobs:
           name: nxpg
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+      - name: clang analyze
+        run: |
+          nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "CPPFLAGS='--analyze -Xanalyzer  -analyzer-werror' xpg -v ${{ matrix.pg-version }} build"
+          rm -rf ./build-${{ matrix.pg-version }}
+
       - name: Build
         run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} build"
 
