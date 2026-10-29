@@ -169,7 +169,7 @@ void inline event_monitor_init(void) {
   }
 }
 
-void event_monitor_close() {
+void event_monitor_close(void) {
   if (epfd >= 0 && close(epfd) < 0) {
     int save_errno = errno;
     ereport(WARNING, errmsg("Failed to close kqueue fd: %s", strerror(save_errno)));
