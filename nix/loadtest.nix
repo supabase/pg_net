@@ -67,6 +67,31 @@ in
 writeShellScriptBin "net-loadtest" ''
   set -euo pipefail
 
+  usage() {
+    cat <<EOF
+  Usage: net-loadtest [REQUESTS] [BATCH_SIZE] [DELAY_MS] [DELAY_SD_MS]
+
+  Launch a temporary db and nginx server, wait until REQUESTS GETs are done,
+  then report results plus process monitoring (CPU/MEM) as markdown.
+
+  Arguments (all optional, positional):
+    NUM_REQUESTS  number of GET requests (default: 10000)
+    BATCH_SIZE    value for pg_net.batch_size (default: extension default)
+    DELAY_MS      mean server delay in ms, normally distributed (default: none)
+    DELAY_SD_MS   standard deviation of the server delay in ms (default: 0)
+
+  Options:
+    -h, --help   show this help and exit
+
+  Example:
+    net-loadtest 1000 200 50 10
+  EOF
+  }
+
+  case "''${1:-}" in
+    -h|--help) usage; exit 0 ;;
+  esac
+
   reqs=""
   batch_size_opt=""
 
@@ -86,6 +111,12 @@ writeShellScriptBin "net-loadtest" ''
 
   if [ -n "''${2:-}" ]; then
     batch_size_opt="-c pg_net.batch_size=$2"
+  fi
+
+  # Optional server delay in ms following a normal distribution.
+  # Arguments: delay in ms ($3), delay standard deviation in ms ($4)
+  if [ -n "''${3:-}" ]; then
+    reqs="$reqs, delay_ms => ''${3}, delay_sd_ms => ''${4:-0}"
   fi
 
   net-with-nginx xpg --options "-c log_min_messages=WARNING $batch_size_opt" \

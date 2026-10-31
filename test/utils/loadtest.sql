@@ -7,8 +7,29 @@ create table run (
   last_failure_error text
 );
 
+-- random delay in ms from a normal distribution with the given mean and standard deviation.
+-- Uses random_normal(), which is only available on PostgreSQL 16+.
+-- Negative results are clamped to 0 since a delay can't be negative.
+create or replace function random_delay_ms(mean_ms int, sd_ms int) returns int as $$
+begin
+  if current_setting('server_version_num')::int < 160000 then
+    raise exception 'function `random_normal` requires PostgreSQL 16 or newer, running %', current_setting('server_version');
+  end if;
+  return greatest(0, round(random_normal(mean_ms, sd_ms)))::int;
+end;
+$$ language plpgsql volatile;
+
 -- loadtest using many gets, used to be called `repro_timeouts`
-create or replace procedure wait_for_many_gets(number_of_requests int default 10000, url text default 'http://localhost:8080') as $$
+--
+-- when delay_ms is given, each request goes to the nginx /delay endpoint with a server delay drawn
+-- from a normal distribution with mean delay_ms and standard deviation delay_sd_ms (clamped
+-- at 0), to simulate the latency of real servers
+create or replace procedure wait_for_many_gets(
+  number_of_requests int default 10000,
+  url text default 'http://localhost:8080',
+  delay_ms int default null,
+  delay_sd_ms int default 0
+) as $$
 declare
   last_id bigint;
   first_time timestamptz;
@@ -22,7 +43,11 @@ begin
 
   with do_requests as (
     select
-      net.http_get(url) as id
+      net.http_get(
+        case when delay_ms is null then url
+        else url || '/delay?s=' || round(random_delay_ms(delay_ms, delay_sd_ms) / 1000.0, 3)
+        end
+      ) as id
     from generate_series (1, number_of_requests) x
   )
   select id, clock_timestamp() into last_id, first_time from do_requests offset number_of_requests - 1;
