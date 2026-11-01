@@ -198,10 +198,6 @@ net.http_get(
 )
     -- request_id reference
     returns bigint
-
-    strict
-    volatile
-    parallel safe
     language plpgsql
 ```
 
@@ -261,9 +257,6 @@ net.http_post(
 )
     -- request_id reference
     returns bigint
-
-    volatile
-    parallel safe
     language plpgsql
 ```
 ### Examples:
@@ -338,12 +331,7 @@ net.http_delete(
 )
     -- request_id reference
     returns bigint
-
-    strict
-    volatile
-    parallel safe
     language plpgsql
-    security definer
 ```
 
 ### Examples:
