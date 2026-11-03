@@ -7,7 +7,7 @@ on:
 
 jobs:
   common-extension-workflows:
-    uses: supabase/xpg/.github/workflows/reusable_extension_ci.yml@e8a7bc1593b9ae293b9c72e1659f5b93795390f6
+    uses: supabase/xpg/.github/workflows/reusable_extension_ci.yml@27aedcb0a23bce2879e7b114369e9c937665082d # v2.7.0
 
   loadtest:
     runs-on: ubuntu-latest
