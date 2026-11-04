@@ -1,0 +1,82 @@
+-- begin/end below was missed in below commit 
+-- 8c059af7f86ea711c4b80d660bc37cd238c3b983
+-- as apart of release 0.7.1
+create or replace function net.http_collect_response(
+    -- request_id reference
+    request_id bigint,
+    -- when `true`, return immediately. when `false` wait for the request to complete before returning
+    async bool default true
+)
+    -- http response composite wrapped in a result type
+    returns net.http_response_result
+    volatile
+    language plpgsql
+as $$
+begin
+  raise notice 'The net.http_collect_response function is deprecated.';
+  return net._http_collect_response(request_id, async);
+end;
+$$;
+
+
+-- coalesce below was missed in upgrade scripts in commit
+-- 8b55e96d0d4b194dd8896b6f2a0fa8ef525aa8b3
+-- as apart of release 0.7.3
+create or replace function net._http_collect_response(
+    -- request_id reference
+    request_id bigint,
+    -- when `true`, return immediately. when `false` wait for the request to complete before returning
+    async bool default true
+)
+    -- http response composite wrapped in a result type
+    returns net.http_response_result
+    language plpgsql
+as $$
+declare
+    rec net._http_response;
+    req_exists boolean;
+begin
+
+    if not async then
+        perform net._await_response(request_id);
+    end if;
+
+    select *
+    into rec
+    from net._http_response
+    where id = request_id;
+
+    if rec is null or rec.error_msg is not null then
+        -- The request is either still processing or the request_id provided does not exist
+
+        -- TODO: request in progress is indistinguishable from request that doesn't exist
+
+        -- No request matching request_id found
+        return (
+            'ERROR',
+            coalesce(rec.error_msg, 'request matching request_id not found'),
+            null
+        )::net.http_response_result;
+
+    end if;
+
+    -- Return a valid, populated http_response_result
+    return (
+        'SUCCESS',
+        'ok',
+        (
+            rec.status_code,
+            rec.headers,
+            rec.content
+        )::net.http_response
+    )::net.http_response_result;
+end;
+$$;
+
+-- below alter tables corrects drift introduced in below commit
+-- 07e63144c95748cef347e13abb5c5c3fa3b1e732
+-- as apart of release v0.5
+alter table net.http_request_queue alter column id drop not null;
+alter table net._http_response alter column id drop not null;
+
+

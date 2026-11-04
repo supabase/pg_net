@@ -33,4 +33,4 @@ def test_plpgsql_check(conn):
     ) ss
     ORDER BY (pcf).functionid::regprocedure::text, (pcf).lineno;
     """
-    assert len(conn.execute(sql).fetchall()) == 2
+    assert len(conn.execute(sql).fetchall()) == 1

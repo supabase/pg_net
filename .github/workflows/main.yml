@@ -117,9 +117,30 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           files: ./build-${{ matrix.pg-version }}/coverage.info
 
+  validate-sql-snapshot:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Use Cachix Cache
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+        with:
+          name: nxpg
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run snapshot
+        run: nix develop --command "./scripts/dump_extension.sh"
+
+      - name: Check for diffs in pg_net.sql snapshot
+        run: nix-shell --run "git diff --exit-code ./pg_net.sql"
+
   style:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
