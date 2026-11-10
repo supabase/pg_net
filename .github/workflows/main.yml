@@ -25,10 +25,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} build"
 
       - name: Run tests
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
 
   test-on-macos:
     runs-on: macos-26
@@ -55,10 +55,10 @@ jobs:
           rm -rf ./build-${{ matrix.pg-version }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} build"
 
       - name: Run tests
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
 
   loadtest:
     runs-on: ubuntu-latest
