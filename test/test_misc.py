@@ -1,3 +1,13 @@
+
+def get_pg_version(conn) -> int:
+    (pg_version,) = conn.execute(
+            """
+        select current_setting('server_version_num');
+    """
+    ).fetchone()
+    return int(pg_version)
+
+
 def test_plpgsql_check(conn):
     """
     Test check all plpgsql functions (functions or trigger functions with defined 
@@ -33,4 +43,10 @@ def test_plpgsql_check(conn):
     ) ss
     ORDER BY (pcf).functionid::regprocedure::text, (pcf).lineno;
     """
-    assert len(conn.execute(sql).fetchall()) == 2
+
+    # The function random_delay_ms that defined in test/utils/loadtest.sql makes use of 
+    # the postgres function random_normal which only exists in pg16 and beyond. This 
+    # conditional assignment fixes issues resulting from that.
+    expected_warnings = (3 if get_pg_version(conn) < 160000 else 2)
+
+    assert len(conn.execute(sql).fetchall()) == expected_warnings 
