@@ -58,7 +58,9 @@ jobs:
         run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} build"
 
       - name: Run tests
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
+        run: |
+          export UBSAN_OPTIONS="print_stacktrace=1:disable_coredump=0:abort_on_error=1:verbosity=0"
+          nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
 
   loadtest:
     runs-on: ubuntu-latest
