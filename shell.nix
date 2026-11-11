@@ -75,6 +75,7 @@ pkgs.mkShell {
     style
     styleCheck
     pkgs.ruff
+    pkgs.python313Packages.pglast
   ];
   shellHook = ''
     export HISTFILE=.history
