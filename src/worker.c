@@ -14,10 +14,8 @@
 #include "util.h"
 
 #define MIN_LIBCURL_VERSION_NUM                                                                    \
-  0x075300 // This is the 7.83.0 version in hex as defined in curl/curlver.h
-#define REQUIRED_LIBCURL_ERR_MSG                                                                   \
-  "libcurl >= 7.83.0 is required, we use the curl_easy_nextheader() function added in this "       \
-  "version"
+  0x074c00 // This is the 7.76.0 version in hex as defined in curl/curlver.h
+#define REQUIRED_LIBCURL_ERR_MSG "libcurl >= 7.76.0 is required"
 _Static_assert(LIBCURL_VERSION_NUM,
                REQUIRED_LIBCURL_ERR_MSG); // test for older libcurl versions that don't even have
                                           // LIBCURL_VERSION_NUM defined (e.g. libcurl 6.5).
