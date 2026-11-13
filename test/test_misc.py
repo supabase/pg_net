@@ -29,7 +29,8 @@ def test_plpgsql_check(conn):
         SELECT
             plpgsql_check_function_tb(pg_proc.oid, COALESCE(pg_trigger.tgrelid, 0),
                                       oldtable=>pg_trigger.tgoldtable,
-                                      newtable=>pg_trigger.tgnewtable) AS pcf
+                                      newtable=>pg_trigger.tgnewtable,
+                                      security_warnings=>TRUE) AS pcf
         FROM pg_proc
         LEFT JOIN pg_trigger
             ON (pg_trigger.tgfoid = pg_proc.oid)
