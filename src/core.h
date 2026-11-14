@@ -38,6 +38,7 @@ typedef struct {
 typedef struct {
   int64              id;
   StringInfo         body;
+  StringInfo         resp_headers;
   struct curl_slist *request_headers;
   int32              timeout_milliseconds;
   char              *url;
