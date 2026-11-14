@@ -22,51 +22,18 @@ static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   return realsize;
 }
 
-// A header with a CR or LF in it can inject extra headers or a body into the request, since libcurl
-// ends every header with CRLF. Such requests are not sent. The message only names the header, the
-// value may hold credentials.
-// Collects the raw header lines of the last response. A status line starts a new response, so a
-// redirect's headers are dropped.
+// Keeps the raw header lines of the last response, a status line starts a new response.
 static size_t header_cb(char *line, size_t size, size_t nitems, void *userp) {
   CurlHandle *handle   = (CurlHandle *)userp;
   size_t      realsize = size * nitems;
-  if (realsize >= 5 && strncmp(line, "HTTP/", 5) == 0) resetStringInfo(handle->resp_headers);
+  if (strncmp(line, "HTTP/", 5) == 0) resetStringInfo(handle->resp_headers);
   appendBinaryStringInfo(handle->resp_headers, line, (int)realsize);
   return realsize;
 }
 
-typedef struct {
-  const char *name;
-  size_t      namelen;
-  const char *value;
-  size_t      valuelen;
-} ResponseHeader;
-
-// Advances *cur to the next header field in the collected lines. Status lines, the blank
-// terminator and obsolete folded lines are skipped.
-static bool next_response_header(StringInfo raw, char **cur, ResponseHeader *out) {
-  char *end = raw->data + raw->len;
-  while (*cur < end) {
-    char *line = *cur;
-    char *eol  = memchr(line, '\n', (size_t)(end - line));
-    char *stop = eol ? eol : end;
-    *cur       = eol ? eol + 1 : end;
-    if (stop > line && stop[-1] == '\r') stop--;
-    char *colon = memchr(line, ':', (size_t)(stop - line));
-    if (!colon || colon == line || *line == ' ' || *line == '\t' || strncmp(line, "HTTP/", 5) == 0)
-      continue;
-    char *v = colon + 1;
-    while (v < stop && (*v == ' ' || *v == '\t'))
-      v++;
-    char *ve = stop;
-    while (ve > v && (ve[-1] == ' ' || ve[-1] == '\t'))
-      ve--;
-    *out = (ResponseHeader){line, (size_t)(colon - line), v, (size_t)(ve - v)};
-    return true;
-  }
-  return false;
-}
-
+// A header with a CR or LF in it can inject extra headers or a body into the request, since libcurl
+// ends every header with CRLF. Such requests are not sent. The message only names the header, the
+// value may hold credentials.
 static char *crlf_header_rejection(const char *hdr) {
   size_t bad = strcspn(hdr, "\r\n");
   if (hdr[bad] == '\0') return NULL;
@@ -305,33 +272,25 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
   return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin};
 }
 
-static Jsonb *jsonb_headers_from_curl_handle(CurlHandle *handle) {
+static Jsonb *jsonb_headers_from_curl_handle(CurlHandle *handle, char **content_type) {
   PG_JSONB_INIT_STATE(headers);
   (void)PG_JSONB_PUSH(headers, WJB_BEGIN_OBJECT, NULL);
 
-  char          *cur = handle->resp_headers->data;
-  ResponseHeader h;
-  while (next_response_header(handle->resp_headers, &cur, &h)) {
-    JsonbValue key = {
-      .type = jbvString,
-      .val  = {.string = {.val = pnstrdup(h.name, h.namelen), .len = (int)h.namelen}}};
-    JsonbValue value = {
-      .type = jbvString,
-      .val  = {.string = {.val = pnstrdup(h.value, h.valuelen), .len = (int)h.valuelen}}};
+  char *save;
+  for (char *line = strtok_r(handle->resp_headers->data, "\r\n", &save); line;
+       line        = strtok_r(NULL, "\r\n", &save)) {
+    char *value = strchr(line, ':');
+    if (!value || value == line || strncmp(line, "HTTP/", 5) == 0) continue;
+    *value++ = '\0';
+    value += strspn(value, " \t");
+    JsonbValue key = {.type = jbvString, .val = {.string = {.val = line, .len = strlen(line)}}};
+    JsonbValue val = {.type = jbvString, .val = {.string = {.val = value, .len = strlen(value)}}};
     (void)PG_JSONB_PUSH(headers, WJB_KEY, &key);
-    (void)PG_JSONB_PUSH(headers, WJB_VALUE, &value);
+    (void)PG_JSONB_PUSH(headers, WJB_VALUE, &val);
+    if (!*content_type && pg_strcasecmp(line, "content-type") == 0) *content_type = value;
   }
 
   return PG_JSONB_OBJECT_FINISH(headers);
-}
-
-static char *content_type_from_handle(CurlHandle *handle) {
-  char          *cur = handle->resp_headers->data;
-  ResponseHeader h;
-  while (next_response_header(handle->resp_headers, &cur, &h))
-    if (h.namelen == 12 && pg_strncasecmp(h.name, "content-type", 12) == 0)
-      return pnstrdup(h.value, h.valuelen);
-  return NULL;
 }
 
 enum { response_nparams = 7 }; // using an enum because const size_t doesn't compile
@@ -377,7 +336,8 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
   nulls[0] = ' ';
 
   if (curl_return_code == CURLE_OK) {
-    Jsonb *jsonb_headers        = jsonb_headers_from_curl_handle(handle);
+    char  *content_type         = NULL;
+    Jsonb *jsonb_headers        = jsonb_headers_from_curl_handle(handle, &content_type);
     long   res_http_status_code = 0;
 
     EREPORT_CURL_GETINFO(handle->ez_handle, CURLINFO_RESPONSE_CODE, &res_http_status_code);
@@ -393,7 +353,6 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
     vals[3]  = JsonbPGetDatum(jsonb_headers);
     nulls[3] = ' ';
 
-    char *content_type = content_type_from_handle(handle);
     if (content_type) {
       vals[4]  = CStringGetTextDatum(content_type);
       nulls[4] = ' ';
