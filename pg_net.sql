@@ -66,7 +66,6 @@ LANGUAGE plpgsql
 AS $$
 declare
     rec net._http_response;
-    req_exists boolean;
 begin
 
     if not async then
