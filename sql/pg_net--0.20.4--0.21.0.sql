@@ -104,13 +104,10 @@ using (
        end
 );
 
-drop function net.http_get(text, jsonb, jsonb, int);
-drop function net.http_post(text, jsonb, jsonb, jsonb, int);
-drop function net.http_delete(text, jsonb, jsonb, int, jsonb);
 
 -- Interface to make an async request
 -- API: Public
-create or replace function net.http_get(
+create function net.http_get(
     -- url for the request
     url text,
     -- key/value pairs to be url encoded and appended to the `url`
@@ -154,7 +151,7 @@ $$;
 
 -- Interface to make an async request
 -- API: Public
-create or replace function net.http_post(
+create function net.http_post(
     -- url for the request
     url text,
     -- body of the POST request
@@ -226,7 +223,7 @@ end
 $$;
 
 
-create or replace function net.http_delete(
+create function net.http_delete(
     -- url for the request
     url text,
     -- key/value pairs to be url encoded and appended to the `url`
@@ -270,3 +267,8 @@ begin
     return request_id;
 end
 $$;
+
+
+drop function net.http_get(text, jsonb, jsonb, int);
+drop function net.http_post(text, jsonb, jsonb, jsonb, int);
+drop function net.http_delete(text, jsonb, jsonb, int, jsonb);
