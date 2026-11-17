@@ -22,6 +22,15 @@ static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   return realsize;
 }
 
+// Keeps the raw header lines of the last response, a status line starts a new response.
+static size_t header_cb(char *line, size_t size, size_t nitems, void *userp) {
+  CurlHandle *handle   = (CurlHandle *)userp;
+  size_t      realsize = size * nitems;
+  if (strncmp(line, "HTTP/", 5) == 0) resetStringInfo(handle->resp_headers);
+  appendBinaryStringInfo(handle->resp_headers, line, (int)realsize);
+  return realsize;
+}
+
 // A header with a CR or LF in it can inject extra headers or a body into the request, since libcurl
 // ends every header with CRLF. Such requests are not sent. The message only names the header, the
 // value may hold credentials.
@@ -71,9 +80,10 @@ static struct curl_slist *pg_text_array_to_slist(ArrayType *array, struct curl_s
 int guc_max_timeout_ms = DEFAULT_MAX_TIMEOUT_MS;
 
 void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
-  handle->id        = row.id;
-  handle->body      = makeStringInfo();
-  handle->ez_handle = curl_easy_init();
+  handle->id           = row.id;
+  handle->body         = makeStringInfo();
+  handle->resp_headers = makeStringInfo();
+  handle->ez_handle    = curl_easy_init();
 
   // libcurl treats a 0 timeout as no timeout, and a request that never finishes blocks the batch
   // loop forever. Requests outside the bound are not sent, they get an error response instead. The
@@ -133,6 +143,8 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEFUNCTION, body_cb);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_WRITEDATA, handle);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HEADER, 0L);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HEADERFUNCTION, header_cb);
+  EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HEADERDATA, handle);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_URL, handle->url);
   EREPORT_CURL_SETOPT(handle->ez_handle, CURLOPT_HTTPHEADER, handle->request_headers);
   // libcurl leaves this out when the request headers have their own User-Agent
@@ -260,19 +272,22 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
   return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin};
 }
 
-static Jsonb *jsonb_headers_from_curl_handle(CURL *ez_handle) {
-  struct curl_header *header, *prev = NULL;
+static Jsonb *jsonb_headers_from_curl_handle(CurlHandle *handle, char **content_type) {
   PG_JSONB_INIT_STATE(headers);
   (void)PG_JSONB_PUSH(headers, WJB_BEGIN_OBJECT, NULL);
 
-  while ((header = curl_easy_nextheader(ez_handle, CURLH_HEADER, -1, prev))) {
-    JsonbValue key   = {.type = jbvString,
-                        .val  = {.string = {.val = header->name, .len = strlen(header->name)}}};
-    JsonbValue value = {.type = jbvString,
-                        .val  = {.string = {.val = header->value, .len = strlen(header->value)}}};
+  char *save;
+  for (char *line = strtok_r(handle->resp_headers->data, "\r\n", &save); line;
+       line        = strtok_r(NULL, "\r\n", &save)) {
+    char *value = strchr(line, ':');
+    if (!value || value == line || strncmp(line, "HTTP/", 5) == 0) continue;
+    *value++ = '\0';
+    value += strspn(value, " \t");
+    JsonbValue key = {.type = jbvString, .val = {.string = {.val = line, .len = strlen(line)}}};
+    JsonbValue val = {.type = jbvString, .val = {.string = {.val = value, .len = strlen(value)}}};
     (void)PG_JSONB_PUSH(headers, WJB_KEY, &key);
-    (void)PG_JSONB_PUSH(headers, WJB_VALUE, &value);
-    prev = header;
+    (void)PG_JSONB_PUSH(headers, WJB_VALUE, &val);
+    if (!*content_type && pg_strcasecmp(line, "content-type") == 0) *content_type = value;
   }
 
   return PG_JSONB_OBJECT_FINISH(headers);
@@ -321,7 +336,8 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
   nulls[0] = ' ';
 
   if (curl_return_code == CURLE_OK) {
-    Jsonb *jsonb_headers        = jsonb_headers_from_curl_handle(handle->ez_handle);
+    char  *content_type         = NULL;
+    Jsonb *jsonb_headers        = jsonb_headers_from_curl_handle(handle, &content_type);
     long   res_http_status_code = 0;
 
     EREPORT_CURL_GETINFO(handle->ez_handle, CURLINFO_RESPONSE_CODE, &res_http_status_code);
@@ -337,10 +353,8 @@ void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
     vals[3]  = JsonbPGetDatum(jsonb_headers);
     nulls[3] = ' ';
 
-    struct curl_header *hdr;
-    if (curl_easy_header(handle->ez_handle, "content-type", 0, CURLH_HEADER, -1, &hdr) ==
-        CURLHE_OK) {
-      vals[4]  = CStringGetTextDatum(hdr->value);
+    if (content_type) {
+      vals[4]  = CStringGetTextDatum(content_type);
       nulls[4] = ' ';
     }
 
@@ -378,6 +392,7 @@ void pfree_handle(CurlHandle *handle) {
   if (handle->rejected_reason) pfree(handle->rejected_reason);
 
   if (handle->body) destroyStringInfo(handle->body);
+  if (handle->resp_headers) destroyStringInfo(handle->resp_headers);
 
   if (handle->request_headers) // curl_slist_free_all already handles the NULL
                                // case, but be explicit about it
