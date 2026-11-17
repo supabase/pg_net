@@ -30,7 +30,8 @@ def test_plpgsql_check(conn):
             plpgsql_check_function_tb(pg_proc.oid, COALESCE(pg_trigger.tgrelid, 0),
                                       oldtable=>pg_trigger.tgoldtable,
                                       newtable=>pg_trigger.tgnewtable,
-                                      security_warnings=>TRUE) AS pcf
+                                      security_warnings=>TRUE, 
+                                      extra_security_warnings_level=>1) AS pcf
         FROM pg_proc
         LEFT JOIN pg_trigger
             ON (pg_trigger.tgfoid = pg_proc.oid)
@@ -48,6 +49,6 @@ def test_plpgsql_check(conn):
     # The function random_delay_ms that defined in test/utils/loadtest.sql makes use of 
     # the postgres function random_normal which only exists in pg16 and beyond. This 
     # conditional assignment fixes issues resulting from that.
-    expected_warnings = (1 if get_pg_version(conn) < 160000 else 0)
+    expected_warnings = (2 if get_pg_version(conn) < 160000 else 1)
 
     assert len(conn.execute(sql).fetchall()) == expected_warnings 
