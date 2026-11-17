@@ -339,7 +339,6 @@ void pg_net_worker(__attribute__((unused)) Datum main_arg) {
 
       if (requests_consumed > 0) {
         CurlHandle *handles = palloc(mul_size(sizeof(CurlHandle), requests_consumed));
-
         // insert_rejected_response() runs SPI, which resets SPI_tuptable, so keep our own pointer
         // to the consumed rows
         SPITupleTable *queue_rows = SPI_tuptable;
