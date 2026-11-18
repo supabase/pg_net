@@ -11,6 +11,7 @@ create or replace function net.http_collect_response(
     returns net.http_response_result
     volatile
     language plpgsql
+    SET search_path = pg_catalog, pg_temp
 as $$
 begin
   raise notice 'The net.http_collect_response function is deprecated.';
@@ -31,6 +32,7 @@ create or replace function net._http_collect_response(
     -- http response composite wrapped in a result type
     returns net.http_response_result
     language plpgsql
+    SET search_path = pg_catalog, pg_temp
 as $$
 declare
     rec net._http_response;
@@ -77,4 +79,9 @@ $$;
 -- as apart of release v0.5
 alter table net._http_response alter column id drop not null;
 
-
+ALTER FUNCTION net._await_response(bigint) SET search_path to pg_catalog, pg_temp;
+ALTER FUNCTION net._http_collect_response(bigint,boolean) SET search_path to pg_catalog, pg_temp;
+ALTER FUNCTION net.check_worker_is_up() SET search_path to pg_catalog, pg_temp;
+ALTER FUNCTION net.http_delete(text,jsonb,jsonb,integer,jsonb) SET search_path to pg_catalog, pg_temp;
+ALTER FUNCTION net.http_get(text,jsonb,jsonb,integer) SET search_path to pg_catalog, pg_temp;
+ALTER FUNCTION net.http_post(text,jsonb,jsonb,jsonb,integer) SET search_path to pg_catalog, pg_temp;
