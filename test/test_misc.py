@@ -51,3 +51,10 @@ def test_plpgsql_check(conn):
     expected_warnings = (1 if get_pg_version(conn) < 160000 else 0)
 
     assert len(conn.execute(sql).fetchall()) == expected_warnings 
+
+
+def test_pg_net_version_guc(conn) -> None:
+    sql = "SHOW pg_net.version;"
+    
+    assert conn.execute(sql).fetchall()[0][0] == '0.20.6'
+
