@@ -1,3 +1,7 @@
+import pytest 
+import psycopg
+import os
+
 
 def get_pg_version(conn) -> int:
     (pg_version,) = conn.execute(
@@ -51,3 +55,30 @@ def test_plpgsql_check(conn):
     expected_warnings = (1 if get_pg_version(conn) < 160000 else 0)
 
     assert len(conn.execute(sql).fetchall()) == expected_warnings 
+
+
+def test_version(conn):
+    pg_net_modversion = os.getenv('PG_NET_MODVERSION')
+    pg_version = get_pg_version(conn)
+
+    sql = "SHOW pg_net.version;"
+    assert conn.execute(sql).fetchall()[0][0] == pg_net_modversion
+
+    sql = "SET pg_net.version to 'v0.0.0';"
+    with pytest.raises(psycopg.errors.CantChangeRuntimeParam):
+        conn.execute(sql)
+
+    conn.execute("ROLLBACK;")
+
+    sql = "SELECT name FROM pg_settings WHERE name OPERATOR(pg_catalog.=) 'pg_net.version';"
+    result = conn.execute(sql).fetchall()
+
+    if pg_version < 180000:
+        assert len(result) == 1
+
+    if pg_version >= 180000:
+        assert len(result) == 0
+        sql = "SELECT version FROM pg_catalog.pg_get_loaded_modules() WHERE module_name = 'pg_net';"
+        result = conn.execute(sql).fetchall()
+        assert result == [(pg_net_modversion, )]
+
