@@ -587,7 +587,7 @@ void _PG_init(void) {
 #if PG_VERSION_NUM >= 180000
   DefineCustomStringVariable(
       "pg_net.version", "DEPRECATED: version of the pg_net lib", NULL,
-      &guc_pg_net_version, MODVERSION, PGC_INTERNAL,
+      &guc_pg_net_version, EXTVERSION, PGC_INTERNAL,
       GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE, NULL, NULL, NULL);
 #else
   DefineCustomStringVariable(
