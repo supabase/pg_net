@@ -80,5 +80,5 @@ def test_version(conn):
         assert len(result) == 0
         sql = "SELECT version FROM pg_catalog.pg_get_loaded_modules() WHERE module_name = 'pg_net';"
         result = conn.execute(sql).fetchall()
-        assert result == [(pg_net_modversion)]
+        assert result == [(pg_net_modversion, )]
 
