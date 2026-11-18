@@ -23,7 +23,11 @@ _Static_assert(LIBCURL_VERSION_NUM,
                                           // LIBCURL_VERSION_NUM defined (e.g. libcurl 6.5).
 _Static_assert(LIBCURL_VERSION_NUM >= MIN_LIBCURL_VERSION_NUM, REQUIRED_LIBCURL_ERR_MSG);
 
+#ifdef PG_MODULE_MAGIC_EXT
+PG_MODULE_MAGIC_EXT(.name = "pg_net", .version = EXTVERSION);
+#else
 PG_MODULE_MAGIC;
+#endif
 
 typedef enum {
   WORKER_WAIT_NO_TIMEOUT,

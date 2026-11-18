@@ -1,3 +1,6 @@
+import pytest 
+import psycopg
+
 
 def get_pg_version(conn) -> int:
     (pg_version,) = conn.execute(
@@ -53,8 +56,27 @@ def test_plpgsql_check(conn):
     assert len(conn.execute(sql).fetchall()) == expected_warnings 
 
 
-def test_pg_net_version_guc(conn) -> None:
+def test_version(conn):
+    pg_version = get_pg_version(conn)
+
     sql = "SHOW pg_net.version;"
-    
     assert conn.execute(sql).fetchall()[0][0] == '0.20.6'
+
+    sql = "SET pg_net.version to 'v0.0.0';"
+    with pytest.raises(psycopg.errors.CantChangeRuntimeParam):
+        conn.execute(sql)
+
+    conn.execute("ROLLBACK;")
+
+    sql = "SELECT name FROM pg_settings WHERE name OPERATOR(pg_catalog.=) 'pg_net.version';"
+    result = conn.execute(sql).fetchall()
+
+    if pg_version < 180000:
+        assert len(result) == 1
+
+    if pg_version >= 180000:
+        assert len(result) == 0
+        sql = "SELECT * FROM pg_catalog.pg_get_loaded_modules() WHERE file_name = 'pg_net.dylib';"
+        result = conn.execute(sql).fetchall()
+        assert result == [('pg_net', '0.20.6', 'pg_net.dylib')]
 
