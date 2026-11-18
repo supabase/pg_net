@@ -1,5 +1,6 @@
 import pytest 
 import psycopg
+import os
 
 
 def get_pg_version(conn) -> int:
@@ -57,10 +58,11 @@ def test_plpgsql_check(conn):
 
 
 def test_version(conn):
+    pg_net_modversion = os.getenv('PG_NET_MODVERSION')
     pg_version = get_pg_version(conn)
 
     sql = "SHOW pg_net.version;"
-    assert conn.execute(sql).fetchall()[0][0] == '0.20.6'
+    assert conn.execute(sql).fetchall()[0][0] == pg_net_modversion
 
     sql = "SET pg_net.version to 'v0.0.0';"
     with pytest.raises(psycopg.errors.CantChangeRuntimeParam):
@@ -76,7 +78,7 @@ def test_version(conn):
 
     if pg_version >= 180000:
         assert len(result) == 0
-        sql = "SELECT * FROM pg_catalog.pg_get_loaded_modules() WHERE file_name = 'pg_net.dylib';"
+        sql = "SELECT version FROM pg_catalog.pg_get_loaded_modules() WHERE module_name = 'pg_net';"
         result = conn.execute(sql).fetchall()
-        assert result == [('pg_net', '0.20.6', 'pg_net.dylib')]
+        assert result == [(pg_net_modversion)]
 
