@@ -45,6 +45,7 @@ static char *guc_ttl;
 static int   guc_batch_size;
 static char *guc_database_name;
 static char *guc_username;
+static char *guc_pg_net_version                 = NULL;
 
 #if PG15_GTE
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
@@ -582,4 +583,16 @@ void _PG_init(void) {
 
   DefineCustomStringVariable("pg_net.username", "Connection user for the worker", NULL,
                              &guc_username, NULL, PGC_SU_BACKEND, 0, NULL, NULL, NULL);
+
+#if PG_VERSION_NUM >= 180000
+  DefineCustomStringVariable(
+      "pg_net.version", "DEPRECATED: version of the pg_net lib", NULL,
+      &guc_pg_net_version, MODVERSION, PGC_INTERNAL,
+      GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE, NULL, NULL, NULL);
+#else
+  DefineCustomStringVariable(
+      "pg_net.version", "version of the pg_net lib", NULL,
+      &guc_pg_net_version, EXTVERSION, PGC_INTERNAL, 0, NULL, NULL, NULL);
+#endif
+
 }
