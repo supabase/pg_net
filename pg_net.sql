@@ -151,7 +151,7 @@ CREATE FUNCTION net.http_delete(url text
                               , timeout_milliseconds integer = 5000
                               , body jsonb = CAST(NULL AS jsonb))
 RETURNS bigint
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog', 'pg_temp'
+LANGUAGE plpgsql
 AS $$
 declare
     request_id bigint;
@@ -186,7 +186,7 @@ CREATE FUNCTION net.http_get(url text
                            , headers jsonb = CAST('{}' AS jsonb)
                            , timeout_milliseconds integer = 5000)
 RETURNS bigint
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog', 'pg_temp'
+LANGUAGE plpgsql
 AS $$
 declare
     request_id bigint;
@@ -221,7 +221,7 @@ CREATE FUNCTION net.http_post(url text
                             , headers jsonb = CAST('{"Content-Type": "application/json"}' AS jsonb)
                             , timeout_milliseconds integer = 5000)
 RETURNS bigint
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog', 'pg_temp'
+LANGUAGE plpgsql
 AS $$
 declare
     request_id bigint;

@@ -12,23 +12,6 @@
 revoke usage on schema net from public;
 revoke all on all tables in schema net from public;
 revoke all on all sequences in schema net from public;
--- Postgres gives PUBLIC execute on every new function. The http functions below become SECURITY
--- DEFINER, so with PUBLIC execute any role with usage on the schema could queue requests as the
--- owner, and worker_restart() and wake() would let any role stop the worker for everyone.
+-- Postgres gives PUBLIC execute on every new function. With it, worker_restart() would let any
+-- role stop the worker for everyone.
 revoke execute on all functions in schema net from public;
-
--- SECURITY DEFINER: the http functions run as the extension owner. As SECURITY INVOKER every
--- caller would also need insert on the queue table, usage on its sequence and execute on wake()
--- and the two helpers, and with those it could insert any row by hand. As definer the caller needs
--- execute on the function and nothing else, and the functions stay the only way to queue a
--- request, the same way cron.schedule() is the only way into pg_cron's job table.
---
--- The search_path is pinned because a definer body resolves unqualified names, like jsonb_each_text,
--- in the caller's search_path, and the caller could put its own there. Everything in net is written
--- with the schema prefix, so pg_catalog and pg_temp are all the body needs.
-alter function net.http_get(text, jsonb, jsonb, integer)
-    security definer set search_path = pg_catalog, pg_temp;
-alter function net.http_post(text, jsonb, jsonb, jsonb, integer)
-    security definer set search_path = pg_catalog, pg_temp;
-alter function net.http_delete(text, jsonb, jsonb, integer, jsonb)
-    security definer set search_path = pg_catalog, pg_temp;

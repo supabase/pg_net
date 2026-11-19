@@ -41,11 +41,16 @@ def test_net_grants_nothing_to_other_roles(conn):
 
 
 def test_net_on_granted_role(conn):
-    """A role with usage on the schema and execute on a function can send a request and read its
-    response, and needs nothing on the queue table or its sequence"""
+    """A role with the grants from the README can send a request and read its response"""
 
     conn.execute("grant usage on schema net to pre_existing;")
     conn.execute("grant execute on function net.http_get to pre_existing;")
+    conn.execute(
+        "grant execute on function net.wake, net._urlencode_string, "
+        "net._encode_url_with_params_array to pre_existing;"
+    )
+    conn.execute("grant insert, select (id) on net.http_request_queue to pre_existing;")
+    conn.execute("grant usage on sequence net.http_request_queue_id_seq to pre_existing;")
     conn.execute("grant select on net._http_response to pre_existing;")
     conn.commit()
 
@@ -86,4 +91,5 @@ def test_net_on_granted_role(conn):
         conn.execute("revoke all on schema net from pre_existing;")
         conn.execute("revoke all on all functions in schema net from pre_existing;")
         conn.execute("revoke all on all tables in schema net from pre_existing;")
+        conn.execute("revoke all on all sequences in schema net from pre_existing;")
         conn.commit()

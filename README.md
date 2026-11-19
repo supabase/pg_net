@@ -186,10 +186,13 @@ pg_net grants nothing by default. Only the extension owner, usually `postgres`, 
 ```sql
 grant usage on schema net to <role>;
 grant execute on function net.http_get, net.http_post, net.http_delete to <role>;
+grant execute on function net.wake, net._urlencode_string, net._encode_url_with_params_array to <role>;
+grant insert, select (id) on net.http_request_queue to <role>;
+grant usage on sequence net.http_request_queue_id_seq to <role>;
 grant select on net._http_response to <role>;
 ```
 
-The http functions run as the extension owner, so the role needs nothing on `net.http_request_queue`. If `pg_net.username` points the worker at a role that is not a superuser, that role needs select, insert and delete on both tables.
+The http functions run as the caller, which is why the role needs the queue table, its sequence and the helpers. If `pg_net.username` points the worker at a role that is not a superuser, that role needs select, insert and delete on both tables.
 
 # Requests API
 
