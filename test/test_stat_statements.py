@@ -1,7 +1,7 @@
 import time
 import pytest
 from sqlalchemy import text
-from common import http_requests
+from common import http_requests, wait_for_worker_state
 
 
 def skip_test_if_pg_is_old(sess):
@@ -60,7 +60,7 @@ def get_worker_query_count(sess):
     return count
 
 
-def test_query_stat_statements(sess):
+def test_query_stat_statements(sess, autocommit_sess):
     """
     Check that the background worker doesn't execute
     queries when no new requests arrive
@@ -69,6 +69,10 @@ def test_query_stat_statements(sess):
     skip_test_if_pg_is_old(sess)
 
     create_pg_stat_statement(sess)
+
+    # the worker runs one more cycle after the last request of the previous test, and its
+    # queries would be counted below
+    wait_for_worker_state(autocommit_sess, "idle")
 
     old_calls = get_worker_query_count(sess)
 
