@@ -179,6 +179,18 @@ grant alter system on parameter pg_net.batch_size to <role>;
 
 To allow regular users to update `pg_net` settings.
 
+# Privileges
+
+pg_net grants nothing by default. Only the extension owner, usually `postgres`, can use the `net` schema. To let another role send requests and read its responses:
+
+```sql
+grant usage on schema net to <role>;
+grant execute on function net.http_get, net.http_post, net.http_delete to <role>;
+grant select on net._http_response to <role>;
+```
+
+The http functions run as the extension owner, so the role needs nothing on `net.http_request_queue`. If `pg_net.username` points the worker at a role that is not a superuser, that role needs select, insert and delete on both tables.
+
 # Requests API
 
 ## GET requests
