@@ -26,9 +26,9 @@ static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 static size_t header_cb(char *line, size_t size, size_t nitems, void *userp) {
   CurlHandle *handle   = (CurlHandle *)userp;
   size_t      realsize = size * nitems;
-  if (strncmp(line, "HTTP/", 5) == 0) resetStringInfo(handle->resp_headers);
-  // libcurl >= 7.83 fails the transfer on a header line without a colon
-  else if (!memchr(line, ':', realsize) && strspn(line, " \t\r\n") == 0)
+  if (strncmp(line, "HTTP/", 5) == 0)
+    resetStringInfo(handle->resp_headers);
+  else if (!memchr(line, ':', realsize) && (unsigned char)line[0] > ' ')
     handle->bad_header = true;
   appendBinaryStringInfo(handle->resp_headers, line, (int)realsize);
   return realsize;
