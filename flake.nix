@@ -34,7 +34,24 @@
         in
         {
           default = import ./shell.nix {
-            inherit pkgs xpgPkgs;
+            pkgs = pkgs;
+            xpgPkgs = xpgPkgs;
+            curl = pkgs.curlWithGnuTls;
+          };
+          curl_7_86_0 = import ./shell.nix {
+            pkgs = pkgs;
+            xpgPkgs = xpgPkgs;
+            curl = (pkgs.curlWithGnuTls.override { http3Support = false; }).overrideAttrs (old: {
+              version = "7.86.0";
+              configureFlags = old.configureFlags ++ [ "--enable-ipv6" ];
+
+              src = pkgs.fetchurl {
+                urls = [
+                  "https://github.com/curl/curl/releases/download/curl-7_86_0/curl-7.86.0.tar.xz"
+                ];
+                hash = "sha256-LWERbl9IVYH21ZhlN330Rj8ueIZ3rEMiK0ltTkn7Yns=";
+              };
+            });
           };
         }
       );

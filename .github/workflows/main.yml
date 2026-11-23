@@ -67,6 +67,31 @@ jobs:
           export UBSAN_OPTIONS="print_stacktrace=1:disable_coredump=0:abort_on_error=1:verbosity=0"
           nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} test
 
+  test-curl-1-86-0:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
+      - name: Use Cachix Cache
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+        with:
+          name: nxpg
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Check flake.lock/flake.nix for drift
+        run: |
+          nix flake update
+          git diff --exit-code
+
+      - name: Build
+        run: nix develop .#curl_7_86_0 --command xpg --cassert -v 17 build
+
+      - name: Run tests
+        run: nix develop .#curl_7_86_0 --command xpg --cassert -v 17 test
+
   loadtest:
     runs-on: ubuntu-latest
     strategy:
