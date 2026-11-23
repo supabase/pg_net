@@ -29,10 +29,10 @@ jobs:
           git diff --exit-code
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} build
 
       - name: Run tests
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} test
 
   test-on-macos:
     runs-on: macos-26
@@ -55,16 +55,17 @@ jobs:
 
       - name: clang analyze
         run: |
-          nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "CPPFLAGS='--analyze -Xanalyzer  -analyzer-werror' xpg -v ${{ matrix.pg-version }} build"
+          export CPPFLAGS="--analyze -Xanalyzer  -analyzer-werror"
+          nix develop . --command xpg -v ${{ matrix.pg-version }} build
           rm -rf ./build-${{ matrix.pg-version }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} build
 
       - name: Run tests
         run: |
           export UBSAN_OPTIONS="print_stacktrace=1:disable_coredump=0:abort_on_error=1:verbosity=0"
-          nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
+          nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} test
 
   loadtest:
     runs-on: ubuntu-latest
@@ -89,11 +90,11 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "17" --arg cassert false --run "xpg build"
+        run: nix develop . --command xpg -v 17 build
 
       - name: Run load test
         run: |
-          nix-shell --argstr pgVersion "17" --arg cassert false --run "net-loadtest ${{ matrix.params.reqs }} ${{ matrix.params.batch }}" >> "$GITHUB_STEP_SUMMARY"
+          nix develop . --command net-loadtest ${{ matrix.params.reqs }} ${{ matrix.params.batch }} >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
     runs-on: ubuntu-latest
@@ -115,7 +116,8 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Coverage
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} coverage"
+        run: |
+          nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} coverage
 
       - name: Send coverage to Coveralls
         uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
@@ -140,10 +142,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run snapshot
-        run: nix develop --command "./scripts/dump_extension.sh"
+        run: nix develop --command ./scripts/dump_extension.sh
 
       - name: Check for diffs in pg_net.sql snapshot
-        run: nix-shell --run "git diff --exit-code ./pg_net.sql"
+        run: nix develop . --command git diff --exit-code ./pg_net.sql
 
   style:
     runs-on: ubuntu-latest
@@ -162,7 +164,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run style check
-        run: nix-shell --run "net-style-check"
+        run: nix develop . --command net-style-check
 
       - name: Enforce conventional commits
         uses: webiny/action-conventional-commits@7f91b1595ca1951cdb671ddc9f07a49081ec5b69 # v1.4.2
