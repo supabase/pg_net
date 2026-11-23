@@ -43,6 +43,26 @@ def pg_http_request(conn, query, params=None):
     return request_id
 
 
+def pg_wait_for_worker_state(conn, expected_state):
+    """
+    psycopg version of wait_for_worker_state. pg_stat_activity is snapshotted per transaction,
+    so each poll ends its transaction.
+    """
+
+    def fetch():
+        (state,) = conn.execute(
+            "select state from pg_stat_activity where backend_type ilike '%pg_net%';"
+        ).fetchone()
+        conn.rollback()
+        return state
+
+    wait_until(
+        fetch,
+        lambda state: state == expected_state,
+        description=f"background worker state to become {expected_state}",
+    )
+
+
 def pg_collect_response(conn, request_id):
     """
     psycopg version of collect_response_sync: wait for the request to complete
