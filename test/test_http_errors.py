@@ -17,7 +17,7 @@ def test_get_bad_url(sess):
             )
         )
 
-    assert "Unsupported URL scheme" in str(execinfo.value)
+    assert f'invalid URL "localhost:{wrong_port}"' in str(execinfo.value)
 
 
 def test_http_get_rejects_relative_url(sess):

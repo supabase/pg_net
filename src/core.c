@@ -27,6 +27,9 @@ static size_t header_cb(char *line, size_t size, size_t nitems, void *userp) {
   CurlHandle *handle   = (CurlHandle *)userp;
   size_t      realsize = size * nitems;
   if (strncmp(line, "HTTP/", 5) == 0) resetStringInfo(handle->resp_headers);
+  // libcurl >= 7.83 fails the transfer on a header line without a colon
+  else if (!memchr(line, ':', realsize) && strspn(line, " \t\r\n") == 0)
+    handle->bad_header = true;
   appendBinaryStringInfo(handle->resp_headers, line, (int)realsize);
   return realsize;
 }
@@ -90,6 +93,7 @@ void init_curl_handle(CurlHandle *handle, RequestQueueRow row) {
   // handle is still fully set up so it can be cleaned up like the others.
   handle->timeout_milliseconds = row.timeout_milliseconds;
   handle->rejected_reason      = NULL;
+  handle->bad_header           = false;
   if (handle->timeout_milliseconds <= 0 || handle->timeout_milliseconds > guc_max_timeout_ms) {
     handle->rejected_reason =
         psprintf("timeout_milliseconds must be between 1 and %d (pg_net.max_timeout_ms), got %d",
@@ -278,7 +282,7 @@ static Jsonb *jsonb_headers_from_curl_handle(CurlHandle *handle, char **content_
 
   char *save;
   for (char *line = strtok_r(handle->resp_headers->data, "\r\n", &save); line;
-       line        = strtok_r(NULL, "\r\n", &save)) {
+       line       = strtok_r(NULL, "\r\n", &save)) {
     char *value = strchr(line, ':');
     if (!value || value == line || strncmp(line, "HTTP/", 5) == 0) continue;
     *value++ = '\0';
@@ -327,6 +331,9 @@ void insert_rejected_response(CurlHandle *handle) {
 }
 
 void insert_response(CurlHandle *handle, CURLcode curl_return_code) {
+  if (curl_return_code == CURLE_OK && handle->bad_header)
+    curl_return_code = CURLE_WEIRD_SERVER_REPLY;
+
   enum { nparams = response_nparams };
   Datum vals[nparams];
   char  nulls[nparams];
