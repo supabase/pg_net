@@ -41,15 +41,16 @@
           curl_7_76_1 = import ./shell.nix {
             pkgs = pkgs;
             xpgPkgs = xpgPkgs;
-            curl = pkgs.curlWithGnuTls.overrideAttrs {
+            curl = pkgs.curlWithGnuTls.overrideAttrs (old: {
               version = "7.76.1";
+              configureFlags = old.configureFlags ++ [ "--enable-ipv6" ];
               src = pkgs.fetchurl {
                 urls = [
                   "https://github.com/curl/curl/releases/download/curl-7_76_1/curl-7.76.1.tar.xz"
                 ];
                 hash = "sha256-ZLtSiMOfCEDAfQd+MNkFLhy7n6bC3FJSOCTMhZ5nkUU=";
               };
-            };
+            });
           };
         }
       );

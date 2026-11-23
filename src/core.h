@@ -46,7 +46,6 @@ typedef struct {
   char              *method;
   CURL              *ez_handle;
   char              *rejected_reason; // set when the request must not be sent
-  bool               bad_header;
 } CurlHandle;
 
 uint64 delete_expired_responses(char *ttl, int batch_size);
