@@ -44,11 +44,6 @@ def test_net_on_granted_role(conn):
     """A role with the grants from the README can send a request and read its response"""
 
     conn.execute("grant usage on schema net to pre_existing;")
-    conn.execute("grant execute on function net.http_get to pre_existing;")
-    conn.execute(
-        "grant execute on function net.wake, net._urlencode_string, "
-        "net._encode_url_with_params_array to pre_existing;"
-    )
     conn.execute("grant insert, select (id) on net.http_request_queue to pre_existing;")
     conn.execute("grant usage on sequence net.http_request_queue_id_seq to pre_existing;")
     conn.execute("grant select on net._http_response to pre_existing;")
@@ -78,7 +73,7 @@ def test_net_on_granted_role(conn):
         assert current_user == "pre_existing"
         conn.rollback()
 
-        # usage on the schema does not open the other functions
+        # the one function PUBLIC lost: only the owner may restart the worker
         conn.execute("set local role to pre_existing;")
         with pytest.raises(
             psycopg.errors.InsufficientPrivilege,

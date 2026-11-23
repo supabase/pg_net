@@ -342,49 +342,5 @@ CREATE INDEX _http_response_created_idx
   ON net._http_response (created);
 
 REVOKE ALL PRIVILEGES
-  ON FUNCTION net._await_response (request_id bigint)
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net._encode_url_with_params_array (url text, params_array text[])
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net._http_collect_response (request_id bigint, async boolean)
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net._urlencode_string (string varchar)
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net.check_worker_is_up ()
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net.http_collect_response (request_id bigint, async boolean)
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net.http_delete (url text, params jsonb, headers jsonb, timeout_milliseconds integer, body jsonb)
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net.http_get (url text, params jsonb, headers jsonb, timeout_milliseconds integer)
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net.http_post (url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer)
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net.wait_until_running ()
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
-  ON FUNCTION net.wake ()
-  FROM PUBLIC;
-
-REVOKE ALL PRIVILEGES
   ON FUNCTION net.worker_restart ()
   FROM PUBLIC
