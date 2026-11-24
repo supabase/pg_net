@@ -1,7 +1,14 @@
 from sqlalchemy import text
-from common import collect_response_sync, http_request
+from common import collect_response_sync, http_request, CURL_VERSION
+import pytest
+
+CURL_VERSION_INT = int(CURL_VERSION, 0)
 
 
+@pytest.mark.skipif(
+    CURL_VERSION_INT <= int("0x075400", 0),
+    reason="header parsing behavior changed in curl 0.84.0",
+)
 def test_http_header_missing_value(sess):
     """Check that a `MissingValue: ` header is processed correctly"""
 
@@ -47,6 +54,10 @@ def test_http_header_injection(sess):
     assert "Weird server reply" in response["message"]
 
 
+@pytest.mark.skipif(
+    CURL_VERSION_INT <= int("0x075400", 0),
+    reason="header parsing behavior changed in curl 0.84.0",
+)
 def test_http_header_spaces(sess):
     """
     Check that a `Spaces In Header Name: This header name contains spaces`
@@ -71,6 +82,10 @@ def test_http_header_spaces(sess):
     assert "Spaces In Header Name" in response["headers"]
 
 
+@pytest.mark.skipif(
+    CURL_VERSION_INT <= int("0x075400", 0),
+    reason="header parsing behavior changed in curl 0.84.0",
+)
 def test_http_header_non_printable_chars(sess):
     """
     Check that a `NonPrintableChars: NonPrintableChars\\u0001\\u0002`

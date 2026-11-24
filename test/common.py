@@ -1,9 +1,28 @@
 import time
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+import psycopg
 
 
 PSYCOPG_CONNSTR = "postgresql+psycopg:///postgres"
+
+CURL_VERSION = ""
+
+
+def curl_version():
+    conn = psycopg.connect("dbname=postgres")
+
+    conn.execute("create extension if not exists pg_net;")
+    conn.commit()
+
+    global CURL_VERSION
+    CURL_VERSION = conn.execute("SHOW pg_net.curl_version_hex;").fetchone()[0]
+
+    conn.execute("drop extension if exists pg_net cascade;")
+    conn.commit()
+
+
+curl_version()
 
 
 def http_request(sess, query):

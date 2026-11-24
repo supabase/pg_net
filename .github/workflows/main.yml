@@ -67,8 +67,11 @@ jobs:
           export UBSAN_OPTIONS="print_stacktrace=1:disable_coredump=0:abort_on_error=1:verbosity=0"
           nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} test
 
-  test-curl-1-86-0:
+  test-curl-matrix:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        curl-version: ["7_83_0", "7_83_1", "7_85_0"]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -87,10 +90,10 @@ jobs:
           git diff --exit-code
 
       - name: Build
-        run: nix develop .#curl_7_86_0 --command xpg --cassert -v 17 build
+        run: nix develop .#curl_${{ matrix.curl-version }} --command xpg --cassert -v 17 build
 
       - name: Run tests
-        run: nix develop .#curl_7_86_0 --command xpg --cassert -v 17 test
+        run: nix develop .#curl_${{ matrix.curl-version }} --command xpg --cassert -v 17 test
 
   loadtest:
     runs-on: ubuntu-latest
