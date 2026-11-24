@@ -1,7 +1,6 @@
-
 def get_pg_version(conn) -> int:
     (pg_version,) = conn.execute(
-            """
+        """
         select current_setting('server_version_num');
     """
     ).fetchone()
@@ -10,7 +9,7 @@ def get_pg_version(conn) -> int:
 
 def test_plpgsql_check(conn):
     """
-    Test check all plpgsql functions (functions or trigger functions with defined 
+    Test check all plpgsql functions (functions or trigger functions with defined
     triggers) via plpgsql_check. Query sourced from below URL.
 
     https://github.com/okbob/plpgsql_check/blob/0ac96adc13b34d071c4be8ba0ec4f73e6e7520f5/README.md?plain=1#L310
@@ -18,7 +17,6 @@ def test_plpgsql_check(conn):
     sql = "create extension plpgsql_check;"
     conn.execute(sql)
 
-    
     sql = """
     SELECT
         (pcf).functionid::regprocedure, (pcf).lineno, (pcf).statement,
@@ -45,9 +43,9 @@ def test_plpgsql_check(conn):
     ORDER BY (pcf).functionid::regprocedure::text, (pcf).lineno;
     """
 
-    # The function random_delay_ms that defined in test/utils/loadtest.sql makes use of 
-    # the postgres function random_normal which only exists in pg16 and beyond. This 
+    # The function random_delay_ms that defined in test/utils/loadtest.sql makes use of
+    # the postgres function random_normal which only exists in pg16 and beyond. This
     # conditional assignment fixes issues resulting from that.
-    expected_warnings = (1 if get_pg_version(conn) < 160000 else 0)
+    expected_warnings = 1 if get_pg_version(conn) < 160000 else 0
 
-    assert len(conn.execute(sql).fetchall()) == expected_warnings 
+    assert len(conn.execute(sql).fetchall()) == expected_warnings

@@ -1,23 +1,27 @@
 import pytest
 from sqlalchemy import text
-from common import collect_response_sync, http_request, http_requests
+from common import collect_response_sync, http_request, http_requests, CURL_VERSION
 
 wrong_port = 6666
 
 
-def test_get_bad_url(sess):
+def test_get_bad_url(conn):
     """Test net.http_get returns a descriptive errors for bad urls"""
 
+    # error messaged changed in curl v7.86.0
+    if int(CURL_VERSION, 0) >= int("0x075600", 0):
+        expected_string = "Unsupported URL scheme"
+    else:
+        expected_string = "Bad scheme"
+
     with pytest.raises(Exception) as execinfo:
-        sess.execute(
-            text(
-                f"""
+        conn.execute(
+            f"""
             select net.http_get('localhost:{wrong_port}');
         """
-            )
         )
 
-    assert "Unsupported URL scheme" in str(execinfo.value)
+    assert expected_string in str(execinfo.value)
 
 
 def test_http_get_rejects_relative_url(sess):

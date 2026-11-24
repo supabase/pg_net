@@ -29,10 +29,10 @@ jobs:
           git diff --exit-code
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} build
 
       - name: Run tests
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
+        run: nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} test
 
   test-on-macos:
     runs-on: macos-26
@@ -55,16 +55,45 @@ jobs:
 
       - name: clang analyze
         run: |
-          nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "CPPFLAGS='--analyze -Xanalyzer  -analyzer-werror' xpg -v ${{ matrix.pg-version }} build"
+          export CPPFLAGS="--analyze -Xanalyzer  -analyzer-werror"
+          nix develop . --command xpg -v ${{ matrix.pg-version }} build
           rm -rf ./build-${{ matrix.pg-version }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} build"
+        run: nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} build
 
       - name: Run tests
         run: |
           export UBSAN_OPTIONS="print_stacktrace=1:disable_coredump=0:abort_on_error=1:verbosity=0"
-          nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert true --run "xpg -v ${{ matrix.pg-version }} test"
+          nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} test
+
+  test-curl-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        curl-version: ["7_83_0", "7_83_1", "7_85_0"]
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31.5.1
+      - name: Use Cachix Cache
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+        with:
+          name: nxpg
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Check flake.lock/flake.nix for drift
+        run: |
+          nix flake update
+          git diff --exit-code
+
+      - name: Build
+        run: nix develop .#curl_${{ matrix.curl-version }} --command xpg --cassert -v 17 build
+
+      - name: Run tests
+        run: nix develop .#curl_${{ matrix.curl-version }} --command xpg --cassert -v 17 test
 
   loadtest:
     runs-on: ubuntu-latest
@@ -89,11 +118,11 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build
-        run: nix-shell --argstr pgVersion "17" --arg cassert false --run "xpg build"
+        run: nix develop . --command xpg -v 17 build
 
       - name: Run load test
         run: |
-          nix-shell --argstr pgVersion "17" --arg cassert false --run "net-loadtest ${{ matrix.params.reqs }} ${{ matrix.params.batch }}" >> "$GITHUB_STEP_SUMMARY"
+          nix develop . --command net-loadtest ${{ matrix.params.reqs }} ${{ matrix.params.batch }} >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
     runs-on: ubuntu-latest
@@ -115,7 +144,8 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Coverage
-        run: nix-shell --argstr pgVersion "${{ matrix.pg-version }}" --arg cassert false --run "xpg -v ${{ matrix.pg-version }} coverage"
+        run: |
+          nix develop . --command xpg --cassert -v ${{ matrix.pg-version }} coverage
 
       - name: Send coverage to Coveralls
         uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
@@ -140,10 +170,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run snapshot
-        run: nix develop --command "./scripts/dump_extension.sh"
+        run: nix develop --command ./scripts/dump_extension.sh
 
       - name: Check for diffs in pg_net.sql snapshot
-        run: nix-shell --run "git diff --exit-code ./pg_net.sql"
+        run: nix develop . --command git diff --exit-code ./pg_net.sql
 
   style:
     runs-on: ubuntu-latest
@@ -162,7 +192,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run style check
-        run: nix-shell --run "net-style-check"
+        run: nix develop . --command net-style-check
 
       - name: Enforce conventional commits
         uses: webiny/action-conventional-commits@7f91b1595ca1951cdb671ddc9f07a49081ec5b69 # v1.4.2

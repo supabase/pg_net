@@ -13,6 +13,9 @@
 #include "event.h"
 #include "util.h"
 
+#define STR_HELPER(x) #x
+#define HEX_TO_STR(x) STR_HELPER(x)
+
 #define MIN_LIBCURL_VERSION_NUM                                                                    \
   0x075300 // This is the 7.83.0 version in hex as defined in curl/curlver.h
 #define REQUIRED_LIBCURL_ERR_MSG                                                                   \
@@ -45,6 +48,8 @@ static char *guc_ttl;
 static int   guc_batch_size;
 static char *guc_database_name;
 static char *guc_username;
+static char *pg_net_curl_version;
+static char *pg_net_curl_version_hex;
 
 #if PG15_GTE
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
@@ -582,4 +587,11 @@ void _PG_init(void) {
 
   DefineCustomStringVariable("pg_net.username", "Connection user for the worker", NULL,
                              &guc_username, NULL, PGC_SU_BACKEND, 0, NULL, NULL, NULL);
+
+  DefineCustomStringVariable("pg_net.curl_version", "version of libcurl used by pg_net", NULL,
+                             &pg_net_curl_version, curl_version(), PGC_INTERNAL, 0, NULL, NULL,
+                             NULL);
+  DefineCustomStringVariable("pg_net.curl_version_hex", "version of libcurl used by pg_net", NULL,
+                             &pg_net_curl_version_hex, HEX_TO_STR(LIBCURL_VERSION_NUM),
+                             PGC_INTERNAL, 0, NULL, NULL, NULL);
 }

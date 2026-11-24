@@ -1,7 +1,10 @@
 from sqlalchemy import text
+import pytest
 import time
 
-from common import collect_response_sync, http_request
+from common import collect_response_sync, http_request, CURL_VERSION
+
+CURL_VERSION_INT = int(CURL_VERSION, 0)
 
 
 def test_http_get_returns_id(sess):
@@ -150,6 +153,10 @@ def test_http_get_collect_with_redirect(sess):
     assert response["body"] == "I got redirected\n"
 
 
+@pytest.mark.skipif(
+    CURL_VERSION_INT <= int("0x075400", 0),
+    reason="header parsing behavior changed in curl 0.84.0",
+)
 def test_http_get_collect_redirect_headers_from_final_response(sess):
     """Response headers must come from the final hop, not the redirect"""
 

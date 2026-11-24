@@ -1,22 +1,7 @@
-let
-  flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
-  nixpkgsLock = flakeLock.nodes.nixpkgs.locked;
-  xpgLock = flakeLock.nodes.xpg.locked;
-in
 {
-  pkgs ? import (builtins.fetchTarball {
-    name = nixpkgsLock.rev;
-    url = "https://github.com/${nixpkgsLock.owner}/${nixpkgsLock.repo}/archive/${nixpkgsLock.rev}.tar.gz";
-    sha256 = nixpkgsLock.narHash;
-  }) { },
-  xpgPkgs ? import (
-    pkgs.fetchFromGitHub {
-      inherit (xpgLock) owner repo rev;
-      sha256 = xpgLock.narHash;
-    }
-  ),
-  pgVersion ? null,
-  cassert ? true,
+  xpgPkgs,
+  pkgs,
+  curl,
 }:
 let
   nginxCustom = pkgs.callPackage ./nix/nginxCustom.nix { };
@@ -70,7 +55,7 @@ pkgs.mkShell {
     })
     pythonDeps
     nginxCustom.nginxScript
-    pkgs.curlWithGnuTls
+    curl
     loadtest
     style
     styleCheck
