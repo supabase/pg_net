@@ -124,6 +124,13 @@ $ nix-shell
 $ sudo net-with-gdb
 ```
 
+## Versioning
+
+Bump the major version when a change breaks existing users. That includes a change in what the
+extension grants, because a restore of an older dump installs the new version fresh and then
+applies only the grants the administrator made on top. Anything a role had through the old
+defaults is gone after the restore. Everything else is a minor or patch bump.
+
 ## Load Testing
 
 The `net-loadtest` launchs a temporary db and a nginx server, waiting until a number of requests are done, then reporting results (plus process monitoring) at the end.
