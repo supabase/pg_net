@@ -14,6 +14,18 @@
 static SPIPlanPtr del_response_plan     = NULL;
 static SPIPlanPtr del_return_queue_plan = NULL;
 static SPIPlanPtr ins_response_plan     = NULL;
+// Whether net.http_request_queue has the rolename column.
+//
+// The library is replaced per server but the extension is updated per database, so this
+// worker can run against a schema that predates the column. If the queries below named
+// rolename unconditionally, every batch on such a schema would fail with "column q.rolename
+// does not exist" and the worker would restart forever.
+//
+// The saved plans above bake the column list in. Once the column is added by ALTER EXTENSION
+// UPDATE, plans built without it would still run fine but would never read the rolename a
+// caller passed, and the response would be stored as public. So the flag is re-read on every
+// batch and the plans are rebuilt as soon as it changes.
+static bool has_rolename = false;
 
 static size_t body_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   CurlHandle *handle   = (CurlHandle *)userp;
@@ -208,9 +220,21 @@ uint64 delete_expired_responses(char *ttl, int batch_size) {
   return affected_rows;
 }
 
-uint64 consume_request_queue(const int batch_size) {
-  if (del_return_queue_plan == NULL) {
-    del_return_queue_plan = prepare_and_save_plan("\
+static bool rolename_column_exists(void) {
+  Oid queue_oid = get_relname_relid("http_request_queue", get_namespace_oid("net", false));
+  return get_attnum(queue_oid, "rolename") != InvalidAttrNumber;
+}
+
+static void free_plan(SPIPlanPtr *plan) {
+  if (*plan == NULL) return;
+  int ret_code = SPI_freeplan(*plan);
+  if (ret_code != 0)
+    ereport(ERROR, errmsg("SPI_freeplan error: %s", SPI_result_code_string(ret_code)));
+  *plan = NULL;
+}
+
+#define CONSUME_REQUEST_QUEUE_SQL                                                                  \
+  "\
         WITH\
         rows AS (\
           SELECT id\
@@ -220,8 +244,20 @@ uint64 consume_request_queue(const int batch_size) {
         )\
         DELETE FROM net.http_request_queue q\
         USING rows WHERE q.id = rows.id\
-        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body, q.rolename",
-                                                  1, (Oid[]){INT4OID});
+        RETURNING q.id, q.method, q.url, timeout_milliseconds, array(select key || ': ' || value from jsonb_each_text(q.headers)), q.body"
+
+uint64 consume_request_queue(const int batch_size) {
+  bool rolename_now = rolename_column_exists();
+  if (rolename_now != has_rolename) {
+    free_plan(&del_return_queue_plan);
+    free_plan(&ins_response_plan);
+    has_rolename = rolename_now;
+  }
+
+  if (del_return_queue_plan == NULL) {
+    del_return_queue_plan = prepare_and_save_plan(
+        has_rolename ? CONSUME_REQUEST_QUEUE_SQL ", q.rolename" : CONSUME_REQUEST_QUEUE_SQL, 1,
+        (Oid[]){INT4OID});
   }
 
   int ret_code =
@@ -258,8 +294,13 @@ RequestQueueRow get_request_queue_row(HeapTuple spi_tupval, TupleDesc spi_tupdes
   NullableDatum bodyBin = {.value  = SPI_getbinval(spi_tupval, spi_tupdesc, 6, &tupIsNull),
                            .isnull = tupIsNull};
 
-  Datum rolename = SPI_getbinval(spi_tupval, spi_tupdesc, 7, &tupIsNull);
-  EREPORT_NULL_ATTR(tupIsNull, rolename);
+  Datum rolename;
+  if (has_rolename) {
+    rolename = SPI_getbinval(spi_tupval, spi_tupdesc, 7, &tupIsNull);
+    EREPORT_NULL_ATTR(tupIsNull, rolename);
+  } else {
+    rolename = CStringGetTextDatum("public");
+  }
 
   return (RequestQueueRow){id, method, url, timeout_milliseconds, headersBin, bodyBin, rolename};
 }
@@ -286,12 +327,19 @@ enum { response_nparams = 8 }; // using an enum because const size_t doesn't com
 
 static void execute_insert_response(Datum *vals, char *nulls) {
   if (ins_response_plan == NULL) {
+    // has_rolename is set by consume_request_queue, which always runs before the first insert
     ins_response_plan =
-        prepare_and_save_plan("\
+        has_rolename
+            ? prepare_and_save_plan("\
         insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg, rolename) values ($1, $2, $3, $4, $5, $6, $7, $8)",
-                              response_nparams,
-                              (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID, TEXTOID,
-                                                      BOOLOID, TEXTOID, TEXTOID});
+                                    response_nparams,
+                                    (Oid[response_nparams]){INT8OID, INT4OID, TEXTOID, JSONBOID,
+                                                            TEXTOID, BOOLOID, TEXTOID, TEXTOID})
+            : prepare_and_save_plan("\
+        insert into net._http_response(id, status_code, content, headers, content_type, timed_out, error_msg) values ($1, $2, $3, $4, $5, $6, $7)",
+                                    response_nparams - 1,
+                                    (Oid[response_nparams - 1]){INT8OID, INT4OID, TEXTOID, JSONBOID,
+                                                                TEXTOID, BOOLOID, TEXTOID});
   }
 
   int ret_code = SPI_execute_plan(ins_response_plan, vals, nulls, false, 0);

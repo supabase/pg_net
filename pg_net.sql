@@ -317,7 +317,7 @@ CREATE UNLOGGED TABLE net._http_response (
   , timed_out boolean
   , error_msg text
   , created timestamp with time zone DEFAULT now() NOT NULL
-  , rolename text DEFAULT CAST('public' AS text)
+  , rolename text DEFAULT CAST('public' AS text) NOT NULL
 );
 
 ALTER TABLE net._http_response OWNER TO postgres;
@@ -329,7 +329,7 @@ CREATE UNLOGGED TABLE net.http_request_queue (
   , headers jsonb
   , body bytea
   , timeout_milliseconds integer NOT NULL
-  , rolename text DEFAULT CAST('public' AS text)
+  , rolename text DEFAULT CAST('public' AS text) NOT NULL
 );
 
 ALTER TABLE net.http_request_queue OWNER TO postgres;

@@ -78,9 +78,9 @@ $$;
 -- as apart of release v0.5
 alter table net._http_response alter column id drop not null;
 
-alter table net._http_response add column rolename text DEFAULT 'public';
+alter table net._http_response add column rolename text not null default 'public';
 
-alter table net.http_request_queue add column rolename text DEFAULT 'public';
+alter table net.http_request_queue add column rolename text not null default 'public';
 
 alter table net.http_request_queue enable row level security;
 
