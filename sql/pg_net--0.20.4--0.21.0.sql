@@ -34,7 +34,6 @@ create or replace function net._http_collect_response(
 as $$
 declare
     rec net._http_response;
-    req_exists boolean;
 begin
 
     if not async then
