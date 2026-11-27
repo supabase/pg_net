@@ -34,6 +34,7 @@ endif
 
 EXTENSION = pg_net
 EXTVERSION = 0.20.6
+MODVERSION = 0.20.6
 
 DATA = $(wildcard sql/*--*.sql)
 
@@ -56,7 +57,7 @@ endif
 SHLIB_LINK = -lcurl
 
 # Find <curl/curl.h> from system headers
-PG_CPPFLAGS := $(CPPFLAGS) -DEXTVERSION=\"$(EXTVERSION)\"
+PG_CPPFLAGS := $(CPPFLAGS) -DEXTVERSION=\"$(EXTVERSION)\" -DMODVERSION=\"$(MODVERSION)\"
 
 all: $(EXTENSION).control
 
@@ -82,4 +83,4 @@ include $(PGXS)
 
 .PHONY: test
 test:
-	net-with-nginx python -m pytest -s -vv $(PYTEST_ARGS)
+	PG_NET_MODVERSION=$(MODVERSION) net-with-nginx python -m pytest -s -vv $(PYTEST_ARGS)
