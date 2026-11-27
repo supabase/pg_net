@@ -341,18 +341,6 @@ ALTER TABLE ONLY net.http_request_queue ALTER COLUMN id SET DEFAULT nextval(CAST
 CREATE INDEX _http_response_created_idx
   ON net._http_response (created);
 
-GRANT USAGE
-  ON SCHEMA net
-  TO PUBLIC;
-
-GRANT ALL PRIVILEGES
-  ON TABLE net._http_response
-  TO PUBLIC;
-
-GRANT ALL PRIVILEGES
-  ON TABLE net.http_request_queue
-  TO PUBLIC;
-
-GRANT ALL PRIVILEGES
-  ON SEQUENCE net.http_request_queue_id_seq
-  TO PUBLIC
+REVOKE ALL PRIVILEGES
+  ON FUNCTION net.worker_restart ()
+  FROM PUBLIC
