@@ -1,5 +1,4 @@
 from sqlalchemy import text
-import time
 
 from common import collect_response_sync, http_request
 
@@ -86,40 +85,24 @@ def test__http_collect_response_async_does_not_exist(conn):
 
 
 def test_http_get_responses_have_different_created_times(sess):
-    """Ensure the rows in net._http_response have different created times"""
+    """Ensure the rows in net._http_response have different created times
 
-    http_request(
-        sess,
-        text(
-            """
-        select net.http_get('http://localhost:8080/echo-method')
+    created defaults to now(), which is the start time of the worker transaction
+    that inserted the row. Every response in one worker batch gets the same value.
+    Wait for each response before queueing the next request, so each one is
+    inserted by its own worker transaction.
     """
-        ),
-    )
 
-    time.sleep(1)
-
-    http_request(
-        sess,
-        text(
-            """
-        select net.http_get('http://localhost:8080/echo-method')
-    """
-        ),
-    )
-
-    time.sleep(1)
-
-    http_request(
-        sess,
-        text(
-            """
-        select net.http_get('http://localhost:8080/echo-method')
-    """
-        ),
-    )
-
-    time.sleep(1)
+    for _ in range(3):
+        request_id = http_request(
+            sess,
+            text(
+                """
+            select net.http_get('http://localhost:8080/echo-method')
+        """
+            ),
+        )
+        collect_response_sync(sess, request_id)
 
     count = sess.execute(
         text(
