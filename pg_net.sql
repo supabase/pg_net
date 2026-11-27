@@ -149,7 +149,8 @@ CREATE FUNCTION net.http_delete(url text
                               , params jsonb = CAST('{}' AS jsonb)
                               , headers jsonb = CAST('{}' AS jsonb)
                               , timeout_milliseconds integer = 5000
-                              , body jsonb = CAST(NULL AS jsonb))
+                              , body jsonb = CAST(NULL AS jsonb)
+                              , rolename text = CAST('public' AS text))
 RETURNS bigint
 LANGUAGE plpgsql
 AS $$
@@ -162,13 +163,14 @@ begin
     from jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds, rolename)
     values (
         'DELETE',
         net._encode_url_with_params_array(url, params_array),
         headers,
         convert_to(body::text, 'UTF8'),
-        timeout_milliseconds
+        timeout_milliseconds,
+	rolename
     )
     returning id
     into request_id;
@@ -179,12 +181,13 @@ begin
 end
 $$;
 
-ALTER FUNCTION net.http_delete (url text, params jsonb, headers jsonb, timeout_milliseconds integer, body jsonb) OWNER TO postgres;
+ALTER FUNCTION net.http_delete (url text, params jsonb, headers jsonb, timeout_milliseconds integer, body jsonb, rolename text) OWNER TO postgres;
 
 CREATE FUNCTION net.http_get(url text
                            , params jsonb = CAST('{}' AS jsonb)
                            , headers jsonb = CAST('{}' AS jsonb)
-                           , timeout_milliseconds integer = 5000)
+                           , timeout_milliseconds integer = 5000
+                           , rolename text = CAST('public' AS text))
 RETURNS bigint
 LANGUAGE plpgsql
 AS $$
@@ -197,12 +200,13 @@ begin
     from jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, timeout_milliseconds, rolename)
     values (
         'GET',
         net._encode_url_with_params_array(url, params_array),
         headers,
-        timeout_milliseconds
+        timeout_milliseconds,
+	rolename
     )
     returning id
     into request_id;
@@ -213,13 +217,14 @@ begin
 end
 $$;
 
-ALTER FUNCTION net.http_get (url text, params jsonb, headers jsonb, timeout_milliseconds integer) OWNER TO postgres;
+ALTER FUNCTION net.http_get (url text, params jsonb, headers jsonb, timeout_milliseconds integer, rolename text) OWNER TO postgres;
 
 CREATE FUNCTION net.http_post(url text
                             , body jsonb = CAST('{}' AS jsonb)
                             , params jsonb = CAST('{}' AS jsonb)
                             , headers jsonb = CAST('{"Content-Type": "application/json"}' AS jsonb)
-                            , timeout_milliseconds integer = 5000)
+                            , timeout_milliseconds integer = 5000
+                            , rolename text = CAST('public' AS text))
 RETURNS bigint
 LANGUAGE plpgsql
 AS $$
@@ -258,13 +263,14 @@ begin
         jsonb_each_text(params);
 
     -- Add to the request queue
-    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds)
+    insert into net.http_request_queue(method, url, headers, body, timeout_milliseconds, rolename)
     values (
         'POST',
         net._encode_url_with_params_array(url, params_array),
         headers,
         convert_to(body::text, 'UTF8'),
-        timeout_milliseconds
+        timeout_milliseconds,
+	rolename
     )
     returning id
     into request_id;
@@ -275,7 +281,7 @@ begin
 end
 $$;
 
-ALTER FUNCTION net.http_post (url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) OWNER TO postgres;
+ALTER FUNCTION net.http_post (url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer, rolename text) OWNER TO postgres;
 
 CREATE FUNCTION net.wait_until_running()
 RETURNS void
@@ -310,6 +316,7 @@ CREATE UNLOGGED TABLE net._http_response (
   , timed_out boolean
   , error_msg text
   , created timestamp with time zone DEFAULT now() NOT NULL
+  , rolename text DEFAULT CAST('public' AS text) NOT NULL
 );
 
 ALTER TABLE net._http_response OWNER TO postgres;
@@ -321,6 +328,7 @@ CREATE UNLOGGED TABLE net.http_request_queue (
   , headers jsonb
   , body bytea
   , timeout_milliseconds integer NOT NULL
+  , rolename text DEFAULT CAST('public' AS text) NOT NULL
 );
 
 ALTER TABLE net.http_request_queue OWNER TO postgres;
@@ -340,6 +348,26 @@ ALTER TABLE ONLY net.http_request_queue ALTER COLUMN id SET DEFAULT nextval(CAST
 
 CREATE INDEX _http_response_created_idx
   ON net._http_response (created);
+
+ALTER TABLE net._http_response ENABLE ROW LEVEL SECURITY ;
+
+ALTER TABLE net.http_request_queue ENABLE ROW LEVEL SECURITY ;
+
+CREATE POLICY net_request_policy ON net.http_request_queue AS PERMISSIVE FOR all TO PUBLIC USING (CASE
+                                                                                                    WHEN rolename = CAST('public' AS text)
+                                                                                                      THEN TRUE
+                                                                                                    ELSE pg_has_role(CURRENT_USER
+                                                                                                                   , CAST(rolename AS name)
+                                                                                                                   , CAST('member' AS text))
+                                                                                                  END);
+
+CREATE POLICY net_response_policy ON net._http_response AS PERMISSIVE FOR all TO PUBLIC USING (CASE
+                                                                                                 WHEN rolename = CAST('public' AS text)
+                                                                                                   THEN TRUE
+                                                                                                 ELSE pg_has_role(CURRENT_USER
+                                                                                                                , CAST(rolename AS name)
+                                                                                                                , CAST('member' AS text))
+                                                                                               END);
 
 GRANT USAGE
   ON SCHEMA net

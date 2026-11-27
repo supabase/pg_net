@@ -15,6 +15,7 @@ Requires libcurl >= 7.83. Compatible with PostgreSQL > = 14.
 - [Technical Explanation](#technical-explanation)
 - [Installation](#installation)
 - [Configuration](#extension-configuration)
+- [Extension Permissions](#extension-permissions)
 - [Requests API](#requests-api)
     - Monitoring requests
     - GET requests
@@ -179,6 +180,18 @@ grant alter system on parameter pg_net.batch_size to <role>;
 
 To allow regular users to update `pg_net` settings.
 
+# Extension Permissions
+
+pg_net makes use of 2 shared tables (_http_response and http_request_quque) to queue 
+requests and store responses. These 2 tables are protected by a row level security policy to allow preventing unwanted users from viewing data they should not have access to. The
+policy is based off of a `rolename` column present in both of these tables. This `rolename` column is settable by the rolename column of the 3 wrapper functions (`http_get`, 
+`http_delete`, and `http_post`). By default using any of these functions will result in 
+`public` being input into the rolename column. This will result in any using being able 
+to view your rows in these tables. If you are using sensitive data it is highly 
+recomended that a rolename is passed when using the 3 wrapper functions. If you enter 
+your own rolename here only your user will be able to view these values. If you enter
+a group name then any member of that group will be able to access those functions. 
+
 # Requests API
 
 ## GET requests
@@ -194,7 +207,9 @@ net.http_get(
     -- key/values to be included in request headers
     headers jsonb default '{}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
-    timeout_milliseconds int default 5000
+    timeout_milliseconds int default 5000,
+    -- the role that should have access to the request/response data
+    rolename text default 'public'
 )
     -- request_id reference
     returns bigint
@@ -254,6 +269,9 @@ net.http_post(
     headers jsonb default '{"Content-Type": "application/json"}'::jsonb,
     -- the maximum number of milliseconds the request may take before being cancelled
     timeout_milliseconds int default 5000
+    -- the role that should have access to the request/response data
+    rolename text default 'public'
+
 )
     -- request_id reference
     returns bigint
@@ -328,6 +346,9 @@ net.http_delete(
     timeout_milliseconds int default 5000,
     -- body of the DELETE request
     body jsonb default null
+    -- the role that should have access to the request/response data
+    rolename text default 'public'
+
 )
     -- request_id reference
     returns bigint
