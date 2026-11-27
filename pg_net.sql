@@ -28,7 +28,7 @@ ALTER TYPE net.http_response_result OWNER TO postgres;
 
 CREATE FUNCTION net._await_response(request_id bigint)
 RETURNS boolean
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp'
 AS $$
 declare
     rec net._http_response;
@@ -62,7 +62,7 @@ ALTER FUNCTION net._encode_url_with_params_array (url text, params_array text[])
 CREATE FUNCTION net._http_collect_response(request_id bigint
                                          , async boolean = TRUE)
 RETURNS net.http_response_result
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp'
 AS $$
 declare
     rec net._http_response;
@@ -115,7 +115,7 @@ ALTER FUNCTION net._urlencode_string (string varchar) OWNER TO postgres;
 
 CREATE FUNCTION net.check_worker_is_up()
 RETURNS void
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp'
 AS $$
 begin
   if not exists (select pid from pg_stat_activity where backend_type ilike '%pg_net%') then
@@ -135,7 +135,7 @@ COMMENT ON FUNCTION net.check_worker_is_up ()
 CREATE FUNCTION net.http_collect_response(request_id bigint
                                         , async boolean = TRUE)
 RETURNS net.http_response_result
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp'
 AS $$
 begin
   raise notice 'The net.http_collect_response function is deprecated.';
@@ -151,7 +151,7 @@ CREATE FUNCTION net.http_delete(url text
                               , timeout_milliseconds integer = 5000
                               , body jsonb = CAST(NULL AS jsonb))
 RETURNS bigint
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp'
 AS $$
 declare
     request_id bigint;
@@ -186,7 +186,7 @@ CREATE FUNCTION net.http_get(url text
                            , headers jsonb = CAST('{}' AS jsonb)
                            , timeout_milliseconds integer = 5000)
 RETURNS bigint
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp'
 AS $$
 declare
     request_id bigint;
@@ -221,7 +221,7 @@ CREATE FUNCTION net.http_post(url text
                             , headers jsonb = CAST('{"Content-Type": "application/json"}' AS jsonb)
                             , timeout_milliseconds integer = 5000)
 RETURNS bigint
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp'
 AS $$
 declare
     request_id bigint;
